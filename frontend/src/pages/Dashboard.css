@@ -1,0 +1,181 @@
+/* src/pages/Dashboard.css */
+
+.dashboard-container {
+  padding: 20px;
+  max-width: 1200px; /* Limita a largura máxima para telas grandes */
+  margin: 0 auto;   /* Centraliza o container */
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-color-light, #eee); /* Usa variável do index.css */
+}
+
+.dashboard-header h1 {
+  font-size: 28px;
+  color: var(--text-color-dark, #333);
+}
+
+.button-logout,
+.button-submit,
+.button-cancel,
+.button-edit,
+.button-delete {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+.button-logout {
+  background-color: var(--error-color, #dc3545);
+  color: white;
+}
+.button-logout:hover {
+  background-color: #c82333; /* Vermelho mais escuro */
+}
+
+.button-submit {
+  background-color: var(--primary-color, #007bff);
+  color: white;
+  margin-right: 10px; /* Espaço se houver botão de cancelar */
+}
+.button-submit:hover {
+  background-color: var(--primary-color-darker, #0056b3);
+}
+
+.button-cancel {
+  background-color: #6c757d; /* Cinza */
+  color: white;
+}
+.button-cancel:hover {
+  background-color: #5a6268;
+}
+
+
+/* Estilo de Card para seções */
+.card {
+  background-color: var(--background-white, #ffffff);
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  margin-bottom: 30px;
+}
+
+.card h2 {
+  font-size: 22px;
+  color: var(--text-color-dark, #333);
+  margin-bottom: 20px;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 10px;
+}
+
+/* Formulário */
+.form-section form .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Layout responsivo */
+  gap: 20px; /* Espaço entre os campos */
+  margin-bottom: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: 6px;
+  color: var(--text-color-light, #555);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"] { /* Adicionei number se patrimônio for numérico */
+  padding: 10px 12px;
+  border: 1px solid var(--border-color-light, #ccc);
+  border-radius: 4px;
+  font-size: 15px;
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="number"]:focus {
+  border-color: var(--primary-color, #007bff);
+  outline: none;
+  box-shadow: 0 0 0 0.15rem rgba(0, 123, 255, 0.2);
+}
+
+/* Lista de Dispositivos */
+.devices-list {
+  list-style: none;
+  padding: 0;
+}
+
+.device-item {
+  background-color: #f9f9f9; /* Fundo levemente diferente para itens da lista */
+  padding: 15px;
+  border: 1px solid #e9e9e9;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: box-shadow 0.2s ease;
+}
+
+.device-item:hover {
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.device-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.device-info strong {
+  font-size: 17px;
+  color: var(--text-color-dark, #333);
+  margin-bottom: 4px;
+}
+
+.device-info span {
+  font-size: 14px;
+  color: var(--text-color-light, #555);
+  margin-bottom: 2px;
+}
+
+.device-actions button {
+  margin-left: 10px;
+  font-size: 13px;
+  padding: 6px 12px;
+}
+
+.button-edit {
+  background-color: #ffc107; /* Amarelo */
+  color: #212529;
+}
+.button-edit:hover {
+  background-color: #e0a800;
+}
+
+.button-delete {
+  background-color: #dc3545; /* Vermelho */
+  color: white;
+}
+.button-delete:hover {
+  background-color: #c82333;
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--text-color-light, #777);
+  padding: 20px;
+  font-style: italic;
+}
