@@ -11,9 +11,25 @@ import DashboardSummary from '../components/DashboardSummary'; // Para o resumo
 const Dashboard = () => {
   const { logout } = useAuth(); //
   const [activeView, setActiveView] = useState('summary'); // Controla a visão atual: 'summary' ou 'inventory'
-
+  const [devices, setDevices] = useState([]); // <-- Adicione este estado para os dispositivos
   // A lógica de fetchDevices, form, editingDevice, handleChange, handleSubmit, handleEdit, handleDelete
   // será movida para o componente InventoryView.jsx
+
+    // Função para buscar os dispositivos
+  const fetchDevices = async () => {
+    try {
+      const res = await API.get('/device');
+      setDevices(res.data); // <-- Atualiza o estado com os dispositivos
+    } catch (error) {
+      console.error("Erro ao buscar dispositivos no Dashboard:", error);
+    }
+  };
+
+  // Chama fetchDevices uma vez ao carregar o componente
+  useEffect(() => {
+    fetchDevices();
+    // Você pode chamar fetchDevices novamente se houver alguma ação que exija a atualização do resumo
+  }, []); // O array vazio significa que roda apenas na montagem
 
   const renderView = () => {
     switch (activeView) {
@@ -21,7 +37,7 @@ const Dashboard = () => {
         return <InventoryView />;
       case 'summary':
       default:
-        return <DashboardSummary />;
+       return <DashboardSummary totalDevices={devices.length} />;
     }
   };
 

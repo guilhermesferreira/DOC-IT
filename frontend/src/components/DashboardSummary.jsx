@@ -2,7 +2,7 @@
 import React from 'react';
 import './DashboardSummary.css'; // CSS para o Resumo
 
-const DashboardSummary = () => {
+const DashboardSummary = ({ totalDevices }) => {
   // No futuro, aqui você pode buscar e exibir dados resumidos
   // Ex: total de equipamentos, equipamentos por tipo, etc.
   return (
@@ -12,7 +12,7 @@ const DashboardSummary = () => {
       <div className="summary-metrics">
         <div className="metric-card">
           <h3>Total de Equipamentos</h3>
-          <p className="metric-value">N/A</p> {/* Substituir por dados reais */}
+          <p className="metric-value">{totalDevices !== undefined ? totalDevices : 'Carregando...'}</p> {/* <-- EXIBE O VALOR AQUI */}
         </div>
         <div className="metric-card">
           <h3>Equipamentos Ativos</h3>
