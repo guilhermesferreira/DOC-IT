@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import API from '../api/api'; // Ajuste o caminho se necessário
 // Não precisa mais do useAuth aqui se o logout for gerenciado pelo Sidebar/DashboardLayout
+import '../pages/Dashboard.css';
 import './InventoryView.css'; // CSS específico para esta visão
 
 const InventoryView = () => {
