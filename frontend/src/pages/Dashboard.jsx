@@ -31,7 +31,7 @@ const Dashboard = () => {
     try {
       if (editingDevice) {
         // Lógica de atualização (PUT /device/:id) - A ser implementada
-        // await API.put(`/device/${editingDevice.id}`, form);
+        await API.put(`/device/${editingDevice.id}`, form);
       } else {
         await API.post('/device', form); //
       }
@@ -44,9 +44,31 @@ const Dashboard = () => {
     }
   };
 
-  // Opcional: Lógica para deletar e popular formulário para edição
-  // const handleDelete = async (deviceId) => { ... };
-  // const handleEdit = (device) => { setForm(device); setEditingDevice(device); };
+    // Função para deletar um dispositivo
+  const handleDelete = async (deviceId) => {
+    // Adicionar uma confirmação antes de deletar é uma boa prática
+    if (window.confirm("Tem certeza que deseja excluir este equipamento?")) {
+      try {
+        await API.delete(`/device/${deviceId}`);
+        fetchDevices(); // Atualiza a lista após deletar
+      } catch (error) {
+        console.error("Erro ao deletar dispositivo:", error);
+        // Mostrar erro para o usuário
+      }
+    }
+  };
+
+    // Função para popular o formulário quando o modo de edição é ativado
+  const handleEdit = (device) => {
+    setEditingDevice(device); // Define qual dispositivo está sendo editado
+    // Popula o formulário com os dados do dispositivo (removendo campos que não devem ser editados diretamente, se houver)
+    setForm({
+      name: device.name,
+      type: device.type,
+      location: device.location,
+      patrimony: device.patrimony || '' // Garante que patrimony não seja undefined
+    });
+  };
 
   return (
     <div className="dashboard-container">
@@ -100,12 +122,12 @@ const Dashboard = () => {
                   <span>Local: {device.location}</span> {/* */}
                   {device.patrimony && <span>Patrimônio: {device.patrimony}</span>}
                 </div>
-                {/* Opcional: Botões de ação por item
+                {
                 <div className="device-actions">
                   <button onClick={() => handleEdit(device)} className="button-edit">Editar</button>
                   <button onClick={() => handleDelete(device.id)} className="button-delete">Excluir</button>
                 </div>
-                */}
+                }
               </li>
             ))}
           </ul>
