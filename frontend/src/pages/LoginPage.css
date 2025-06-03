@@ -1,0 +1,98 @@
+/* src/pages/LoginPage.css */
+
+.login-page-container {
+  display: flex;
+  flex-direction: column; /* Para o texto do rodapé ficar abaixo do formulário */
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+  /* O background-color: #f0f2f5; e font-family virão do body (index.css) */
+}
+
+.login-form-container {
+  background-color: #ffffff;
+  padding: 30px 40px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.login-form-container h2 {
+  margin-bottom: 24px;
+  color: #333;
+  font-size: 28px; /* Aumentei um pouco o título */
+}
+
+.form-group {
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #555;
+  font-weight: bold;
+  font-size: 14px; /* Tamanho da label */
+}
+
+.form-group input[type="text"],
+.form-group input[type="password"] {
+  width: 100%;
+  padding: 12px 15px; /* Ajuste no padding */
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 16px;
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="password"]:focus {
+  border-color: #007bff; /* Azul primário */
+  outline: none;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.login-button {
+  width: 100%;
+  padding: 12px;
+  background-color: #007bff; /* Azul primário */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.login-button:hover {
+  background-color: #0056b3; /* Azul primário mais escuro */
+}
+
+.error-message {
+  color: #dc3545; /* Vermelho para erro */
+  margin-top: 15px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.login-footer-text {
+  margin-top: 25px; /* Espaçamento acima do texto do rodapé */
+  text-align: center;
+  font-size: 14px;
+  color: #555;
+}
+
+.login-footer-text a {
+  color: #007bff; /* Azul primário para o link */
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.login-footer-text a:hover {
+  text-decoration: underline;
+}
