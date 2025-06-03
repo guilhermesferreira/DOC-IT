@@ -1,5 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+//const { PrismaClient } = require('@prisma/client');
+//const prisma = new PrismaClient();
+const prisma = require('../../prisma/prismaClient');
 
 async function getDevices(req, res) {
   const userId = req.user.id;
