@@ -1,0 +1,23 @@
+/* src/components/InventoryView.css */
+.inventory-view-container {
+  /* Se precisar de algum container específico para a visão de inventário */
+}
+
+/* Reutilize .form-section, .card-dashboard, .devices-section, etc. do Dashboard.css geral
+   ou defina estilos específicos se necessário.
+   As classes .form-grid, .form-group, input, button-*, .devices-list, .device-item, .empty-state
+   já foram definidas no Dashboard.css anterior e devem ser aplicadas.
+   Se você moveu Dashboard.css para DashboardLayout.css ou algo assim,
+   garanta que essas classes ainda estejam acessíveis.
+   Para este exemplo, vou assumir que o .card-dashboard é global ou
+   você pode importar os estilos de botões e formulários de um local comum.
+   Por simplicidade, se você apenas importou o Dashboard.css no Dashboard.jsx (layout),
+   e o InventoryView é renderizado dentro dele, as classes como card-dashboard,
+   form-group, button-submit, etc., já devem ser aplicadas por cascata ou
+   porque os elementos JSX no InventoryView usam essas classes.
+*/
+
+/* Apenas se precisar de algum override ou estilo muito específico para InventoryView: */
+.inventory-view-container .form-section {
+  /* Exemplo: margin-top: 0; se for o primeiro elemento */
+}
