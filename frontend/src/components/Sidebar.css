@@ -1,16 +1,27 @@
 /* src/components/Sidebar.css */
+
 .sidebar {
-  width: 250px; /* Largura do sidebar */
-  background-color: #2c3e50; /* Cor escura para o sidebar */
-  color: #ecf0f1; /* Cor clara para o texto */
+  width: 70px; /* Largura padrão quando recolhido */
+  background-color: #2c3e50;
+  color: #ecf0f1;
   padding: 20px 0;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0; /* Impede que o sidebar encolha */
+  flex-shrink: 0;
+  transition: width 0.3s ease; /* Transição suave para a largura */
+  overflow-x: hidden; /* Esconde o conteúdo que transborda horizontalmente */
+  white-space: nowrap; /* Impede que o texto quebre linhas */
+  position: relative; /* Para que o z-index funcione se ele sobrepor o conteúdo */
+  z-index: 1000; /* Garante que ele fique acima do conteúdo principal */
+}
+
+/* Estilo quando expandido */
+.sidebar.expanded {
+  width: 250px; /* Largura quando expandido */
 }
 
 .sidebar-header {
-  padding: 0 20px 20px 20px;
+  padding: 0 10px 20px 10px;
   text-align: center;
   border-bottom: 1px solid #34495e;
 }
@@ -19,7 +30,42 @@
   margin: 0;
   font-size: 24px;
   color: #ffffff;
+  transition: opacity 0.3s ease, font-size 0.3s ease, width 0.3s ease; /* Adicione font-size e width para transição */
+  opacity: 1;
+  width: auto; /* Garante que o texto ocupa a largura */
+  overflow: hidden;
+  white-space: nowrap;
 }
+
+/* Esconde o título completo e mostra a versão abreviada quando recolhido */
+.sidebar.collapsed .sidebar-header h2 {
+  opacity: 0;
+  font-size: 0;
+  width: 0;
+  padding: 0; /* Remover padding lateral se estiver atrapalhando */
+}
+
+/* Pseudo-elemento para o "D-IT" ou ícone no header quando recolhido */
+.sidebar.collapsed .sidebar-header h2::before {
+  content: 'D-IT'; /* Ou um ícone, se preferir. Ex: content: '\f015'; (Font Awesome unicode) */
+  font-size: 24px;
+  opacity: 1;
+  position: absolute; /* Para posicionar independentemente do texto escondido */
+  left: 50%;
+  transform: translateX(-50%);
+  top: 20px; /* Ajuste a posição vertical conforme necessário */
+  display: block; /* Garante que o pseudo-elemento ocupe espaço */
+  width: auto;
+}
+
+/* Se você usar ícones, pode querer estilizar para que fiquem centrados quando recolhido */
+.sidebar.collapsed .sidebar-header h2:before {
+  content: 'D-IT'; /* Ou um ícone aqui se preferir */
+  font-size: 24px; /* Tamanho do ícone/texto abreviado */
+  opacity: 1;
+  width: auto;
+}
+
 
 .sidebar-nav ul {
   list-style: none;
@@ -28,27 +74,49 @@
 }
 
 .sidebar-nav li button {
-  display: block;
+  display: flex; /* Muito importante para alinhar ícone e texto */
+  align-items: center; /* Alinha verticalmente */
+  gap: 10px; /* Espaçamento entre ícone e texto quando expandido */
   width: 100%;
-  padding: 15px 20px;
+  padding: 15px 10px; /* Padding padrão */
   background-color: transparent;
   border: none;
-  color: #bdc3c7; /* Cor mais suave para links não ativos */
-  text-align: left;
+  color: #bdc3c7;
+  text-align: left; /* Garante que o texto alinhe à esquerda quando expandido */
   font-size: 16px;
   cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, padding 0.3s ease;
+  overflow: hidden; /* Esconde o texto que transborda */
+  white-space: nowrap; /* Evita que o texto quebre linha */
+}
+
+/* Ajusta o padding para os botões quando expandido */
+.sidebar.expanded .sidebar-nav li button {
+  padding: 15px 20px;
 }
 
 .sidebar-nav li button:hover,
-.sidebar-nav li button.active { /* Adicionar classe .active via JS se quiser */
+.sidebar-nav li button.active {
   background-color: #34495e;
-  color: #ffffff; /* Branco para item ativo/hover */
+  color: #ffffff;
 }
 
+/* Esconde o texto dos botões quando recolhido */
+.sidebar.collapsed .sidebar-nav li button {
+    justify-content: center; /* Centraliza o ícone */
+    padding: 15px 0; /* Remove padding lateral */
+    font-size: 20px; /* Aumenta tamanho do ícone, se for o caso */
+}
+
+/* Oculta o texto ao lado do ícone quando recolhido */
+.sidebar.collapsed .sidebar-nav li button span { /* Se você envolver o texto em um span */
+    display: none;
+}
+
+
 .sidebar-footer {
-  margin-top: auto; /* Empurra o rodapé para baixo */
-  padding: 20px;
+  margin-top: auto;
+  padding: 20px 10px; /* Ajusta padding */
   border-top: 1px solid #34495e;
 }
 
@@ -59,12 +127,75 @@
   color: white;
   border: none;
   border-radius: 4px;
-  font-size: 15px;
+  font-size: 15px; /* Tamanho base para o texto */
   font-weight: bold;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s ease, opacity 0.3s ease;
+  display: flex; /* Para alinhar o texto e o ícone */
+  align-items: center;
+  justify-content: center; /* Centraliza o conteúdo por padrão */
+  gap: 10px; /* Espaço entre texto e ícone quando expandido */
 }
 
 .button-logout-sidebar:hover {
-  background-color: #c0392b; /* Vermelho mais escuro */
+  background-color: #c0392b;
 }
+
+/* Estilos para o texto dentro do botão */
+.button-logout-sidebar .button-text {
+  transition: opacity 0.3s ease, width 0.3s ease; /* Transição para o texto */
+  opacity: 1;
+  width: auto;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Estilos para o ícone dentro do botão */
+.button-logout-sidebar .button-icon {
+  font-size: 20px; /* Tamanho do ícone quando recolhido */
+  display: flex; /* Garante que o ícone é um flex item */
+  align-items: center;
+  justify-content: center;
+}
+
+/* Quando o sidebar está recolhido */
+.sidebar.collapsed .button-logout-sidebar {
+  padding: 10px 0; /* REMOVER padding lateral. Apenas padding vertical */
+  /* Re-aplicar flex e centralização para garantir que puxe o ícone para o centro */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.sidebar.collapsed .button-logout-sidebar .button-text {
+  opacity: 0;
+  width: 0;
+  padding: 0;
+  margin: 0; /* Garante que não há margem empurrando o ícone */
+}
+
+.button-logout-sidebar .button-icon {
+  font-size: 20px; /* Tamanho do ícone */
+  display: flex; /* O ícone também é um flex item */
+  align-items: center; /* Centraliza conteúdo do ícone (se o ícone for mais complexo) */
+  justify-content: center; /* Centraliza conteúdo do ícone */
+  /* Certifique-se de que não há margem ou padding indesejados aqui */
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar.collapsed .button-logout-sidebar .button-icon {
+    /* Exemplo de ajuste fino. Tente 0px ou -1px */
+    position: relative;
+    left: -3.5px; /* Altere para -1px, 1px etc. e veja o que centraliza melhor */
+    top: 0px;  /* Altere para -1px, 1px etc. se estiver alto/baixo */
+}
+
+/* Para o conteúdo principal do Dashboard se deslocar */
+/* Isso DEVE estar no seu src/pages/Dashboard.css ou no seu CSS global de layout */
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+
