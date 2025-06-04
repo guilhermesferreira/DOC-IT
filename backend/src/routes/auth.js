@@ -1,6 +1,9 @@
+// src/routes/auth.js
 const express = require('express');
 const router = express.Router();
-const { register, login } = require('../controllers/authController');
+const authController = require('../controllers/authController');
+const mfaController = require('../controllers/mfaController');
+const authenticateToken = require('../middleware/auth');
 
 /**
  * @swagger
@@ -130,7 +133,78 @@ const { register, login } = require('../controllers/authController');
  */
 
 
-router.post('/register', register);
-router.post('/login', login);
+
+/**
+ * @swagger
+ * tags:
+ *   name: Mfa
+ *   description: Endpoints para registro e login de usuários
+ */
+
+/**
+ * @swagger
+ * /verify-mfa:
+ *   post:
+ *     summary:  Verifica o código MFA durante o processo de login
+ *     tags: [Mfa]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *               - mfaCode
+ *             properties:
+ *               userId:
+ *                 type: integer
+ *                 example:  1
+ *               mfaCode:
+ *                 type: string
+ *                 example: 123456
+ *     responses:
+ *       200:
+ *         description: Código MFA válido, token de sessão retornado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                   example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *       400:
+ *         description: Dados ausentes (userId ou mfaCode)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Código MFA inválido
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description:  Erro interno na verificação MFA
+ *         content:
+ *           application/json:
+ *             schema:
+ *              $ref: '#/components/schemas/ErrorResponse'
+ */
+
+
+
+
+router.post('/register', authController.register);
+
+router.post('/login', authController.login);
+
+router.post('/verify-mfa', authController.verifyMfaLogin);
+
+router.post('/mfa/generate-secret', authenticateToken, mfaController.generateMfaSecret);
+
+router.post('/mfa/verify-setup', authenticateToken, mfaController.verifyAndActivateMfa);
 
 module.exports = router;

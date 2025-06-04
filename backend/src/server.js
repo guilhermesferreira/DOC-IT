@@ -1,3 +1,4 @@
+//src/server.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -20,6 +21,7 @@ app.use(express.json());
 app.use('/auth', authRoutes);
 app.use('/device', deviceRoutes);
 app.use('/VerifyHealth', healthRoutes);
+
 
 app.get('/', (req, res) => {
   res.json({ message: 'API doc-it Backend funcionando!' });

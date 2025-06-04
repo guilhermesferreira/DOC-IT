@@ -1,0 +1,107 @@
+/* src/pages/MfaSetupPage.css */
+.mfa-setup-page-container {
+  /* .page-container do seu index.css pode já aplicar estilos de centralização */
+  /* Se não, adicione: */
+  /* display: flex; */
+  /* justify-content: center; */
+  /* align-items: flex-start; /* Alinha o card no topo */
+  /* padding-top: 40px; */
+}
+
+.mfa-setup-card {
+  /* .card-dashboard do seu Dashboard.css pode já aplicar estilos de card */
+  /* Se não, adicione: */
+  /* background-color: #fff; */
+  /* padding: 25px; */
+  /* border-radius: 8px; */
+  /* box-shadow: 0 2px 8px rgba(0,0,0,0.1); */
+  /* max-width: 600px; */
+  /* width: 100%; */
+  text-align: left; /* Para alinhar o texto dentro do card à esquerda */
+}
+
+.mfa-setup-card h2 {
+  text-align: center; /* Centraliza o título principal do card */
+  margin-bottom: 25px;
+}
+
+.mfa-setup-card h3 {
+  margin-top: 20px;
+  margin-bottom: 10px;
+  font-size: 1.25em;
+}
+
+.mfa-initiate-section,
+.mfa-configure-section,
+.mfa-recovery-codes-section,
+.mfa-status-section {
+  margin-bottom: 30px;
+}
+
+.qr-code-container {
+  margin: 20px auto; /* Centraliza o QR Code */
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  width: fit-content; /* Ajusta ao tamanho do QR Code */
+}
+
+.secret-key {
+  display: inline-block;
+  background-color: #f0f0f0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-family: monospace;
+  margin: 10px 0;
+  word-break: break-all; /* Quebra chaves longas */
+}
+
+.mfa-verify-form .form-group {
+  margin-bottom: 15px;
+}
+
+.mfa-verify-form input[type="text"] {
+  /* Reutilize estilos de input do seu CSS global ou LoginPage.css se aplicável */
+  /* Exemplo: */
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1em;
+  text-align: center; /* Para códigos de 6 dígitos */
+}
+
+.error-message {
+  /* Reutilize do LoginPage.css ou defina aqui */
+  color: #dc3545;
+  margin-top: 10px;
+  font-size: 0.9em;
+}
+
+.recovery-warning {
+  background-color: #fff3cd; /* Amarelo claro para aviso */
+  color: #856404;
+  border: 1px solid #ffeeba;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.recovery-codes-list {
+  list-style-type: none;
+  padding: 0;
+}
+
+.recovery-codes-list li {
+  background-color: #e9ecef;
+  padding: 8px 12px;
+  margin-bottom: 5px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+/* Reutilize estilos de botão do seu CSS global/Dashboard.css */
+/* .button-submit { ... } */
+/* .button-danger { background-color: #dc3545; color: white; ... } */
