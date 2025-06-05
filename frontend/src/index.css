@@ -10,7 +10,7 @@ body {
 .page-container {
   max-width: 900px; /* Limita a largura máxima da página */
   margin: 0 auto; /* Centraliza o conteúdo */
-  padding: 20px;
+  padding: 0px;
 }
 
 .card-dashboard {

@@ -4,7 +4,8 @@ import MfaSetupPage from './MfaSetupPage'; // Importa a página de setup do MFA 
 import './SettingsPage.css'; // Criaremos este arquivo CSS para estilizar as abas e o conteúdo
 
 const SettingsPage = () => {
-  const [activeTab, setActiveTab] = useState('userProfile'); // Aba ativa por padrão
+  const [activeTab, setActiveTab] = useState('userProfile'); // Aba principal ativa por padrão
+  const [activeUserSecuritySubView, setActiveUserSecuritySubView] = useState('profile'); // Sub-visão ativa dentro de 'userProfile'
 
   // Conteúdo para diferentes abas
   const renderTabContent = () => {
@@ -12,24 +13,41 @@ const SettingsPage = () => {
       case 'userProfile':
         return (
           <div className="tab-pane active">
-            <h3>Perfil e Segurança do Usuário</h3>
-            <p>Gerencie as informações do seu perfil e as configurações de segurança da sua conta.</p>
-            
-            {/* Seção para Configuração do MFA */}
-            <div className="settings-section mfa-settings-section">
-              {/*
-              <h4>Autenticação de Dois Fatores (MFA)</h4>
-              */}
-              <MfaSetupPage /> {/* Renderiza o componente de setup do MFA aqui */}
+            {/* Sub-navegação para a aba "Usuário e Segurança" */}
+            <nav className="user-security-sub-nav">
+              <button
+                className={`sub-tab-link ${activeUserSecuritySubView === 'profile' ? 'active' : ''}`}
+                onClick={() => setActiveUserSecuritySubView('profile')}
+              >
+                Meu Perfil
+              </button>
+              <button
+                className={`sub-tab-link ${activeUserSecuritySubView === 'mfa' ? 'active' : ''}`}
+                onClick={() => setActiveUserSecuritySubView('mfa')}
+              >
+                Autenticação de Dois Fatores (MFA)
+              </button>
+              {/* Adicione mais botões para outras sub-visões aqui */}
+              {/* Ex: Alterar Senha, Gerenciar Sessões, etc. */}
+            </nav>
+
+            {/* Conteúdo da sub-visão ativa */}
+            <div className="user-security-sub-content">
+              {activeUserSecuritySubView === 'profile' && (
+                <div className="settings-section">
+                  <h3>Meu Perfil</h3>
+                  <p>Informações do seu perfil de usuário.</p>
+                  {/* Adicionar formulário ou detalhes do perfil aqui */}
+                </div>
+              )}
+
+              {activeUserSecuritySubView === 'mfa' && (
+                 <div className="settings-section mfa-settings-section">
+                   <MfaSetupPage /> {/* Renderiza o componente de setup do MFA */}
+                 </div>
+              )}
             </div>
 
-            {/* Outras configurações de perfil poderiam vir aqui */}
-            {/* Exemplo:
-            <div className="settings-section">
-              <h4>Alterar Senha</h4>
-              <p>Formulário para alterar senha...</p>
-            </div>
-            */}
           </div>
         );
       case 'applicationSettings':
@@ -59,8 +77,8 @@ const SettingsPage = () => {
 
   return (
     <div className="settings-page-container card-dashboard"> {/* Reutiliza a classe .card-dashboard para o container */}
-      <h2 className="settings-page-title">Configurações</h2> 
-      
+      <h2 className="settings-page-title">Configurações</h2>
+
       <nav className="settings-tabs-nav">
         <button
           className={`tab-link ${activeTab === 'userProfile' ? 'active' : ''}`}

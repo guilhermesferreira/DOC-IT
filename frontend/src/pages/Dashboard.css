@@ -7,7 +7,7 @@
 
 .dashboard-main-content {
   flex-grow: 1; /* Ocupa todo o espaço restante ao lado do sidebar */
-  padding: 25px;
+  padding: 15px;
   background-color: var(--background-light, #f0f2f5); /* Do index.css */
   overflow-y: auto; /* ESSENCIAL: Permite scroll vertical APENAS nesta área */
   /* Para garantir que ele saiba sua altura máxima para o scroll: */
@@ -22,16 +22,16 @@
   padding: 25px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  margin-bottom: 30px;
+  margin-bottom: 20px;
 }
 
 .card-dashboard h2 {
-  font-size: 22px;
+  font-size: 20px;
   color: var(--text-color-dark, #333);
   margin-top: 0; /* Remove margem do topo se for o primeiro elemento */
-  margin-bottom: 20px;
+  margin-bottom: 5px;
   border-bottom: 1px solid #f0f0f0;
-  padding-bottom: 10px;
+  padding-bottom: 5px;
 }
 
 /* --- ESTILOS QUE ESTAVAM FALTANDO OU FORAM APAGADOS --- */
