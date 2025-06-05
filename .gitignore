@@ -32,6 +32,11 @@ ehthumbs.db
 *.sln
 *.swp
 *~
+client/build/
+client/dis
+client/agent.spec
+client/dist/inventario.txt
+client/inventario.txt
 
 
 
