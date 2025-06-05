@@ -54,7 +54,7 @@ const LoginPage = () => {
     }
     try {
       // Chama o endpoint do backend para verificar o código MFA
-      const response = await API.post("/auth/verify-mfa", { userId: userIdForMfa, mfaCode });
+      const response = await API.post("/auth/mfa/verify-mfa", { userId: userIdForMfa, mfaCode });
       
       if (response.data.token) {
         login(response.data.token); // Login bem-sucedido com MFA

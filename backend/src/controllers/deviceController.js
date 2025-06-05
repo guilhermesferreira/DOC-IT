@@ -3,13 +3,13 @@
 const prisma = require('../../prisma/prismaClient');
 
 async function getDevices(req, res) {
-  const userId = req.user.userId;
+  const userId = req.user.id;
   console.log('ID do usuário do token:', userId); //debug
   console.log('Objeto req.user completo:', req.user); //debug
 
   try {
     const devices = await prisma.device.findMany({
-      where: { userId }
+       where: { userId: userId }
     });
     res.json(devices);
   } catch (err) {
@@ -19,7 +19,7 @@ async function getDevices(req, res) {
 }
 
 async function addDevice(req, res) {
-  const userId = req.user.userId;
+  const userId = req.user.id;
   console.log('ID do usuário do token:', userId); //debug
   console.log('Objeto req.user completo:', req.user); //debug
   const { name, type, location, patrimony } = req.body;
@@ -34,7 +34,7 @@ async function addDevice(req, res) {
         type,
         location,
         patrimony,
-        userId
+        userId: userId
       }
     });
     res.status(201).json(device);
@@ -45,7 +45,7 @@ async function addDevice(req, res) {
 }
 
 async function updateDevice(req, res) {
-  const userId = req.user.userId;
+  const userId = req.user.id;
   console.log('ID do usuário do token:', userId); //debug
   console.log('Objeto req.user completo:', req.user); //debug
 
@@ -69,7 +69,7 @@ async function updateDevice(req, res) {
 }
 
 async function deleteDevice(req, res) {
-  const userId = req.user.userId;
+  const userId = req.user.id;
   console.log('ID do usuário do token:', userId); //debug
   console.log('Objeto req.user completo:', req.user); //debug
 

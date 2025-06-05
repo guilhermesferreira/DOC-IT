@@ -30,7 +30,13 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDevices();
     // Você pode chamar fetchDevices novamente se houver alguma ação que exija a atualização do resumo
-  }, []); // O array vazio significa que roda apenas na montagem
+  }, []);
+  // Efeito para recarregar os dispositivos quando a aba "Resumo" for selecionada
+  useEffect(() => {
+    if (activeView === 'summary') {
+      fetchDevices();
+    }
+  }, [activeView]); // Roda sempre que activeView mudar
 
 const renderView = () => {
     switch (activeView) {
@@ -40,7 +46,7 @@ const renderView = () => {
         return <SettingsPage />; 
       case 'summary':
       default:
-        return <DashboardSummary />; 
+        return <DashboardSummary totalDevices={devices.length} />;
     }
   };
 
