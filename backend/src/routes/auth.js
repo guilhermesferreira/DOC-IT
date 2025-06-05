@@ -309,6 +309,45 @@ const authenticateToken = require('../middleware/auth');
  *       500: { description: Erro interno ao ativar MFA }
  */
 
+/**
+ * @swagger
+ * /auth/mfa/disable:
+ *   post:
+ *     summary: Desativa o MFA para o usuário autenticado
+ *     tags: [Mfa]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - mfaCode
+ *             properties:
+ *               mfaCode:
+ *                 type: string
+ *                 example: "123456"
+ *                 description: O código MFA atual do usuário.
+ *     responses:
+ *       200:
+ *         description: MFA desativado com sucesso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: MFA desativado com sucesso.
+ *       400:
+ *         description: Código MFA inválido ou ausente, ou MFA não estava ativo.
+ *       401:
+ *         description: Token inválido ou não fornecido.
+ *       500:
+ *         description: Erro interno ao desativar MFA.
+ */
 
 
 router.post('/register', authController.register);
@@ -323,5 +362,7 @@ router.post('/mfa/verify-setup', authenticateToken, mfaController.verifyAndActiv
 
 router.get('/mfa/status-mfa', authenticateToken, authController.getMfaStatus);
 
+router.post('/mfa/disable', authenticateToken, mfaController.disableMfa);
+
 module.exports = router;
- 
+  

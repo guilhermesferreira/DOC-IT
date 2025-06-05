@@ -17,6 +17,77 @@
   margin-bottom: 10px;
 }
 
+.mfa-setup-card h3 {
+  margin-top: 20px;
+  margin-bottom: 10px;
+  font-size: 1.3em;
+}
+
+
+.error-message,
+.disable-mfa-error { /* Unificando classes de erro se desejar */
+  color: #dc3545; /* Vermelho Bootstrap para perigo */
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 15px;
+  margin-bottom: 15px;
+  font-size: 0.95em;
+}
+
+.mfa-initiate-section,
+.mfa-configure-section,
+.mfa-recovery-codes-section,
+.mfa-status-section,
+.mfa-disable-section {
+  margin-top: 25px;
+}
+
+.mfa-initiate-section:first-child,
+.mfa-configure-section:first-child,
+.mfa-recovery-codes-section:first-child,
+.mfa-status-section:first-child,
+.mfa-disable-section:first-child {
+  margin-top: 0;
+}
+
+.mfa-status-section p {
+  margin-bottom: 15px; /* Espaço entre o texto e o container do botão */
+  text-align: center; /* Centraliza o parágrafo também, se desejado */
+}
+
+/* Container para centralizar o botão "Desativar MFA" */
+.mfa-disable-button-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px; /* Espaçamento acima do botão */
+}
+
+.button-danger {
+  background-color: #dc3545; /* Vermelho Bootstrap */
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+  font-weight: 500;
+  text-align: center;
+  transition: background-color 0.2s ease-in-out, transform 0.1s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.button-danger:hover {
+  background-color: #c82333; /* Vermelho mais escuro */
+  transform: translateY(-1px);
+}
+
+.button-danger:active {
+  background-color: #bd2130; /* Vermelho ainda mais escuro ao clicar */
+  transform: translateY(0px);
+}
+
 .mfa-setup-card p {
   line-height: 1.6;
   margin-bottom: 10px;
@@ -37,7 +108,7 @@
 .mfa-configure-section h3 {
   margin-top: 0; /* Primeiro título da seção */
   margin-bottom: 15px;
-}
+} 
 
 /* NOVO: Container para QR e Chave Manual */
 .mfa-setup-details {

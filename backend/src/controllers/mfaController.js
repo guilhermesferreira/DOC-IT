@@ -67,4 +67,38 @@ async function verifyAndActivateMfa(req, res) {
   }
 }
 
-module.exports = { generateMfaSecret, verifyAndActivateMfa };
+// Função para desativar o MFA
+async function disableMfa(req, res) {
+  const userId = req.user.id;
+  const { mfaCode } = req.body;
+
+  if (!mfaCode) {
+    return res.status(400).json({ error: 'Código MFA é obrigatório.' });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.isMfaEnabled || !user.mfaSecret) {
+      return res.status(400).json({ error: 'MFA não está habilitado ou usuário inválido.' });
+    }
+
+    const decryptedSecret = decrypt(user.mfaSecret);
+    const isValid = otplib.authenticator.check(mfaCode, decryptedSecret);
+
+    if (isValid) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { isMfaEnabled: false, mfaSecret: null },
+      });
+      res.json({ message: 'MFA desativado com sucesso.' });
+    } else {
+      res.status(400).json({ error: 'Código MFA inválido.' });
+    }
+  } catch (error) {
+    console.error("Erro ao desativar MFA:", error);
+    res.status(500).json({ error: 'Erro interno ao desativar MFA.' });
+  }
+}
+
+module.exports = { generateMfaSecret, verifyAndActivateMfa, disableMfa };
+
