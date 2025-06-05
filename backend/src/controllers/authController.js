@@ -94,5 +94,23 @@ async function verifyMfaLogin(req, res) {
     res.status(500).json({ error: 'Erro interno na verificação MFA.' });
   }
 }
+// Nova função para verificar o status do MFA para o usuário autenticado
+async function getMfaStatus(req, res) {
+  // O ID do usuário autenticado vem do middleware `authenticateToken`
+  const userId = req.user.id; 
 
-module.exports = { register, login, verifyMfaLogin };
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    res.json({ enabled: user.isMfaEnabled });
+  } catch (error) {
+    console.error("Erro ao verificar status do MFA:", error);
+    res.status(500).json({ error: 'Erro interno ao verificar status do MFA.' });
+  }
+}
+
+module.exports = { register, login, verifyMfaLogin, getMfaStatus };
