@@ -75,7 +75,7 @@ const MfaSetupPage = () => {
       <div className="mfa-setup-card card-dashboard"> {/* Reutilize .card-dashboard */}
         <h2>Configurar Autenticação de Dois Fatores (MFA)</h2>
 
-        {isLoading && <p>Carregando...</p>}
+        {isLoading && <p>Carregando...</p>} 
         
         {setupError && <p className="error-message">{setupError}</p>}
 
@@ -90,27 +90,27 @@ const MfaSetupPage = () => {
 
         {mfaSetupInfo && recoveryCodes.length === 0 && (
           <div className="mfa-configure-section">
-            <h3>1. Configure seu Aplicativo Autenticador</h3>
-            <p>
-              Escaneie o QR Code abaixo com seu aplicativo autenticador preferido
-              (como Google Authenticator, Authy, Microsoft Authenticator, etc.).
-            </p>
-            <div className="qr-code-container">
-              {mfaSetupInfo.otpauthUrl ? (
-                //<QRCode value={mfaSetupInfo.otpauthUrl} size={200} level="H" />
-                <QRCode value={mfaSetupInfo.otpauthUrl} size={200} level="H" />
-              ) : (
-                <p>Erro ao gerar QR Code.</p>
-              )}
+            <h3>1. Adicione ao seu App Autenticador</h3>
+            <div className="mfa-setup-details">
+              <div className="qr-code-area">
+                <p>Escaneie com seu app:</p>
+                <div className="qr-code-container">
+                  {mfaSetupInfo.otpauthUrl ? (
+                    <QRCode value={mfaSetupInfo.otpauthUrl} size={160} level="H" /> 
+                  ) : (
+                    <p>Erro ao gerar QR Code.</p>
+                  )}
+                </div>
+              </div>
+              <div className="manual-setup-area">
+                <p>Ou insira a chave manualmente:</p>
+                <code className="secret-key">{mfaSetupInfo.secretKey}</code>
+              </div>
             </div>
-            <p>
-              Se não puder escanear, você pode inserir manualmente a seguinte chave secreta:
-            </p>
-            <code className="secret-key">{mfaSetupInfo.secretKey}</code>
             
             <form onSubmit={handleVerifyAndActivateMfa} className="mfa-verify-form">
               <h3>2. Verifique o Código</h3>
-              <p>Após adicionar a conta ao seu aplicativo, insira o código de 6 dígitos gerado:</p>
+              <p>Insira o código de 6 dígitos gerado pelo seu aplicativo:</p>
               <div className="form-group">
                 <label htmlFor="mfaVerifyCode">Código de Verificação</label>
                 <input 

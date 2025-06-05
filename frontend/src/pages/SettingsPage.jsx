@@ -17,7 +17,9 @@ const SettingsPage = () => {
             
             {/* Seção para Configuração do MFA */}
             <div className="settings-section mfa-settings-section">
+              {/*
               <h4>Autenticação de Dois Fatores (MFA)</h4>
+              */}
               <MfaSetupPage /> {/* Renderiza o componente de setup do MFA aqui */}
             </div>
 
@@ -57,7 +59,7 @@ const SettingsPage = () => {
 
   return (
     <div className="settings-page-container card-dashboard"> {/* Reutiliza a classe .card-dashboard para o container */}
-      <h2 className="settings-page-title">Configurações</h2>
+      <h2 className="settings-page-title">Configurações</h2> 
       
       <nav className="settings-tabs-nav">
         <button

@@ -1,39 +1,76 @@
-/* src/index.css */
-
-/* Reset básico para remover margens e paddings padrão e definir box-sizing */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-/* Estilos padrão para o corpo da página */
+/* Exemplo de estilos base em index.css ou similar */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
-               Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
-  line-height: 1.6; /* Melhora a legibilidade */
-  background-color: #f0f2f5; /* Um cinza claro para o fundo geral da aplicação */
-  color: #333; /* Cor de texto padrão */
+  font-family: sans-serif;
+  background-color: #f4f7f6;
+  color: #333;
+  margin: 0;
+  padding: 0px;
 }
 
-/* Opcional: Você pode definir variáveis CSS aqui para usar em toda a aplicação */
-:root {
-  --primary-color: #007bff;
-  --primary-color-darker: #0056b3;
-  --error-color: #dc3545;
-  --text-color-dark: #333;
-  --text-color-light: #555;
-  --border-color-light: #ccc;
-  --background-light: #f0f2f5;
-  --background-white: #ffffff;
-}
-
-/* Um container genérico que você pode querer usar em outras páginas */
 .page-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
+  max-width: 900px; /* Limita a largura máxima da página */
+  margin: 0 auto; /* Centraliza o conteúdo */
   padding: 20px;
+}
+
+.card-dashboard {
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 20px; /* Reduzido de um padding potencialmente maior */
+  margin-bottom: 20px;
+}
+
+.card-dashboard h2, .card-dashboard h3, .card-dashboard h4 {
+  color: #2c3e50;
+  margin-top: 0; /* Remove margem superior padrão de títulos dentro do card */
+  margin-bottom: 15px; /* Espaçamento consistente abaixo dos títulos */
+}
+
+.button-submit {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+  transition: background-color 0.3s ease;
+}
+
+.button-submit:hover {
+  background-color: #2980b9;
+}
+
+.button-submit:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
+}
+
+.error-message {
+  color: #e74c3c;
+  background-color: #fdd;
+  border: 1px solid #e74c3c;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.form-group input[type="text"],
+.form-group input[type="password"] {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
 }

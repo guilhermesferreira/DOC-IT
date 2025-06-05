@@ -1,105 +1,82 @@
 /* src/pages/SettingsPage.css */
-
 .settings-page-container {
-  /* A classe .card-dashboard (do Dashboard.css ou index.css) 
-     já deve fornecer o estilo base de card (fundo, sombra, padding, etc.) */
-  /* Se precisar de ajustes específicos para o container da página de configurações: */
-  padding: 20px 30px; /* Exemplo de ajuste de padding */
+  /* .card-dashboard já aplica padding e background */
 }
 
 .settings-page-title {
-  text-align: center;
-  font-size: 26px; /* Ajuste o tamanho conforme preferir */
-  color: var(--text-color-dark, #333);
-  margin-bottom: 30px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 10px; /* Espaço abaixo do título principal da página */
+  font-size: 1.8em;
+  color: #333;
 }
 
 .settings-tabs-nav {
   display: flex;
-  border-bottom: 2px solid #dee2e6; /* Linha abaixo das abas */
-  margin-bottom: 25px;
+  margin-bottom: 10px;
+  border-bottom: 2px solid #e0e0e0;
 }
 
 .tab-link {
-  padding: 12px 20px;
+  padding: 10px 10px;
   cursor: pointer;
   border: none;
   background-color: transparent;
-  font-size: 16px;
-  color: var(--text-color-light, #555);
-  margin-right: 5px; /* Espaçamento entre os botões de aba */
-  border-bottom: 3px solid transparent; /* Borda inferior para o estado ativo */
-  transition: color 0.2s ease, border-bottom-color 0.2s ease;
-  position: relative;
-  top: 2px; /* Para alinhar a borda inferior com a borda principal */
+  font-size: 1em;
+  color: #555;
+  border-bottom: 2px solid transparent; /* Para o efeito da aba ativa */
+  margin-bottom: -2px; /* Alinha com a borda inferior do nav */
+  transition: color 0.3s ease, border-bottom-color 0.3s ease;
 }
 
 .tab-link:hover {
-  color: var(--primary-color, #007bff);
+  color: #3498db;
 }
 
 .tab-link.active {
-  color: var(--primary-color, #007bff);
-  font-weight: 600; /* Um pouco mais de destaque para a aba ativa */
-  border-bottom-color: var(--primary-color, #007bff);
+  color: #3498db;
+  font-weight: bold;
+  border-bottom-color: #3498db;
 }
 
 .settings-content {
-  padding-top: 15px;
+  /* O conteúdo da aba já está dentro do .card-dashboard */
 }
 
 .tab-pane {
-  /* Estilos para o painel de conteúdo da aba */
+  /* Estilos específicos para o painel da aba, se necessário */
+  /* O padding já vem do .card-dashboard */
 }
 
 .tab-pane h3 {
-  font-size: 1.5em; /* 24px se a base for 16px */
-  color: var(--text-color-dark, #333);
-  margin-top: 0; /* Remove margem do topo do primeiro h3 na aba */
-  margin-bottom: 20px;
+  font-size: 1.5em;
+  margin-bottom: 15px;
+  color: #2c3e50;
 }
 
 .tab-pane p {
-  margin-bottom: 15px;
   line-height: 1.6;
-  color: var(--text-color-light, #5F6368); /* Cor de texto um pouco mais suave */
+  margin-bottom: 10px;
+  color: #555;
 }
 
 .settings-section {
-  margin-bottom: 30px;
-  padding-bottom: 20px;
-  border-bottom: 1px dotted #e0e0e0; /* Separador leve entre seções */
+  margin-top: 10px; /* Espaço entre seções dentro de uma aba */
+  padding-top: 10px;
+  border-top: 1px solid #eee; /* Separador visual leve */
 }
-.settings-section:last-child {
-  border-bottom: none; /* Remove a borda da última seção */
-  margin-bottom: 0;
+
+.settings-section:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .settings-section h4 {
-  font-size: 1.2em; /* 19px se a base for 16px */
-  color: var(--text-color-dark, #333);
+  font-size: 1.2em;
   margin-bottom: 10px;
+  color: #333;
 }
 
-/* Ajustes para o MfaSetupPage quando embutido */
-.mfa-settings-section .mfa-setup-card {
-  /* Remove ou ajusta estilos do card do MfaSetupPage para melhor integração */
-  box-shadow: none;
-  border: 1px solid #f0f0f0; /* Uma borda leve em vez de sombra */
-  padding: 20px; /* Mantém um padding interno */
-  margin-top: 10px;
-}
-
-.mfa-settings-section .mfa-setup-card h2 {
-  /* O MfaSetupPage tem seu próprio H2, podemos querer escondê-lo ou estilizá-lo diferente aqui */
-  /* Exemplo para esconder o H2 do MfaSetupPage quando embutido: */
-  /* display: none; */
-  /* Ou apenas ajustar o tamanho/margem: */
-  font-size: 1.3em;
-  text-align: left;
-  border-bottom: none;
-  padding-bottom: 0;
-  margin-bottom: 15px;
+/* Ajustes para a seção MFA dentro da página de configurações */
+.mfa-settings-section {
+  /* Pode não precisar de estilos específicos se MfaSetupPage já for bem encapsulado */
 }

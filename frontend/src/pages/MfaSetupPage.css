@@ -1,107 +1,196 @@
 /* src/pages/MfaSetupPage.css */
-.mfa-setup-page-container {
-  /* .page-container do seu index.css pode já aplicar estilos de centralização */
-  /* Se não, adicione: */
-  /* display: flex; */
-  /* justify-content: center; */
-  /* align-items: flex-start; /* Alinha o card no topo */
-  /* padding-top: 40px; */
-}
+
+/* O container .mfa-setup-page-container pode não ser necessário se
+   o MfaSetupPage for sempre renderizado dentro de outro card/container
+   que já provê padding, como o .settings-section.
+   Se for usado como uma página standalone, o .page-container global pode ser suficiente.
+*/
 
 .mfa-setup-card {
-  /* .card-dashboard do seu Dashboard.css pode já aplicar estilos de card */
-  /* Se não, adicione: */
-  /* background-color: #fff; */
+  /* .card-dashboard já aplica padding, background, shadow, etc. */
+  /* Se precisar de ajustes específicos para o card de MFA: */
   /* padding: 25px; */
-  /* border-radius: 8px; */
-  /* box-shadow: 0 2px 8px rgba(0,0,0,0.1); */
-  /* max-width: 600px; */
-  /* width: 100%; */
-  text-align: left; /* Para alinhar o texto dentro do card à esquerda */
 }
 
 .mfa-setup-card h2 {
-  text-align: center; /* Centraliza o título principal do card */
-  margin-bottom: 25px;
+  text-align: center;
+  margin-bottom: 10px;
 }
 
-.mfa-setup-card h3 {
-  margin-top: 20px;
+.mfa-setup-card p {
+  line-height: 1.6;
   margin-bottom: 10px;
-  font-size: 1.25em;
+  color: #555;
 }
 
 .mfa-initiate-section,
 .mfa-configure-section,
 .mfa-recovery-codes-section,
 .mfa-status-section {
-  margin-bottom: 30px;
+  margin-top: 10px;
 }
 
+.mfa-initiate-section p {
+  margin-bottom: 10px;
+}
+
+.mfa-configure-section h3 {
+  margin-top: 0; /* Primeiro título da seção */
+  margin-bottom: 15px;
+}
+
+/* NOVO: Container para QR e Chave Manual */
+.mfa-setup-details {
+  display: flex;
+  flex-wrap: wrap; /* Permite quebrar linha em telas menores se necessário antes do media query */
+  gap: 10px; /* Espaço entre a área do QR e a área da chave manual */
+  align-items: flex-start; /* Alinha os itens ao topo */
+  margin-bottom: 15px; /* Espaço antes do formulário de verificação */
+}
+
+/* NOVO: Área do QR Code */
+.qr-code-area {
+  flex: 1 1 180px; /* Base flexível, permite crescer e encolher, base de 180px (QR 160px + padding) */
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Centraliza o conteúdo da área (texto e QR container) */
+  min-width: 180px; /* Garante espaço mínimo para o QR code + padding */
+}
+
+.qr-code-area > p { /* Estilo para o texto "Escaneie com seu app:" */
+  margin-bottom: 8px;
+  font-size: 0.9em;
+  color: #555;
+  text-align: center;
+}
+
+/* MODIFICADO: Container do QR Code em si */
 .qr-code-container {
-  margin: 20px auto; /* Centraliza o QR Code */
   display: flex;
   justify-content: center;
-  padding: 10px;
+  align-items: center;
+  padding: 10px; /* Padding reduzido */
+  background-color: #f9f9f9;
+  border-radius: 5px;
   border: 1px solid #eee;
-  border-radius: 4px;
-  width: fit-content; /* Ajusta ao tamanho do QR Code */
+  margin: 0; /* Removida margem anterior, controlada pelo flex gap e container pai */
+  /* width e height serão definidos pelo QRCodeCanvas */
 }
 
+/* NOVO: Área da Chave Manual */
+.manual-setup-area {
+  flex: 2 1 220px; /* Mais espaço para a chave, mas pode encolher */
+  display: flex;
+  flex-direction: column;
+  /* Por padrão, itens de coluna flex são align-items: stretch.
+     O texto e a chave ficarão alinhados à esquerda dentro desta área.
+  */
+}
+
+.manual-setup-area > p { /* Estilo para o texto "Ou insira a chave manualmente:" */
+  margin-bottom: 8px;
+  font-size: 0.9em;
+  color: #555;
+  /* text-align: left; por padrão */
+}
+
+/* MODIFICADO: Estilo da Chave Secreta */
 .secret-key {
-  display: inline-block;
-  background-color: #f0f0f0;
+  display: inline-block; /* Para permitir padding e background */
+  background-color: #e9ecef;
   padding: 8px 12px;
   border-radius: 4px;
   font-family: monospace;
-  margin: 10px 0;
-  word-break: break-all; /* Quebra chaves longas */
+  font-size: 1em; /* Tamanho da fonte ajustado */
+  color: #000;
+  margin: 0 0 10px 0; /* Margem ajustada (sem margem superior, margem inferior para espaçamento) */
+  word-break: break-all; /* Para chaves longas */
+  line-height: 1.4; /* Para melhor leitura da chave se quebrar linha */
 }
 
-.mfa-verify-form .form-group {
-  margin-bottom: 15px;
+.mfa-verify-form {
+  margin-top: 25px;
+  padding-top: 20px;
+  border-top: 1px dashed #ddd;
 }
 
-.mfa-verify-form input[type="text"] {
-  /* Reutilize estilos de input do seu CSS global ou LoginPage.css se aplicável */
-  /* Exemplo: */
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 1em;
-  text-align: center; /* Para códigos de 6 dígitos */
+.mfa-verify-form h3 {
+  margin-bottom: 10px;
 }
 
-.error-message {
-  /* Reutilize do LoginPage.css ou defina aqui */
-  color: #dc3545;
-  margin-top: 10px;
-  font-size: 0.9em;
+.mfa-verify-form .form-group input[type="text"] {
+  max-width: 200px; /* Limita a largura do campo de código */
+  text-align: center;
+  font-size: 1.2em;
+  letter-spacing: 2px;
+}
+
+.mfa-recovery-codes-section h3 {
+  color: #27ae60; /* Verde para sucesso */
 }
 
 .recovery-warning {
-  background-color: #fff3cd; /* Amarelo claro para aviso */
-  color: #856404;
-  border: 1px solid #ffeeba;
-  padding: 15px;
+  background-color: #fff9e6; /* Amarelo claro para aviso */
+  border: 1px solid #ffe58f;
+  padding: 10px 15px;
   border-radius: 4px;
-  margin-bottom: 15px;
+  margin: 15px 0;
+}
+
+.recovery-warning strong {
+  color: #d97706; /* Laranja escuro para ênfase no aviso */
 }
 
 .recovery-codes-list {
   list-style-type: none;
-  padding: 0;
+  padding-left: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* Layout responsivo para os códigos */
+  gap: 10px;
+  margin-top: 15px;
 }
 
 .recovery-codes-list li {
-  background-color: #e9ecef;
-  padding: 8px 12px;
-  margin-bottom: 5px;
+  background-color: #f0f0f0;
+  padding: 8px 10px;
   border-radius: 4px;
   font-family: monospace;
+  font-size: 1.1em;
+  text-align: center;
+  border: 1px solid #ddd;
 }
 
-/* Reutilize estilos de botão do seu CSS global/Dashboard.css */
-/* .button-submit { ... } */
-/* .button-danger { background-color: #dc3545; color: white; ... } */
+.mfa-status-section p {
+  font-weight: bold;
+  color: #27ae60; /* Verde para indicar status ativo */
+  text-align: center;
+  padding: 10px;
+  background-color: #e6fff0;
+  border: 1px solid #b3ffcc;
+  border-radius: 4px;
+}
+
+/* NOVO: Media query para empilhar em telas menores */
+@media (max-width: 680px) { /* Ponto de quebra ajustável */
+  .mfa-setup-details {
+    flex-direction: column; /* Empilha os itens */
+    align-items: center; /* Centraliza os blocos empilhados (qr-code-area, manual-setup-area) */
+  }
+
+  .qr-code-area,
+  .manual-setup-area {
+    flex-basis: auto; /* Reseta a base flexível */
+    width: 100%; /* Ocupa toda a largura disponível no container pai */
+    max-width: 320px; /* Limita a largura máxima em telas pequenas para não ficar muito largo */
+    align-items: center; /* Centraliza o conteúdo interno de cada área */
+  }
+  
+  /* O texto dentro de <p> já está centralizado em .qr-code-area > p.
+     Para .manual-setup-area > p, centralizamos o texto: */
+  .manual-setup-area > p {
+    text-align: center;
+  }
+
+  /* A .secret-key, sendo inline-block e dentro de .manual-setup-area (que agora tem align-items: center),
+     será centralizada. */
+}
