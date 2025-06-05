@@ -2,19 +2,22 @@
 
 /* --- Estilo Base do Sidebar --- */
 .sidebar {
-  width: 70px; /* Largura padrão quando recolhido (apenas ícones) */
-  background-color: #2c3e50; /* Cor de fundo escura */
-  color: #ecf0f1; /* Cor do texto clara (para o caso de algum texto vazar) */
-  padding: 20px 0; /* Espaçamento interno vertical, sem espaçamento horizontal */
-  display: flex; /* Habilita Flexbox para alinhar itens internos verticalmente */
-  flex-direction: column; /* Itens internos empilhados verticalmente */
-  flex-shrink: 0; /* Impede que o sidebar encolha se o conteúdo principal for muito largo */
-  transition: width 0.2s ease; /* Animação suave da largura ao expandir/recolher */
-  overflow-x: hidden; /* Esconde qualquer conteúdo que transborde horizontalmente (importante para o texto ao recolher) */
-  /* white-space: nowrap;  Removido do container principal, será aplicado aos textos específicos se necessário */
-  position: relative; /* Necessário para z-index e posicionamento absoluto de filhos */
-  z-index: 1000; /* Garante que o sidebar fique acima de outros conteúdos da página */
+  width: 70px; 
+  background-color: #2c3e50;
+  color: #ecf0f1;
+  /* padding: 20px 0; Removido padding vertical do container principal do sidebar */
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.3s ease; 
+  overflow-x: hidden; 
+  /* white-space: nowrap;  Movido para elementos internos se necessário */
+  position: sticky; /* <<< MUDANÇA IMPORTANTE */
+  top: 0;           /* <<< MUDANÇA IMPORTANTE: Trava no topo */
+  height: 100vh;    /* <<< MUDANÇA IMPORTANTE: Ocupa toda a altura da tela */
+  /* z-index: 1000;  Já estava, bom para sobreposição */
 }
+
 
 .sidebar.expanded {
   width: 200px; /* Largura do sidebar quando está expandido */
@@ -22,7 +25,7 @@
 
 /* --- Cabeçalho do Sidebar --- */
 .sidebar-header {
-  padding: 0 10px 20px 10px; /* Espaçamento interno */
+  padding: 15 15px 15px 15px; /* Espaçamento interno */
   text-align: center; /* Centraliza o texto (útil para o 'D-IT' quando recolhido) */
   border-bottom: 1px solid #34495e; /* Linha divisória abaixo do cabeçalho */
   /* A altura do header será determinada pelo seu conteúdo (h2) */
@@ -115,9 +118,23 @@
 /* --- Rodapé do Sidebar --- */
 .sidebar-footer {
   margin-top: auto; /* Empurra o rodapé para baixo */
-  padding: 20px 0; /* Espaçamento interno vertical, sem horizontal no container */
+  padding: 0px 0; /* Espaçamento interno vertical, sem horizontal no container */
   border-top: 1px solid #34495e; /* Linha divisória acima */
 }
+/* Estilos para a lista de navegação dentro do rodapé, se precisar diferenciá-la */
+.sidebar-footer .sidebar-nav.footer-nav ul {
+  margin: 0; /* Remove margens da lista de navegação do rodapé se estiverem vindo de .sidebar-nav ul */
+  padding-bottom: 10px; /* Exemplo: Adiciona um espaço antes do botão Sair */
+}
+
+/* Os botões dentro de .footer-nav já devem herdar os estilos de .sidebar-nav li button.
+   Se precisar de ajustes específicos: */
+.sidebar-footer .sidebar-nav.footer-nav li button {
+  /* Exemplo: Menor altura se quiser diferenciar */
+  /* height: 50px; */
+}
+
+
 
 /* Estilo para o botão de SAIR no rodapé */
 .button-logout-sidebar {

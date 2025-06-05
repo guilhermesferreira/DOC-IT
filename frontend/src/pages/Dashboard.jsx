@@ -7,6 +7,7 @@ import './Dashboard.css'; // Vamos usar este CSS para o layout geral do dashboar
 import Sidebar from '../components/Sidebar'; // Menu lateral
 import InventoryView from '../components/InventoryView'; // A antiga lógica de inventário
 import DashboardSummary from '../components/DashboardSummary'; // Para o resumo
+import SettingsPage from './SettingsPage'; // Certifique-se que o caminho está correto (ex: './SettingsPage' se estiver na mesma pasta)
 
 const Dashboard = () => {
   const { logout } = useAuth(); //
@@ -31,13 +32,15 @@ const Dashboard = () => {
     // Você pode chamar fetchDevices novamente se houver alguma ação que exija a atualização do resumo
   }, []); // O array vazio significa que roda apenas na montagem
 
-  const renderView = () => {
+const renderView = () => {
     switch (activeView) {
       case 'inventory':
         return <InventoryView />;
+      case 'settings': 
+        return <SettingsPage />; 
       case 'summary':
       default:
-       return <DashboardSummary totalDevices={devices.length} />;
+        return <DashboardSummary />; 
     }
   };
 

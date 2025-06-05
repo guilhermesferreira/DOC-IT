@@ -6,11 +6,15 @@
 }
 
 .dashboard-main-content {
-  flex-grow: 1; /* Ocupa o espaço restante */
+  flex-grow: 1; /* Ocupa todo o espaço restante ao lado do sidebar */
   padding: 25px;
   background-color: var(--background-light, #f0f2f5); /* Do index.css */
-  overflow-y: auto; /* Scroll se o conteúdo for maior */
+  overflow-y: auto; /* ESSENCIAL: Permite scroll vertical APENAS nesta área */
+  /* Para garantir que ele saiba sua altura máxima para o scroll: */
+  height: 100vh; /* Ocupa a altura da viewport, o scroll será interno */
+  box-sizing: border-box; /* Garante que o padding não aumente a altura total */
 }
+
 
 /* Estilo de Card genérico para usar nas seções do dashboard */
 .card-dashboard { /* Renomeei de .card para não conflitar se você tiver .card no index.css */
