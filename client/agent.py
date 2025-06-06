@@ -5,6 +5,7 @@ import re
 import psutil
 import json
 import winreg # Módulo específico para o Registro do Windows
+import subprocess # Para obter UUID de hardware
 
 #futuro: uptime
 #futuro: drivers
@@ -55,6 +56,24 @@ def get_installed_software():
     unique_software = [dict(t) for t in unique_software_tuples]
     return sorted(unique_software, key=lambda x: x['name'].lower())
 
+def get_windows_hardware_uuid():
+    """
+    Obtém o UUID de hardware da máquina Windows usando um comando WMI.
+    Este é um identificador mais estável do que um UUID gerado aleatoriamente.
+    """
+    try:
+        # Comando para obter o UUID da placa-mãe via WMI
+        result = subprocess.check_output("wmic csproduct get uuid", shell=True, text=True, stderr=subprocess.DEVNULL)
+        # O output vem com o cabeçalho "UUID" e linhas em branco.
+        # Precisamos limpar isso para pegar apenas o valor.
+        hardware_uuid = result.strip().split("\n")[-1].strip()
+        if hardware_uuid and hardware_uuid != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF":
+            return hardware_uuid
+    except Exception as e:
+        print(f"Aviso: Não foi possível obter o UUID do hardware via WMI: {e}")
+    # Fallback para um UUID aleatório se o do hardware não puder ser obtido
+    return str(uuid.uuid4())
+
 def get_system_inventory():
     """
     Coleta todas as informações do sistema e as retorna em um dicionário.
@@ -62,9 +81,11 @@ def get_system_inventory():
     inventory_data = {}
 
     # --- Informações de Sistema e Hardware ---
+    inventory_data["machine_uuid"] = get_windows_hardware_uuid()
     inventory_data["hostname"] = socket.gethostname()
     inventory_data["os_name"] = f"{platform.system()} {platform.release()}"
     inventory_data["os_version"] = platform.version()
+    
     # Tenta obter um nome de processador mais limpo
     try:
         # No Windows, platform.processor() pode já ser bom.
