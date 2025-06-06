@@ -1,6 +1,10 @@
 /* src/components/InventoryView.css */
 .inventory-view-container {
-  /* Se precisar de algum container específico para a visão de inventário */
+  /* .card-dashboard já foi adicionado ao container principal no JSX */
+  /* Se precisar de estilos específicos para o container geral do inventário, adicione aqui. */
+}
+.form-section, .devices-section, .onboarding-section {
+  margin-bottom: 25px; /* Espaço entre as seções */
 }
 
 /* Reutilize .form-section, .card-dashboard, .devices-section, etc. do Dashboard.css geral
@@ -20,4 +24,44 @@
 /* Apenas se precisar de algum override ou estilo muito específico para InventoryView: */
 .inventory-view-container .form-section {
   /* Exemplo: margin-top: 0; se for o primeiro elemento */
+} 
+
+/* --- Estilos para o Submenu dentro de Inventário --- */
+/* Reutilizando e adaptando estilos de SettingsPage.css para consistência */
+
+.inventory-sub-nav {
+  display: flex;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #eee; /* Linha sutil abaixo do submenu */
+  padding-bottom: 5px;
+  gap: 10px; /* Espaço entre os botões do submenu */
+  flex-wrap: wrap; /* Permite quebrar linha em telas menores */
+}
+
+.inventory-sub-nav .sub-tab-link { /* Especificidade para evitar conflito se .sub-tab-link for global */
+  background: none;
+  border: none;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 1em;
+  color: #555;
+  border-bottom: 2px solid transparent; /* Borda transparente por padrão */
+  transition: color 0.2s ease, border-bottom-color 0.2s ease;
+}
+
+.inventory-sub-nav .sub-tab-link:hover {
+  color: #333;
+  border-bottom-color: #ccc; /* Borda sutil ao passar o mouse */
+}
+
+.inventory-sub-nav .sub-tab-link.active {
+  color: var(--primary-color, #007bff); /* Usando variável global se definida, senão fallback */
+  border-bottom-color: var(--primary-color, #007bff);
+  font-weight: bold;
+}
+
+
+
+.inventory-sub-content {
+  /* Estilos para o container do conteúdo do submenu, se necessário */
 }
