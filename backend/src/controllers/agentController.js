@@ -12,35 +12,54 @@ async function checkIn(req, res) {
 
   try {
     const now = new Date();
-    const agentHost = await prisma.agentHost.upsert({
+    let agentHost;
+    let message;
+    let httpStatus = 200; // Default to 200 OK
+
+    const existingAgent = await prisma.agentHost.findUnique({
       where: { id: agentId },
-      create: {
-        id: agentId,
-        hostname,
-        osUsername,
-        ipAddress,
-        agentVersion,
-        osInfo,
-        additionalData,
-        status: 'pending', // Novos agentes iniciam como pendentes
-        firstSeenAt: now,
-        lastSeenAt: now,
-      },
-      update: {
-        hostname,
-        osUsername,
-        ipAddress,
-        agentVersion,
-        osInfo,
-        additionalData,
-        lastSeenAt: now,
-      },
     });
 
-    res.status(200).json({
+    if (existingAgent) {
+      // Agente já existe, atualiza as informações e lastSeenAt
+      agentHost = await prisma.agentHost.update({
+        where: { id: agentId },
+        data: {
+          hostname,
+          osUsername,
+          ipAddress,
+          agentVersion,
+          osInfo,
+          additionalData,
+          lastSeenAt: now,
+          // O status não é alterado aqui pelo agente
+        },
+      });
+      message = `Host já cadastrado. Informações atualizadas. Status atual: ${agentHost.status}.`;
+    } else {
+      // Agente não existe, cria um novo com status 'pending'
+      agentHost = await prisma.agentHost.create({
+        data: {
+          id: agentId,
+          hostname,
+          osUsername,
+          ipAddress,
+          agentVersion,
+          osInfo,
+          additionalData,
+          status: 'pending',
+          firstSeenAt: now,
+          lastSeenAt: now,
+        },
+      });
+      message = `Novo host registrado e aguardando aprovação. Status atual: ${agentHost.status}.`;
+      httpStatus = 201; // 201 Created para novo recurso
+    }
+
+    res.status(httpStatus).json({
       status: agentHost.status,
       agentId: agentHost.id,
-      message: `Check-in do agente processado. Status atual: ${agentHost.status}.`,
+      message: message,
     });
 
     console.log(agentHost)
