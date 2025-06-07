@@ -8,7 +8,7 @@ const setupSwagger = require("./config/swagger");
 const authRoutes = require('./routes/auth');
 const deviceRoutes = require('./routes/devices');
 const healthRoutes = require('./routes/health');
-
+const agentRoutes = require('./routes/agentRoutes'); 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,7 +21,7 @@ app.use(express.json());
 app.use('/auth', authRoutes);
 app.use('/device', deviceRoutes);
 app.use('/VerifyHealth', healthRoutes);
-
+app.use('/agent', agentRoutes); 
 
 app.get('/', (req, res) => {
   res.json({ message: 'API doc-it Backend funcionando!' });

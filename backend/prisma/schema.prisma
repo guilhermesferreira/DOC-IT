@@ -17,7 +17,30 @@ model User {
   updatedAt DateTime @updatedAt
   mfaSecret         String?  
   isMfaEnabled      Boolean  @default(false)
-  // Futuro: mfaRecoveryCodes String[] // Para códigos de recuperação
+  approvedAgentHosts AgentHost[] @relation("ApprovedAgentHostsRel")
+  // Futuro: mfaRecoveryCodes String[] // Para códigos de recuperação 
+}
+model AgentHost {
+  id               String    @id // Identificador único fornecido pelo agente (UUID)
+  hostname         String
+  osUsername       String    // Nome de usuário do SO na máquina host
+  ipAddress        String?
+  agentVersion     String?   // Versão do software do agente
+  osInfo           String?   // Ex: "Windows 10 Pro 22H2"
+  additionalData   Json?     // Para quaisquer outros dados estruturados que o agente possa enviar
+
+  status           String    @default("pending") // "pending", "approved", "rejected"
+
+  firstSeenAt      DateTime  @default(now())
+  lastSeenAt       DateTime  @updatedAt
+
+  approvedByUserId Int?
+  approvedByUser   User?     @relation("ApprovedAgentHostsRel", fields: [approvedByUserId], references: [id])
+  approvedAt       DateTime?
+
+  @@index([status])
+  @@index([hostname])
+  @@index([approvedByUserId])
 }
 
 model Device {
@@ -31,4 +54,5 @@ model Device {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
 
