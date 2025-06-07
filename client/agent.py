@@ -1,11 +1,15 @@
 import platform
 import socket
-import uuid # Embora não seja mais o método principal para MAC, pode ser mantido se necessário para algo.
+import uuid
 import re
 import psutil
 import json
 import winreg # Módulo específico para o Registro do Windows
 import subprocess # Para obter UUID de hardware
+import os # Para os.getlogin(), os.path.exists()
+import getpass # Para getpass.getuser()
+import requests # Para HTTP requests
+from datetime import datetime
 
 #futuro: uptime
 #futuro: drivers
@@ -14,6 +18,62 @@ import subprocess # Para obter UUID de hardware
 #futuro: usuarios locais / ativos / logados
 #futuro: workgroup
 #futuro: ultima atualização / envio
+
+# --- Configuration ---
+CONFIG_FILE = "config.json"
+LOG_FILE = "agent.log"
+INVENTORY_FILE = "inventario.txt"
+AGENT_VERSION = "1.1.0" # Versão do Agente
+
+DEFAULT_CONFIG = {
+    "server_base_url": "http://localhost:3000", # URL base do servidor
+    "agent_id": None,
+    "last_successful_checkin": None,
+    "log_level": "INFO" # Futuro: DEBUG, INFO, WARNING, ERROR
+}
+
+# --- Logging ---
+def log_event(message, level="INFO"):
+    """Adiciona uma mensagem de log ao arquivo de log."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"{timestamp} [{level}] - {message}\n"
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(log_entry)
+    except Exception as e:
+        print(f"Crítico: Falha ao escrever no arquivo de log {LOG_FILE}: {e}")
+
+# --- Configuration Management ---
+def load_config():
+    """Carrega a configuração do agente de config.json, cria padrão se não encontrado."""
+    if not os.path.exists(CONFIG_FILE):
+        log_event(f"Arquivo de configuração {CONFIG_FILE} não encontrado. Criando config padrão.", "WARNING")
+        save_config(DEFAULT_CONFIG)
+        return DEFAULT_CONFIG
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            config = json.load(f)
+            # Garante que todas as chaves padrão estejam presentes
+            for key, value in DEFAULT_CONFIG.items():
+                if key not in config:
+                    config[key] = value
+            return config
+    except json.JSONDecodeError:
+        log_event(f"Erro ao decodificar {CONFIG_FILE}. Usando config padrão e tentando sobrescrever.", "ERROR")
+        save_config(DEFAULT_CONFIG) # Tenta salvar um padrão válido
+        return DEFAULT_CONFIG
+    except Exception as e:
+        log_event(f"Falha ao carregar config de {CONFIG_FILE}: {e}. Usando config padrão.", "ERROR")
+        return DEFAULT_CONFIG
+
+def save_config(config_data):
+    """Salva os dados de configuração em config.json."""
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(config_data, f, indent=4, ensure_ascii=False)
+        # log_event("Configuração salva com sucesso.", "DEBUG") # Evita loops de log
+    except Exception as e:
+        log_event(f"Falha ao salvar config em {CONFIG_FILE}: {e}", "ERROR")
 
 
 def get_installed_software():
@@ -40,20 +100,33 @@ def get_installed_software():
                     try:
                         display_version, _ = winreg.QueryValueEx(subkey, "DisplayVersion")
                     except OSError:
-                        display_version = "N/A" # Ou None, ou string vazia
+                        display_version = "N/A"
                     
-                    if display_name.strip():
+                    if display_name.strip(): # Garante que display_name não seja apenas espaços em branco
                         software_list.append({"name": display_name, "version": display_version})
                     winreg.CloseKey(subkey)
                 except OSError:
                     # Ignora chaves que não têm DisplayName (ex: atualizações do Windows)
                     pass
+                except Exception: # Captura outros erros inesperados para uma subchave
+                    pass
+            winreg.CloseKey(key)
         except FileNotFoundError:
             # Ignora se o caminho do Registro não for encontrado
             pass
+        except Exception: # Captura outros erros inesperados para um caminho
+            pass
 
-    unique_software_tuples = {tuple(d.items()) for d in software_list}
-    unique_software = [dict(t) for t in unique_software_tuples]
+    # Remove duplicatas de forma mais robusta
+    unique_software = []
+    seen_software = set()
+    for item in software_list:
+        # Cria um frozenset de itens para torná-lo hashable para o set
+        identifier = frozenset(item.items())
+        if identifier not in seen_software:
+            unique_software.append(item)
+            seen_software.add(identifier)
+            
     return sorted(unique_software, key=lambda x: x['name'].lower())
 
 def get_windows_hardware_uuid():
@@ -67,24 +140,123 @@ def get_windows_hardware_uuid():
         # O output vem com o cabeçalho "UUID" e linhas em branco.
         # Precisamos limpar isso para pegar apenas o valor.
         hardware_uuid = result.strip().split("\n")[-1].strip()
-        if hardware_uuid and hardware_uuid != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF":
+        if hardware_uuid and hardware_uuid != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF" and len(hardware_uuid) > 5: # Checagem básica
+            log_event(f"UUID de Hardware obtido: {hardware_uuid}", "DEBUG")
             return hardware_uuid
     except Exception as e:
-        print(f"Aviso: Não foi possível obter o UUID do hardware via WMI: {e}")
-    # Fallback para um UUID aleatório se o do hardware não puder ser obtido
-    return str(uuid.uuid4())
+        log_event(f"Aviso: Não foi possível obter o UUID do hardware via WMI: {e}", "WARNING")
+    
+    # Fallback será tratado pela lógica que garante que agent_id seja salvo no config
+    log_event("Falha no UUID do WMI, dependerá do config ou gerará novo se for a primeira execução.", "WARNING")
+    return str(uuid.uuid4()) # Fallback se o config também falhar ou for primeira execução sem sucesso no WMI
 
-def get_system_inventory():
+def get_os_username():
+    """Obtém o nome de usuário atual do SO."""
+    try:
+        return getpass.getuser()
+    except Exception:
+        try:
+            return os.getlogin()
+        except Exception as e:
+            log_event(f"Não foi possível determinar o nome de usuário do SO: {e}", "WARNING")
+            return "unknown_user"
+
+def get_primary_ip_address():
+    """Tenta obter um endereço IPv4 primário não loopback."""
+    try:
+        hostname = socket.gethostname()
+        # Isso obtém um IP que pode alcançar um site externo, frequentemente o primário.
+        # Não conecta de fato, apenas resolve.
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.1) # Evita longas esperas
+        try:
+            s.connect(('8.8.8.8', 1)) # DNS do Google, pode ser qualquer IP externo confiável
+            ip = s.getsockname()[0]
+        except Exception:
+            # Fallback se a conexão externa falhar, tenta resolução de hostname local
+            try:
+                ip = socket.gethostbyname(hostname)
+            except socket.gaierror:
+                ip = "127.0.0.1" # Último recurso
+        finally:
+            s.close()
+        
+        # Se o IP ainda for loopback, tenta encontrar um melhor com psutil
+        if ip.startswith("127."):
+            interfaces = psutil.net_if_addrs()
+            for if_name, snic_list in interfaces.items():
+                if "loopback" in if_name.lower() or "lo" == if_name.lower():
+                    continue
+                for snic in snic_list:
+                    if snic.family == socket.AF_INET and not snic.address.startswith("169.254."):
+                        return snic.address # Retorna o primeiro IPv4 não APIPA
+            return "127.0.0.1" # Se nada melhor for encontrado
+        return ip
+    except Exception as e:
+        log_event(f"Não foi possível determinar o endereço IP primário: {e}", "WARNING")
+        return "unknown_ip"
+
+def get_os_info_string():
+    """Gera uma string concisa de informações do SO."""
+    return f"{platform.system()} {platform.release()} ({platform.version()})"
+
+# --- Backend Communication ---
+def perform_check_in(config):
+    """Envia dados básicos do agente para o endpoint de check-in do backend."""
+    check_in_url = f"{config.get('server_base_url', DEFAULT_CONFIG['server_base_url'])}/agent/check-in"
+    
+    payload = {
+        "agentId": config.get("agent_id"),
+        "hostname": socket.gethostname(),
+        "osUsername": get_os_username(),
+        "ipAddress": get_primary_ip_address(),
+        "agentVersion": AGENT_VERSION,
+        "osInfo": get_os_info_string(),
+        "additionalData": {} # Vazio por enquanto, ou adicione dados mínimos se necessário
+    }
+
+    if not payload["agentId"]:
+        log_event("ID do Agente ausente. Não é possível realizar o check-in.", "ERROR")
+        return False
+
+    log_event(f"Tentando check-in para {check_in_url} com payload: {json.dumps(payload)}", "INFO")
+    
+    try:
+        response = requests.post(check_in_url, json=payload, timeout=10) # Timeout de 10 segundos
+        response.raise_for_status() # Levanta HTTPError para respostas ruins (4XX ou 5XX)
+        
+        response_data = response.json()
+        log_event(f"Check-in bem-sucedido. Resposta do servidor: {response_data}", "INFO")
+        
+        config["last_successful_checkin"] = datetime.now().isoformat()
+        save_config(config) # Salva o horário do último check-in atualizado
+        
+        return True
+    except requests.exceptions.HTTPError as http_err:
+        log_event(f"Erro HTTP durante o check-in: {http_err} - Resposta: {http_err.response.text if http_err.response else 'Sem texto de resposta'}", "ERROR")
+    except requests.exceptions.ConnectionError as conn_err:
+        log_event(f"Erro de conexão durante o check-in: {conn_err}", "ERROR")
+    except requests.exceptions.Timeout as timeout_err:
+        log_event(f"Timeout durante o check-in: {timeout_err}", "ERROR")
+    except requests.exceptions.RequestException as req_err:
+        log_event(f"Erro geral durante o check-in: {req_err}", "ERROR")
+    except json.JSONDecodeError:
+        log_event(f"Falha ao decodificar resposta JSON do servidor. Resposta crua: {response.text if 'response' in locals() else 'Sem objeto de resposta'}", "ERROR")
+    
+    return False
+
+def get_system_inventory(agent_id):
     """
     Coleta todas as informações do sistema e as retorna em um dicionário.
+    Inclui o agent_id.
     """
     inventory_data = {}
 
     # --- Informações de Sistema e Hardware ---
-    inventory_data["machine_uuid"] = get_windows_hardware_uuid()
+    inventory_data["agent_id"] = agent_id # Usa o agent_id persistente
     inventory_data["hostname"] = socket.gethostname()
-    inventory_data["os_name"] = f"{platform.system()} {platform.release()}"
-    inventory_data["os_version"] = platform.version()
+    inventory_data["os_name_release"] = f"{platform.system()} {platform.release()}" # Renomeado para clareza
+    inventory_data["os_version_full"] = platform.version() # Renomeado para clareza
     
     # Tenta obter um nome de processador mais limpo
     try:
@@ -101,85 +273,123 @@ def get_system_inventory():
     
     mem = psutil.virtual_memory()
     inventory_data["ram_total_gb"] = round(mem.total / (1024**3), 2)
+    inventory_data["ram_available_gb"] = round(mem.available / (1024**3), 2) # RAM disponível adicionada
 
     disks_info = []
-    partitions = psutil.disk_partitions()
-    for p in partitions:
-        # Filtra tipos de partições que geralmente não são discos de usuário (ex: 'squashfs' em Linux live USBs)
-        # ou sistemas de ficheiros de dispositivos removíveis que podem não estar prontos.
-        # Para Windows, 'opts' pode conter 'fixed' para discos fixos.
-        if 'cdrom' in p.opts or p.fstype == '':
-            continue
-        try:
-            usage = psutil.disk_usage(p.mountpoint)
-            disk_info_item = {
-                "drive": p.mountpoint,
-                "total_gb": round(usage.total / (1024**3), 2),
-                "free_gb": round(usage.free / (1024**3), 2),
-                "filesystem_type": p.fstype
-            }
-            disks_info.append(disk_info_item)
-        except (PermissionError, FileNotFoundError):
-            # Ignora drives que não podem ser acessados ou pontos de montagem inválidos
-            continue
+    try:
+        partitions = psutil.disk_partitions(all=False) # all=False para evitar erros de floppy/CD se não estiverem prontos
+        for p in partitions:
+            if 'cdrom' in p.opts or p.fstype == '' or 'removable' in p.opts: # Filtro mais robusto
+                continue
+            try:
+                usage = psutil.disk_usage(p.mountpoint)
+                disk_info_item = {
+                    "drive_mountpoint": p.mountpoint,
+                    "total_gb": round(usage.total / (1024**3), 2),
+                    "used_gb": round(usage.used / (1024**3), 2), # Espaço usado adicionado
+                    "free_gb": round(usage.free / (1024**3), 2),
+                    "filesystem_type": p.fstype
+                }
+                disks_info.append(disk_info_item)
+            except (PermissionError, FileNotFoundError, OSError) as e: # Captura OSError para drives não prontos
+                log_event(f"Pulando disco {p.device} devido a erro: {e}", "DEBUG")
+                continue
+    except Exception as e:
+        log_event(f"Erro ao coletar partições de disco: {e}", "WARNING")
     inventory_data["disks"] = disks_info
 
     # --- Informações de Rede Detalhadas por Interface Ativa ---
     network_interfaces_info = []
-    interface_addresses = psutil.net_if_addrs() # Todos os endereços por interface
-    interface_stats = psutil.net_if_stats()     # Estatísticas das interfaces (incluindo se está 'up')
+    try:
+        interface_addresses = psutil.net_if_addrs()
+        interface_stats = psutil.net_if_stats()
 
-    for interface_name, snic_list in interface_addresses.items():
-        # Verifica se a interface está ativa (up) e não é de loopback
-        if interface_name in interface_stats and interface_stats[interface_name].isup and \
-           not (interface_name.lower().startswith('lo') or "loopback" in interface_name.lower()):
-            
-            current_interface_details = {
-                "interface_name": interface_name,
-                "ipv4_addresses": [],
-                "mac_addresses": []
-            }
-            
-            has_relevant_ipv4 = False # Flag para saber se a interface tem IPv4 não link-local
+        for interface_name, snic_list in interface_addresses.items():
+            if interface_name in interface_stats and interface_stats[interface_name].isup and \
+               not (interface_name.lower().startswith('lo') or "loopback" in interface_name.lower() or "virtual" in interface_name.lower()):
+                
+                current_interface_details = {
+                    "interface_name": interface_name,
+                    "ipv4_addresses": [],
+                    "ipv6_addresses": [], # IPv6 adicionado
+                    "mac_addresses": []
+                }
+                
+                has_relevant_ip = False
 
-            for snic in snic_list:
-                if snic.family == socket.AF_INET: # Endereço IPv4
-                    # Ignora endereços APIPA (169.254.x.x) que indicam falha no DHCP
-                    # e também endereços de loopback (já filtrados, mas uma verificação extra não faz mal)
-                    if not snic.address.startswith("169.254.") and not snic.address.startswith("127."):
-                        current_interface_details["ipv4_addresses"].append({
-                            "ip_address": snic.address,
-                            "netmask": snic.netmask if snic.netmask else "N/A",
-                        })
-                        has_relevant_ipv4 = True
-                elif snic.family == psutil.AF_LINK: # Endereço MAC (Hardware)
-                    if snic.address and snic.address.lower() != "00:00:00:00:00:00":
-                        current_interface_details["mac_addresses"].append(snic.address.upper())
-            
-            # Adiciona a interface à lista APENAS se ela tiver algum endereço IPv4 relevante.
-            if has_relevant_ipv4:
-                current_interface_details["mac_addresses"] = list(set(current_interface_details["mac_addresses"]))
-                # Se não houver MACs, pode-se deixar a lista vazia ou adicionar "N/A"
-                if not current_interface_details["mac_addresses"]:
-                    current_interface_details["mac_addresses"].append("N/A") # Ou deixar lista vazia
-                network_interfaces_info.append(current_interface_details)
-            
+                for snic in snic_list:
+                    if snic.family == socket.AF_INET:
+                        if not snic.address.startswith("169.254.") and not snic.address.startswith("127."):
+                            current_interface_details["ipv4_addresses"].append({
+                                "ip_address": snic.address,
+                                "netmask": snic.netmask if snic.netmask else "N/A",
+                            })
+                            has_relevant_ip = True
+                    elif snic.family == socket.AF_INET6: # IPv6
+                         # Filtra link-local (fe80::) e loopback (::1)
+                        if not snic.address.lower().startswith("fe80:") and snic.address != "::1":
+                            current_interface_details["ipv6_addresses"].append({
+                                "ip_address": snic.address,
+                                "netmask": snic.netmask if snic.netmask else "N/A", # Netmask para IPv6 é o comprimento do prefixo
+                            })
+                            # has_relevant_ip = True # Descomente se IPv6 sozinho for suficiente para listar a interface
+                    elif snic.family == psutil.AF_LINK:
+                        if snic.address and snic.address.lower() != "00:00:00:00:00:00":
+                            current_interface_details["mac_addresses"].append(snic.address.upper())
+                
+                if has_relevant_ip or current_interface_details["ipv6_addresses"]: # Lista se tiver IPv4 relevante ou qualquer IPv6 não local
+                    current_interface_details["mac_addresses"] = list(set(current_interface_details["mac_addresses"]))
+                    if not current_interface_details["mac_addresses"]:
+                        current_interface_details["mac_addresses"].append("N/A")
+                    network_interfaces_info.append(current_interface_details)
+    except Exception as e:
+        log_event(f"Erro ao coletar informações da interface de rede: {e}", "WARNING")
     inventory_data["network_interfaces"] = network_interfaces_info
 
     # --- Informações de Software ---
     inventory_data["installed_software"] = get_installed_software()
+    inventory_data["collection_timestamp"] = datetime.now().isoformat() # Timestamp para este inventário
     
     return inventory_data
 
 if __name__ == "__main__":
-    #print("Coletando informações do sistema...")
+    log_event("Script do agente iniciado.", "INFO")
     
-    inventory = get_system_inventory()
+    config = load_config()
+
+    # Garante que o ID do Agente esteja definido
+    if not config.get("agent_id"):
+        log_event("ID do Agente não encontrado no config. Tentando obter UUID de hardware.", "INFO")
+        hw_uuid = get_windows_hardware_uuid() # Esta função agora tem seu próprio fallback
+        if hw_uuid:
+            config["agent_id"] = hw_uuid
+            save_config(config)
+            log_event(f"ID do Agente definido como: {hw_uuid} e salvo no config.", "INFO")
+        else:
+            # Este caso deve ser raro se get_windows_hardware_uuid sempre retornar algo
+            log_event("Falha ao obter ou gerar um novo ID do Agente. Saindo.", "CRITICAL")
+            exit(1) # Sai se nenhum ID puder ser estabelecido
+    else:
+        log_event(f"Usando ID do Agente do config: {config['agent_id']}", "INFO")
+
+    # Realiza o check-in
+    check_in_successful = perform_check_in(config)
     
-    output_filename = "inventario.txt"
+    if check_in_successful:
+        log_event("Processo de check-in concluído com sucesso.", "INFO")
+    else:
+        log_event("Processo de check-in falhou. Veja logs anteriores para detalhes.", "WARNING")
+
+    # Coleta e salva o inventário completo do sistema localmente (independentemente do status do check-in por enquanto)
+    log_event("Coletando inventário completo do sistema...", "INFO")
+    # Passa o agent_id confirmado para get_system_inventory
+    full_inventory = get_system_inventory(config["agent_id"]) 
+    
     try:
-        with open(output_filename, "w", encoding="utf-8") as f:
-            json.dump(inventory, f, indent=4, ensure_ascii=False)
-      #  print(f"Inventário salvo com sucesso no arquivo: {output_filename}")
+        with open(INVENTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(full_inventory, f, indent=4, ensure_ascii=False)
+        log_event(f"Inventário completo salvo localmente em: {INVENTORY_FILE}", "INFO")
     except Exception as e:
-        print(f"Erro ao salvar o arquivo: {e}")
+        log_event(f"Erro ao salvar inventário completo em {INVENTORY_FILE}: {e}", "ERROR")
+        
+    log_event("Script do agente finalizado.", "INFO")
