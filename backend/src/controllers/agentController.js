@@ -72,14 +72,17 @@ async function checkIn(req, res) {
 
 // Nova função para listar os hosts de agentes
 async function getAgentHosts(req, res) {
-  // Futuramente, pode-se adicionar filtros por status, etc. via req.query
-  // const { status } = req.query;
+ const { status } = req.query; // Captura o parâmetro 'status' da URL query
   try {
+        const whereClause = {};
+    if (status) {
+      whereClause.status = status;
+    }
     const agentHosts = await prisma.agentHost.findMany({
+      where: whereClause, // Aplica o filtro se 'status' foi fornecido
       orderBy: {
-        lastSeenAt: 'desc', // Ou firstSeenAt, dependendo da preferência
+        lastSeenAt: 'desc', 
       },
-      // where: status ? { status } : {}, // Exemplo de filtro
     });
     res.json(agentHosts);
   } catch (error) {

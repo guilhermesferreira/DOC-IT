@@ -79,7 +79,8 @@ const InventoryView = () => {
     setIsLoadingAgents(true);
     setAgentError(null);
     try {
-      const response = await API.get('/agent/hosts');
+      // Solicita apenas os agentes com status 'pending' para a tela de onboarding
+      const response = await API.get('/agent/hosts?status=pending');
       setAgentHosts(response.data);
     } catch (err) {
       console.error("Erro ao buscar hosts de agentes:", err);

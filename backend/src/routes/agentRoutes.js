@@ -167,7 +167,15 @@ const authMiddleware = require('../middleware/auth');
  *     tags: [Agent]
  *     security:
  *       - bearerAuth: []
- *     description: Retorna uma lista de todos os hosts que fizeram check-in. Requer autenticação.
+ *     description: Retorna uma lista de hosts que fizeram check-in. Requer autenticação. Pode ser filtrado por status.
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, approved, rejected]
+ *         required: false
+ *         description: Filtra os hosts de agentes pelo status. Se não fornecido, retorna todos.
  *     responses:
  *       200:
  *         description: Lista de hosts de agentes obtida com sucesso.
