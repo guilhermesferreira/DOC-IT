@@ -13,9 +13,9 @@ const InventoryView = () => {
  // Estado para controlar a sub-aba ativa
   const [activeInventorySubView, setActiveInventorySubView] = useState('devices'); // 'devices' ou 'onboarding'
   const [showRegistrationForm, setShowRegistrationForm] = useState(false); // Novo estado para controlar visibilidade do form
- // Estados para a aba "Onboarding"
-  const [agentHosts, setAgentHosts] = useState([]);
-  const [isLoadingAgents, setIsLoadingAgents] = useState(false);
+ // Estados para a aba "Onboarding" (agora são Devices com source='agent')
+  const [pendingAgentDevices, setPendingAgentDevices] = useState([]);
+  const [isLoadingPendingAgents, setIsLoadingPendingAgents] = useState(false);
   const [agentError, setAgentError] = useState(null);
 
 
@@ -74,62 +74,63 @@ const InventoryView = () => {
       }
     }
   };
-  // Funções para a aba "Onboarding"
-  const fetchAgentHosts = useCallback(async () => {
-    setIsLoadingAgents(true);
+  // Funções para a aba "Onboarding" (agora lida com Devices)
+  const fetchPendingAgentDevices = useCallback(async () => {
+    setIsLoadingPendingAgents(true);
     setAgentError(null);
     try {
-      // Solicita apenas os agentes com status 'pending' para a tela de onboarding
-      const response = await API.get('/agent/hosts?status=pending');
-      setAgentHosts(response.data);
+      // Busca Devices com source 'agent' e status 'pending'
+      const response = await API.get('/device?source=agent&status=pending');
+      setPendingAgentDevices(response.data);
     } catch (err) {
-      console.error("Erro ao buscar hosts de agentes:", err);
+      console.error("Erro ao buscar dispositivos de agentes pendentes:", err);
       setAgentError(err.response?.data?.error || "Falha ao carregar dados de onboarding.");
     } finally {
-      setIsLoadingAgents(false);
+      setIsLoadingPendingAgents(false);
     }
   }, []); // useCallback
 
-  const handleApproveAgent = async (agentId) => {
-    if (window.confirm(`Tem certeza que deseja aprovar o agente ${agentId}?`)) {
+  const handleApproveAgentDevice = async (deviceId, deviceName) => {
+    if (window.confirm(`Tem certeza que deseja aprovar o dispositivo '${deviceName}' (ID: ${deviceId})?`)) {
       try {
-        const response = await API.patch(`/agent/hosts/${agentId}/approve`);
-        fetchAgentHosts(); // Re-fetch para atualizar a lista
+        // Usa o endpoint de aprovação de Device
+        const response = await API.patch(`/device/${deviceId}/approve`);
+        fetchPendingAgentDevices(); // Re-fetch para atualizar a lista de pendentes
         // Exibe a mensagem completa do backend
         alert(response.data.message);
 
-        // Se a criação do dispositivo foi bem-sucedida e você quiser
-        // que a lista de dispositivos seja atualizada imediatamente
-        // (mesmo que o usuário não mude de aba), você pode descomentar a linha abaixo.
-        // if (response.data.deviceCreationStatus === 'success') {
-        //   fetchDevices();
-        // }
+        // Opcional: atualizar a lista principal de dispositivos se a aba "Dispositivos" estiver visível
+        // ou se quiser que ela seja atualizada em background.
+        fetchDevices(); 
 
       } catch (error) {
-        console.error("Erro ao aprovar agente:", error);
-         alert(error.response?.data?.message || error.response?.data?.error || "Falha ao aprovar agente.");
+        console.error("Erro ao aprovar dispositivo do agente:", error);
+         alert(error.response?.data?.message || error.response?.data?.error || "Falha ao aprovar dispositivo.");
       }
     }
   };
 
-  const handleDeleteAgent = async (agentId, agentHostname) => {
-    if (window.confirm(`Tem certeza que deseja EXCLUIR PERMANENTEMENTE o agente ${agentHostname} (ID: ${agentId}) do sistema? Esta ação não pode ser desfeita.`)) {
+  // Exclui um Device (pode ser originado por agente ou manual, mas aqui focado nos de agente)
+  const handleDeleteAgentDevice = async (deviceId, deviceName) => {
+    if (window.confirm(`Tem certeza que deseja EXCLUIR PERMANENTEMENTE o dispositivo '${deviceName}' (ID: ${deviceId}) do sistema? Esta ação não pode ser desfeita.`)) {
       try {
-        const response = await API.delete(`/agent/hosts/${agentId}`);
-        fetchAgentHosts(); // Re-fetch para atualizar a lista
+        // Usa o endpoint de delete de Device
+        const response = await API.delete(`/device/${deviceId}`);
+        fetchPendingAgentDevices(); // Re-fetch para atualizar a lista de pendentes
         alert(response.data.message);
+        fetchDevices(); // Atualiza a lista principal também
       } catch (error) {
-        console.error("Erro ao excluir agente:", error);
-        alert(error.response?.data?.error || "Falha ao excluir agente.");
+        console.error("Erro ao excluir dispositivo do agente:", error);
+        alert(error.response?.data?.error || "Falha ao excluir dispositivo.");
       }
     }
   };
 
-  const handleRejectAgent = async (agentId) => {
-    if (window.confirm(`Tem certeza que deseja rejeitar o agente ${agentId}?`)) {
+  const handleRejectAgentDevice = async (deviceId, deviceName) => {
+    if (window.confirm(`Tem certeza que deseja rejeitar o dispositivo '${deviceName}' (ID: ${deviceId})?`)) {
       try {
-        await API.patch(`/agent/hosts/${agentId}/reject`);
-        fetchAgentHosts(); // Re-fetch para atualizar a lista
+        await API.patch(`/device/${deviceId}/reject`);
+        fetchPendingAgentDevices(); // Re-fetch para atualizar a lista
       } catch (error) {
         console.error("Erro ao rejeitar agente:", error);
         alert(error.response?.data?.error || "Falha ao rejeitar agente.");
@@ -148,9 +149,9 @@ const InventoryView = () => {
   // Efeito para buscar dados da aba "Onboarding" quando ela estiver ativa
   useEffect(() => {
     if (activeInventorySubView === 'onboarding') {
-      fetchAgentHosts();
+      fetchPendingAgentDevices();
     }
-  }, [activeInventorySubView, fetchAgentHosts]);
+  }, [activeInventorySubView, fetchPendingAgentDevices]);
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -257,18 +258,19 @@ const InventoryView = () => {
 
         {activeInventorySubView === 'onboarding' && (
           <div className="onboarding-section">
-            <h2>Hosts de Agentes para Onboarding</h2>
-            {isLoadingAgents && <p>Carregando agentes...</p>}
+            <h2>Dispositivos de Agentes Pendentes de Aprovação</h2>
+            {isLoadingPendingAgents && <p>Carregando dispositivos de agentes...</p>}
             {agentError && <p className="error-message">{agentError}</p>}
-            {!isLoadingAgents && !agentError && agentHosts.length === 0 && (
-              <p className="empty-state">Nenhum agente fez check-in ainda ou todos foram processados.</p>
+            {!isLoadingPendingAgents && !agentError && pendingAgentDevices.length === 0 && (
+              <p className="empty-state">Nenhum dispositivo de agente pendente ou todos foram processados.</p>
             )}
-            {!isLoadingAgents && !agentError && agentHosts.length > 0 && (
+            {!isLoadingPendingAgents && !agentError && pendingAgentDevices.length > 0 && (
               <table className="agent-hosts-table">
                 <thead>
                   <tr>
                     <th>Hostname</th>
                     <th>Usuário OS</th>
+                    <th>Nome (Device)</th>
                     <th>IP</th>
                     <th>Versão Agente</th>
                     <th>OS Info</th>
@@ -279,38 +281,40 @@ const InventoryView = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {agentHosts.map((agent) => (
-                    <tr key={agent.id}>
-                      <td>{agent.hostname}</td>
-                      <td>{agent.osUsername}</td>
-                      <td>{agent.ipAddress || 'N/A'}</td>
-                      <td>{agent.agentVersion || 'N/A'}</td>
-                      <td>{agent.osInfo || 'N/A'}</td>
+                  {pendingAgentDevices.map((device) => ( // Agora iteramos sobre pendingAgentDevices
+                    <tr key={device.id}> {/* Usamos device.id (PK do Device) */}
+                      <td>{device.hostname || 'N/A'}</td>
+                      <td>{device.osUsername || 'N/A'}</td>
+                      <td>{device.name}</td> {/* Nome do Device */}
+                      <td>{device.ipAddress || 'N/A'}</td>
+                      <td>{device.agentVersion || 'N/A'}</td>
+                      <td>{device.osInfo || 'N/A'}</td>
                       <td>
-                        <span className={`status-badge status-${agent.status.toLowerCase()}`}>
-                          {agent.status}
+                        <span className={`status-badge status-${device.status.toLowerCase()}`}>
+                          {device.status}
                         </span>
                       </td>
-                      <td>{formatDate(agent.firstSeenAt)}</td>
-                      <td>{formatDate(agent.lastSeenAt)}</td>
+                      <td>{formatDate(device.firstSeenAt)}</td>
+                      <td>{formatDate(device.lastSeenAt)}</td>
                       <td>
-                        {agent.status === 'pending' && (
+                        {/* Ações baseadas no status do Device */}
+                        {device.status === 'pending' && (
                           <>
                             <button
-                              onClick={() => handleApproveAgent(agent.id)}
+                              onClick={() => handleApproveAgentDevice(device.id, device.name)}
                               className="button-approve"
                               style={{ marginRight: '5px' }}
                             >
                               Aprovar
                             </button>
                             <button
-                              onClick={() => handleRejectAgent(agent.id)}
+                              onClick={() => handleRejectAgentDevice(device.id, device.name)}
                               className="button-reject"
                             >
                               Rejeitar
                              </button>
                             <button
-                              onClick={() => handleDeleteAgent(agent.id, agent.hostname)}
+                              onClick={() => handleDeleteAgentDevice(device.id, device.name)}
                               className="button-delete" // Reutilizando estilo existente
                               style={{ marginLeft: '5px' }}
                             >
@@ -318,12 +322,12 @@ const InventoryView = () => {
                             </button>
                           </>
                         )}
-                        {(agent.status === 'approved' || agent.status === 'rejected') && (
-                                                    <>
-                            {/* Mantém o botão de Rejeitar para 'approved' ou um de Reverter para Pendente se preferir */}
-                            {agent.status === 'approved' && <button onClick={() => handleRejectAgent(agent.id)} className="button-reject" style={{ marginRight: '5px' }}>Rejeitar</button> }
+                        {/* Se um dispositivo aprovado ou rejeitado aparecer aqui por algum motivo, permitir excluir */}
+                        {(device.status === 'approved' || device.status === 'rejected') && (
+                          <>
+                            {device.status === 'approved' && <button onClick={() => handleRejectAgentDevice(device.id, device.name)} className="button-reject" style={{ marginRight: '5px' }}>Rejeitar</button> }
                             <button
-                              onClick={() => handleDeleteAgent(agent.id, agent.hostname)}
+                              onClick={() => handleDeleteAgentDevice(device.id, device.name)}
                               className="button-delete"
                             >Excluir</button>
                           </>

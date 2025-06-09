@@ -17,30 +17,7 @@ model User {
   updatedAt DateTime @updatedAt
   mfaSecret         String?  
   isMfaEnabled      Boolean  @default(false)
-  approvedAgentHosts AgentHost[] @relation("ApprovedAgentHostsRel")
   // Futuro: mfaRecoveryCodes String[] // Para códigos de recuperação 
-}
-model AgentHost {
-  id               String    @id // Identificador único fornecido pelo agente (UUID)
-  hostname         String
-  osUsername       String    // Nome de usuário do SO na máquina host
-  ipAddress        String?
-  agentVersion     String?   // Versão do software do agente
-  osInfo           String?   // Ex: "Windows 10 Pro 22H2"
-  additionalData   Json?     // Para quaisquer outros dados estruturados que o agente possa enviar
-
-  status           String    @default("pending") // "pending", "approved", "rejected"
-
-  firstSeenAt      DateTime  @default(now())
-  lastSeenAt       DateTime  @updatedAt
-
-  approvedByUserId Int?
-  approvedByUser   User?     @relation("ApprovedAgentHostsRel", fields: [approvedByUserId], references: [id])
-  approvedAt       DateTime?
-
-  @@index([status])
-  @@index([hostname])
-  @@index([approvedByUserId])
 }
 
 model Device {
@@ -49,10 +26,31 @@ model Device {
   type        String
   location    String
   patrimony   String?
-  userId      Int
-  user        User     @relation(fields: [userId], references: [id])
+  userId      Int?      // User who owns/manages this device, or who approved it. Optional because agent devices are unowned until approved.
+  user        User?     @relation(fields: [userId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  // Fields for agent-discovered devices
+  agentId          String?   @unique // UUID from agent
+  hostname         String?   // Can be same as 'name' for agent devices
+  osUsername       String?
+  ipAddress        String?
+  agentVersion     String?
+  osInfo           String?
+  additionalData   Json?
+
+  // Status and tracking
+  status           String    @default("pending") // "pending", "approved", "rejected", "archived"
+                                                // Manually added devices can be set to "approved" directly.
+  source           String    @default("manual")  // "manual", "agent"
+  firstSeenAt      DateTime? // For agent-discovered devices
+  lastSeenAt       DateTime? // For agent pings, or general last known activity
+  approvedAt       DateTime? // When status changed to "approved"
+
+  @@index([status])
+  @@index([hostname])
+  @@index([userId])
+  @@index([agentId])
+  @@index([source])
 }
-
-

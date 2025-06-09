@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const agentController = require('../controllers/agentController');
 const authMiddleware = require('../middleware/auth');
-
+// A documentação Swagger precisará ser significativamente alterada ou movida.
 /**
  * @swagger
  * tags:
@@ -307,14 +307,9 @@ const authMiddleware = require('../middleware/auth');
 
 
 
+// Apenas a rota de check-in do agente permanece aqui.
+// A gestão de dispositivos originados por agentes (listar pendentes, aprovar, rejeitar, deletar)
+// será tratada através das rotas de /devices, operando em entidades Device com source='agent'.
 router.post('/check-in', agentController.checkIn);
-
-router.get('/hosts', authMiddleware, agentController.getAgentHosts);
-
-router.patch('/hosts/:agentId/reject', authMiddleware, agentController.rejectAgentHost);
-
-router.patch('/hosts/:agentId/approve', authMiddleware, agentController.approveAgentHost);
-
-router.delete('/hosts/:agentId', authMiddleware, agentController.deleteAgentHost);
 
 module.exports = router;

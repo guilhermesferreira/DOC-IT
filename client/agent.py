@@ -200,6 +200,71 @@ def get_os_info_string():
     """Gera uma string concisa de informações do SO."""
     return f"{platform.system()} {platform.release()} ({platform.version()})"
 
+def get_additional_inventory_data():
+    """
+    Coleta dados de inventário detalhados para serem incluídos no campo additionalData do check-in.
+    """
+    data = {}
+    try:
+        cpu_model_raw = platform.processor()
+        cpu_model_clean = re.sub(r'\((TM|tm|R|r)\)', '', cpu_model_raw).strip()
+        cpu_model_clean = re.sub(r' +', ' ', cpu_model_clean)
+        data["cpu_model"] = cpu_model_clean
+    except Exception:
+        data["cpu_model"] = platform.processor()
+
+    mem = psutil.virtual_memory()
+    data["ram_total_gb"] = round(mem.total / (1024**3), 2)
+    data["ram_available_gb"] = round(mem.available / (1024**3), 2)
+
+    disks_info = []
+    try:
+        partitions = psutil.disk_partitions(all=False)
+        for p in partitions:
+            if 'cdrom' in p.opts or p.fstype == '' or 'removable' in p.opts:
+                continue
+            try:
+                usage = psutil.disk_usage(p.mountpoint)
+                disks_info.append({
+                    "drive_mountpoint": p.mountpoint,
+                    "total_gb": round(usage.total / (1024**3), 2),
+                    "used_gb": round(usage.used / (1024**3), 2),
+                    "free_gb": round(usage.free / (1024**3), 2),
+                    "filesystem_type": p.fstype
+                })
+            except (PermissionError, FileNotFoundError, OSError) as e:
+                log_event(f"Pulando disco {p.device} em additional_inventory devido a erro: {e}", "DEBUG")
+    except Exception as e:
+        log_event(f"Erro ao coletar partições de disco para additional_inventory: {e}", "WARNING")
+    data["disks"] = disks_info
+
+    network_interfaces_info = []
+    try:
+        interface_addresses = psutil.net_if_addrs()
+        interface_stats = psutil.net_if_stats()
+        for interface_name, snic_list in interface_addresses.items():
+            if interface_name in interface_stats and interface_stats[interface_name].isup and \
+               not (interface_name.lower().startswith('lo') or "loopback" in interface_name.lower() or "virtual" in interface_name.lower()):
+                current_interface_details = {"interface_name": interface_name, "ipv4_addresses": [], "ipv6_addresses": [], "mac_addresses": []}
+                has_relevant_ip = False
+                for snic in snic_list:
+                    if snic.family == socket.AF_INET and not snic.address.startswith("169.254.") and not snic.address.startswith("127."):
+                        current_interface_details["ipv4_addresses"].append({"ip_address": snic.address, "netmask": snic.netmask or "N/A"})
+                        has_relevant_ip = True
+                    elif snic.family == socket.AF_INET6 and not snic.address.lower().startswith("fe80:") and snic.address != "::1":
+                        current_interface_details["ipv6_addresses"].append({"ip_address": snic.address, "netmask": snic.netmask or "N/A"})
+                    elif snic.family == psutil.AF_LINK and snic.address and snic.address.lower() != "00:00:00:00:00:00":
+                        current_interface_details["mac_addresses"].append(snic.address.upper())
+                if has_relevant_ip or current_interface_details["ipv6_addresses"]:
+                    current_interface_details["mac_addresses"] = list(set(current_interface_details["mac_addresses"])) or ["N/A"]
+                    network_interfaces_info.append(current_interface_details)
+    except Exception as e:
+        log_event(f"Erro ao coletar informações da interface de rede para additional_inventory: {e}", "WARNING")
+    data["network_interfaces"] = network_interfaces_info
+    data["installed_software"] = get_installed_software()
+    data["collection_timestamp"] = datetime.now().isoformat()
+    return data
+
 # --- Backend Communication ---
 def perform_check_in(config):
     """Envia dados básicos do agente para o endpoint de check-in do backend."""
@@ -212,7 +277,7 @@ def perform_check_in(config):
         "ipAddress": get_primary_ip_address(),
         "agentVersion": AGENT_VERSION,
         "osInfo": get_os_info_string(),
-        "additionalData": {} # Vazio por enquanto, ou adicione dados mínimos se necessário
+        "additionalData": get_additional_inventory_data()
     }
 
     if not payload["agentId"]:
