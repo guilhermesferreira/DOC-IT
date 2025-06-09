@@ -60,8 +60,209 @@
   font-weight: bold;
 }
 
-
+ 
 
 .inventory-sub-content {
   /* Estilos para o container do conteúdo do submenu, se necessário */
+}
+
+.inventory-sub-nav {
+  display: flex;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.sub-tab-link {
+  padding: 10px 20px;
+  cursor: pointer;
+  border: none;
+  background-color: transparent;
+  font-size: 1rem;
+  color: #555;
+  border-bottom: 3px solid transparent;
+  margin-right: 10px;
+}
+
+.sub-tab-link.active {
+  color: var(--primary-color); /* Certifique-se de que esta variável CSS está definida globalmente */
+  border-bottom-color: var(--primary-color);
+  font-weight: bold;
+}
+
+.inventory-sub-content {
+  padding-top: 10px;
+}
+
+.onboarding-section h2 {
+  margin-bottom: 15px;
+  font-size: 1.4rem;
+  color: #333;
+}
+
+.agent-hosts-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  font-size: 0.9rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.agent-hosts-table th,
+.agent-hosts-table td {
+  border: 1px solid #ddd;
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.agent-hosts-table th {
+  background-color: #f7f7f7;
+  font-weight: 600;
+  color: #333;
+}
+
+.agent-hosts-table tbody tr:nth-child(even) {
+  background-color: #fdfdfd;
+}
+
+.agent-hosts-table tbody tr:hover {
+  background-color: #f0f0f0;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: bold;
+  color: white;
+  text-transform: capitalize;
+  display: inline-block;
+  min-width: 70px; /* Para garantir que os badges tenham uma largura mínima */
+  text-align: center;
+}
+
+.status-pending {
+  background-color: #ffc107; /* Amarelo */
+  color: #333;
+}
+
+.status-approved {
+  background-color: #28a745; /* Verde */
+}
+
+.status-rejected {
+  background-color: #dc3545; /* Vermelho */
+}
+
+.button-approve, .button-reject, .button-edit, .button-delete, .button-submit, .button-cancel {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+  margin-right: 5px; /* Espaçamento padrão entre botões */
+}
+.button-approve:last-child, .button-reject:last-child {
+    margin-right: 0;
+}
+
+
+.button-approve {
+  background-color: #28a745; /* Verde */
+  color: white;
+}
+.button-approve:hover {
+  background-color: #218838;
+}
+
+.button-reject {
+  background-color: #dc3545; /* Vermelho */
+  color: white;
+}
+.button-reject:hover {
+  background-color: #c82333;
+}
+.button-reject:disabled {
+  background-color: #6c757d; /* Cinza para desabilitado */
+  color: #ccc;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 20px;
+  color: #777;
+  font-style: italic;
+  background-color: #f9f9f9;
+  border: 1px dashed #ddd;
+  border-radius: 4px;
+}
+
+.error-message {
+  color: #721c24; /* Cor de texto para erro */
+  margin-top: 10px;
+  padding: 10px 15px;
+  background-color: #f8d7da; /* Fundo para erro */
+  border: 1px solid #f5c6cb; /* Borda para erro */
+  border-radius: 4px;
+}
+
+/* Ajustes para o formulário de dispositivos manuais, se necessário */
+.form-section {
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 5px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+.form-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.devices-section h2 {
+    margin-bottom: 15px;
+    font-size: 1.4rem;
+    color: #333;
+}
+.devices-list {
+    list-style: none;
+    padding: 0;
+}
+.device-item {
+    background-color: #fff;
+    border: 1px solid #eee;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.device-info strong {
+    font-size: 1.1em;
+    color: #333;
+}
+.device-info span {
+    display: block;
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 3px;
 }

@@ -1,30 +1,38 @@
 // src/components/InventoryView.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback  } from 'react';
 import API from '../api/api'; // Ajuste o caminho se necessário
 // Não precisa mais do useAuth aqui se o logout for gerenciado pelo Sidebar/DashboardLayout
 import '../pages/Dashboard.css';
 import './InventoryView.css'; // CSS específico para esta visão 
 
 const InventoryView = () => {
+ // Estados para a aba "Dispositivos"
   const [devices, setDevices] = useState([]);
   const [form, setForm] = useState({ name: '', type: '', location: '', patrimony: '' });
   const [editingDevice, setEditingDevice] = useState(null);
+ // Estado para controlar a sub-aba ativa
   const [activeInventorySubView, setActiveInventorySubView] = useState('devices'); // 'devices' ou 'onboarding'
   const [showRegistrationForm, setShowRegistrationForm] = useState(false); // Novo estado para controlar visibilidade do form
+ // Estados para a aba "Onboarding"
+  const [agentHosts, setAgentHosts] = useState([]);
+  const [isLoadingAgents, setIsLoadingAgents] = useState(false);
+  const [agentError, setAgentError] = useState(null);
 
 
-  const fetchDevices = async () => {
+  // Funções para a aba "Dispositivos"
+  const fetchDevices = useCallback(async () => {
     try {
       const res = await API.get('/device');
       setDevices(res.data);
     } catch (error) {
       console.error("Erro ao buscar dispositivos:", error);
     }
-  };
+  }, []); 
 
-  useEffect(() => {
-    fetchDevices();
-  }, []);
+// useEffect(() => { // Este useEffect não é mais necessário aqui, pois será chamado condicionalmente
+  //   fetchDevices();
+  // }, [fetchDevices]); // Adicionado fetchDevices às dependências
+
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -66,6 +74,88 @@ const InventoryView = () => {
       }
     }
   };
+  // Funções para a aba "Onboarding"
+  const fetchAgentHosts = useCallback(async () => {
+    setIsLoadingAgents(true);
+    setAgentError(null);
+    try {
+      const response = await API.get('/agent/hosts');
+      setAgentHosts(response.data);
+    } catch (err) {
+      console.error("Erro ao buscar hosts de agentes:", err);
+      setAgentError(err.response?.data?.error || "Falha ao carregar dados de onboarding.");
+    } finally {
+      setIsLoadingAgents(false);
+    }
+  }, []); // useCallback
+
+  const handleApproveAgent = async (agentId) => {
+    if (window.confirm(`Tem certeza que deseja aprovar o agente ${agentId}?`)) {
+      try {
+        const response = await API.patch(`/agent/hosts/${agentId}/approve`);
+        fetchAgentHosts(); // Re-fetch para atualizar a lista
+        // Exibe a mensagem completa do backend
+        alert(response.data.message);
+
+        // Se a criação do dispositivo foi bem-sucedida e você quiser
+        // que a lista de dispositivos seja atualizada imediatamente
+        // (mesmo que o usuário não mude de aba), você pode descomentar a linha abaixo.
+        // if (response.data.deviceCreationStatus === 'success') {
+        //   fetchDevices();
+        // }
+
+      } catch (error) {
+        console.error("Erro ao aprovar agente:", error);
+         alert(error.response?.data?.message || error.response?.data?.error || "Falha ao aprovar agente.");
+      }
+    }
+  };
+
+  const handleDeleteAgent = async (agentId, agentHostname) => {
+    if (window.confirm(`Tem certeza que deseja EXCLUIR PERMANENTEMENTE o agente ${agentHostname} (ID: ${agentId}) do sistema? Esta ação não pode ser desfeita.`)) {
+      try {
+        const response = await API.delete(`/agent/hosts/${agentId}`);
+        fetchAgentHosts(); // Re-fetch para atualizar a lista
+        alert(response.data.message);
+      } catch (error) {
+        console.error("Erro ao excluir agente:", error);
+        alert(error.response?.data?.error || "Falha ao excluir agente.");
+      }
+    }
+  };
+
+  const handleRejectAgent = async (agentId) => {
+    if (window.confirm(`Tem certeza que deseja rejeitar o agente ${agentId}?`)) {
+      try {
+        await API.patch(`/agent/hosts/${agentId}/reject`);
+        fetchAgentHosts(); // Re-fetch para atualizar a lista
+      } catch (error) {
+        console.error("Erro ao rejeitar agente:", error);
+        alert(error.response?.data?.error || "Falha ao rejeitar agente.");
+      }
+    }
+  };
+
+
+  // Efeito para buscar dados da aba "Dispositivos" quando ela estiver ativa
+  useEffect(() => {
+    if (activeInventorySubView === 'devices') {
+      fetchDevices();
+    }
+  }, [activeInventorySubView, fetchDevices]);
+
+  // Efeito para buscar dados da aba "Onboarding" quando ela estiver ativa
+  useEffect(() => {
+    if (activeInventorySubView === 'onboarding') {
+      fetchAgentHosts();
+    }
+  }, [activeInventorySubView, fetchAgentHosts]);
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleString('pt-BR');
+  };
+
 
   return (
     <div className="inventory-view-container card-dashboard"> {/* Adicionado card-dashboard ao container principal */}
@@ -81,7 +171,7 @@ const InventoryView = () => {
           className={`sub-tab-link ${activeInventorySubView === 'onboarding' ? 'active' : ''}`}
           onClick={() => setActiveInventorySubView('onboarding')}
         >
-          Onboarding
+          Onboarding Agentes
         </button>
       </nav>
 
@@ -166,9 +256,83 @@ const InventoryView = () => {
 
         {activeInventorySubView === 'onboarding' && (
           <div className="onboarding-section">
-            <h2>Processo de Onboarding de Equipamentos</h2>
-            <p>Aqui você poderá gerenciar o fluxo de entrada de novos equipamentos, checklists, etc.</p>
-            {/* Conteúdo futuro da aba de Onboarding */}
+            <h2>Hosts de Agentes para Onboarding</h2>
+            {isLoadingAgents && <p>Carregando agentes...</p>}
+            {agentError && <p className="error-message">{agentError}</p>}
+            {!isLoadingAgents && !agentError && agentHosts.length === 0 && (
+              <p className="empty-state">Nenhum agente fez check-in ainda ou todos foram processados.</p>
+            )}
+            {!isLoadingAgents && !agentError && agentHosts.length > 0 && (
+              <table className="agent-hosts-table">
+                <thead>
+                  <tr>
+                    <th>Hostname</th>
+                    <th>Usuário OS</th>
+                    <th>IP</th>
+                    <th>Versão Agente</th>
+                    <th>OS Info</th>
+                    <th>Status</th>
+                    <th>Primeiro Check-in</th>
+                    <th>Último Check-in</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {agentHosts.map((agent) => (
+                    <tr key={agent.id}>
+                      <td>{agent.hostname}</td>
+                      <td>{agent.osUsername}</td>
+                      <td>{agent.ipAddress || 'N/A'}</td>
+                      <td>{agent.agentVersion || 'N/A'}</td>
+                      <td>{agent.osInfo || 'N/A'}</td>
+                      <td>
+                        <span className={`status-badge status-${agent.status.toLowerCase()}`}>
+                          {agent.status}
+                        </span>
+                      </td>
+                      <td>{formatDate(agent.firstSeenAt)}</td>
+                      <td>{formatDate(agent.lastSeenAt)}</td>
+                      <td>
+                        {agent.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleApproveAgent(agent.id)}
+                              className="button-approve"
+                              style={{ marginRight: '5px' }}
+                            >
+                              Aprovar
+                            </button>
+                            <button
+                              onClick={() => handleRejectAgent(agent.id)}
+                              className="button-reject"
+                            >
+                              Rejeitar
+                             </button>
+                            <button
+                              onClick={() => handleDeleteAgent(agent.id, agent.hostname)}
+                              className="button-delete" // Reutilizando estilo existente
+                              style={{ marginLeft: '5px' }}
+                            >
+                              Excluir
+                            </button>
+                          </>
+                        )}
+                        {(agent.status === 'approved' || agent.status === 'rejected') && (
+                                                    <>
+                            {/* Mantém o botão de Rejeitar para 'approved' ou um de Reverter para Pendente se preferir */}
+                            {agent.status === 'approved' && <button onClick={() => handleRejectAgent(agent.id)} className="button-reject" style={{ marginRight: '5px' }}>Rejeitar</button> }
+                            <button
+                              onClick={() => handleDeleteAgent(agent.id, agent.hostname)}
+                              className="button-delete"
+                            >Excluir</button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
       </div>
@@ -176,4 +340,4 @@ const InventoryView = () => {
   );
 };
 
-export default InventoryView;
+export default InventoryView; 
