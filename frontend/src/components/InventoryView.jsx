@@ -5,6 +5,7 @@ import './InventoryView.css'; // Usaremos este para a lista e o layout geral
 
 // O novo componente que mostrará os detalhes completos
 import DeviceDetailsView from './DeviceDetailsView';
+import ConfirmationModal from './ConfirmationModal'; // Importar o modal
 
 const InventoryView = () => {
   const [devices, setDevices] = useState([]);
@@ -18,6 +19,12 @@ const InventoryView = () => {
   const [pendingAgentDevices, setPendingAgentDevices] = useState([]);
   const [isLoadingPendingAgents, setIsLoadingPendingAgents] = useState(false);
   const [agentError, setAgentError] = useState(null);
+
+  // Estados para o modal de confirmação
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [deviceToDelete, setDeviceToDelete] = useState(null); // { id, name, fromOnboarding }
+  const [actionToConfirm, setActionToConfirm] = useState(null); // 'approve' ou 'reject'
+  const [deviceForAction, setDeviceForAction] = useState(null); // Dispositivo para aprovar/rejeitar
 
 
   // Função para buscar dispositivos APROVADOS (para a lista principal de cards)
@@ -92,56 +99,103 @@ const InventoryView = () => {
     setActiveInventorySubView('approvedList'); // Garante que o form apareça na aba correta
   };
 
-  const handleDeleteDevice = async (deviceId, deviceName, fromOnboarding = false) => {
-    const confirmationMessage = fromOnboarding
-      ? `Tem certeza que deseja EXCLUIR PERMANENTEMENTE o dispositivo de agente '${deviceName}' (ID: ${deviceId})? Esta ação não pode ser desfeita.`
-      : `Tem certeza que deseja excluir o equipamento '${deviceName}' (ID: ${deviceId})?`;
+  // Abre o modal de confirmação
+  const requestDeleteDevice = (device, fromOnboarding = false) => {
+    setDeviceToDelete({ ...device, fromOnboarding });
+    setIsConfirmModalOpen(true);
+  };
 
-    if (window.confirm(confirmationMessage)) {
-      try {
-        await API.delete(`/device/${deviceId}`);
-        if (fromOnboarding) {
-          fetchAgentDevicesForOnboarding(); // Atualiza a lista de onboarding
-        } else {
-          fetchApprovedDevices(); // Atualiza a lista de aprovados
-          if (selectedDevice && selectedDevice.id === deviceId) {
-            setSelectedDevice(null);
-          }
+  // Função chamada quando a exclusão é confirmada no modal
+  const confirmDeleteDevice = async () => {
+    if (!deviceToDelete) return;
+
+    const { id, name, fromOnboarding } = deviceToDelete;
+
+    try {
+      await API.delete(`/device/${id}`);
+      if (fromOnboarding) {
+        fetchAgentDevicesForOnboarding();
+      } else {
+        fetchApprovedDevices();
+        if (selectedDevice && selectedDevice.id === id) {
+          setSelectedDevice(null); // Fecha a view de detalhes se o dispositivo excluído era o selecionado
         }
-        alert('Dispositivo excluído com sucesso.');
-      } catch (error) {
-        console.error("Erro ao deletar dispositivo:", error);
-        alert(error.response?.data?.error || "Falha ao excluir dispositivo.");
       }
+      alert(`Dispositivo '${name}' excluído com sucesso.`);
+    } catch (error) {
+      console.error("Erro ao deletar dispositivo:", error);
+      alert(error.response?.data?.error || "Falha ao excluir dispositivo.");
+    } finally {
+      setIsConfirmModalOpen(false);
+      setDeviceToDelete(null);
     }
+  };
+
+  const cancelDeleteDevice = () => {
+    setIsConfirmModalOpen(false);
+    setDeviceToDelete(null);
   };
   
-  const handleApproveAgentDevice = async (deviceId, deviceName) => {
-    if (window.confirm(`Tem certeza que deseja aprovar o dispositivo '${deviceName}' (ID: ${deviceId})?`)) {
-      try {
-        const response = await API.patch(`/device/${deviceId}/approve`);
-        fetchAgentDevicesForOnboarding(); // Atualiza a lista de onboarding
-        fetchApprovedDevices(); // Atualiza a lista de aprovados, pois um novo item pode aparecer lá
-        alert(response.data.message || 'Dispositivo aprovado com sucesso.');
-      } catch (error) {
-        console.error("Erro ao aprovar dispositivo do agente:", error);
-        alert(error.response?.data?.message || error.response?.data?.error || "Falha ao aprovar dispositivo.");
+  // Abre o modal para aprovar/rejeitar
+  const requestAgentAction = (device, action) => {
+    setDeviceForAction(device);
+    setActionToConfirm(action); // 'approve' ou 'reject'
+    setIsConfirmModalOpen(true);
+  };
+
+  // Função chamada quando a ação (aprovar/rejeitar) é confirmada no modal
+  const confirmAgentAction = async () => {
+    if (!deviceForAction || !actionToConfirm) return;
+
+    const { id, name } = deviceForAction;
+
+    try {
+      let response;
+      if (actionToConfirm === 'approve') {
+        response = await API.patch(`/device/${id}/approve`);
+        fetchApprovedDevices(); // Atualiza a lista de aprovados
+        alert(response.data.message || `Dispositivo '${name}' aprovado com sucesso.`);
+      } else if (actionToConfirm === 'reject') {
+        response = await API.patch(`/device/${id}/reject`);
+        alert(response.data.message || `Dispositivo '${name}' rejeitado com sucesso.`);
       }
+      fetchAgentDevicesForOnboarding(); // Atualiza a lista de onboarding em ambos os casos
+    } catch (error) {
+      console.error(`Erro ao ${actionToConfirm} dispositivo do agente:`, error);
+      alert(error.response?.data?.message || error.response?.data?.error || `Falha ao ${actionToConfirm} dispositivo.`);
+    } finally {
+      setIsConfirmModalOpen(false);
+      setDeviceForAction(null);
+      setActionToConfirm(null);
     }
   };
 
-  const handleRejectAgentDevice = async (deviceId, deviceName) => {
-    if (window.confirm(`Tem certeza que deseja rejeitar o dispositivo '${deviceName}' (ID: ${deviceId})?`)) {
-      try {
-        const response = await API.patch(`/device/${deviceId}/reject`);
-        fetchAgentDevicesForOnboarding(); // Atualiza a lista de onboarding
-        // Não precisa atualizar fetchApprovedDevices aqui, pois um item rejeitado não vai para lá
-        alert(response.data.message || 'Dispositivo rejeitado com sucesso.');
-      } catch (error) {
-        console.error("Erro ao rejeitar dispositivo do agente:", error);
-        alert(error.response?.data?.error || "Falha ao rejeitar dispositivo.");
-      }
+  // Função para determinar o que o modal deve fazer ao confirmar
+  const handleModalConfirm = () => {
+    if (deviceToDelete) {
+      confirmDeleteDevice();
+    } else if (deviceForAction && actionToConfirm) {
+      confirmAgentAction();
     }
+  };
+
+  // Função para fechar o modal e limpar os estados relevantes
+  const handleModalClose = () => {
+    setIsConfirmModalOpen(false);
+    setDeviceToDelete(null);
+    setDeviceForAction(null);
+    setActionToConfirm(null);
+  };
+
+  // Determina a mensagem do modal dinamicamente
+  const getModalMessage = () => {
+    if (deviceToDelete) {
+      return `Tem certeza que deseja excluir o dispositivo "${deviceToDelete.name}"? ${deviceToDelete.fromOnboarding ? 'Esta ação não pode ser desfeita.' : ''}`;
+    }
+    if (deviceForAction && actionToConfirm) {
+      return `Tem certeza que deseja ${actionToConfirm === 'approve' ? 'aprovar' : 'rejeitar'} o dispositivo "${deviceForAction.name}"?`;
+    }
+    return '';
   };
 
   const formatDate = (dateString) => {
@@ -149,127 +203,136 @@ const InventoryView = () => {
     return new Date(dateString).toLocaleString('pt-BR');
   };
 
-  // Se um dispositivo estiver selecionado, mostra a visão de detalhes.
-  // Senão, mostra a lista de inventário.
-  if (selectedDevice) {
-    return (
-      <DeviceDetailsView 
-        device={selectedDevice} 
-        onBack={() => setSelectedDevice(null)} // Passa uma função para voltar
-      />
-    );
-  }
-
   return (
     <div className="inventory-view-container card-dashboard">
-      {/* Navegação das Sub-abas */}
-      <nav className="inventory-sub-nav">
-        <button
-          className={`sub-tab-link ${activeInventorySubView === 'approvedList' ? 'active' : ''}`}
-          onClick={() => setActiveInventorySubView('approvedList')}
-        >
-          Dispositivos Aprovados
-        </button>
-        <button
-          className={`sub-tab-link ${activeInventorySubView === 'agentOnboarding' ? 'active' : ''}`}
-          onClick={() => setActiveInventorySubView('agentOnboarding')}
-        >
-          Onboarding Agentes
-        </button>
-      </nav>
+      {selectedDevice ? (
+        <DeviceDetailsView 
+          device={selectedDevice} 
+          onBack={() => setSelectedDevice(null)}
+          onDeleteRequest={() => requestDeleteDevice(selectedDevice, false)}
+        />
+      ) : (
+        <> {/* Fragmento para agrupar a visualização da lista */}
+          {/* Navegação das Sub-abas */}
+          <nav className="inventory-sub-nav">
+            <button
+              className={`sub-tab-link ${activeInventorySubView === 'approvedList' ? 'active' : ''}`}
+              onClick={() => setActiveInventorySubView('approvedList')}
+            >
+              Dispositivos Aprovados
+            </button>
+            <button
+              className={`sub-tab-link ${activeInventorySubView === 'agentOnboarding' ? 'active' : ''}`}
+              onClick={() => setActiveInventorySubView('agentOnboarding')}
+            >
+              Onboarding Agentes
+            </button>
+          </nav>
 
-      {/* Conteúdo da Sub-aba Ativa */}
-      <div className="inventory-sub-content">
-        {activeInventorySubView === 'approvedList' && (
-          <>
-            <div className="inventory-header">
-              <h2>Inventário de Dispositivos Aprovados</h2>
-              {!editingDevice && !showRegistrationForm && (
-                <button onClick={() => {
-                  setShowRegistrationForm(true);
-                  setEditingDevice(null);
-                  setManualDeviceForm({ name: '', type: '', location: '', patrimony: '' });
-                }} className="button-submit">
-                  Adicionar Manualmente
-                </button>
-              )}
-            </div>
-
-            {(showRegistrationForm || editingDevice) && (
-              <section className="form-section-compact">
-                <h4>{editingDevice ? "Editar Equipamento Manual" : "Cadastrar Novo Equipamento Manual"}</h4>
-                <form onSubmit={handleSubmitManualDevice}>
-                  <div className="form-grid">
-                    <div className="form-group"><label>Nome</label><input name="name" value={manualDeviceForm.name} onChange={handleManualDeviceFormChange} required /></div>
-                    <div className="form-group"><label>Tipo</label><input name="type" value={manualDeviceForm.type} onChange={handleManualDeviceFormChange} required /></div>
-                    <div className="form-group"><label>Localização</label><input name="location" value={manualDeviceForm.location} onChange={handleManualDeviceFormChange} required /></div>
-                    <div className="form-group"><label>Patrimônio</label><input name="patrimony" value={manualDeviceForm.patrimony} onChange={handleManualDeviceFormChange} /></div>
-                  </div>
-                  <div className="form-actions">
-                    <button type="submit" className="button-submit">{editingDevice ? "Salvar" : "Cadastrar"}</button>
-                    <button type="button" className="button-cancel" onClick={() => { setEditingDevice(null); setShowRegistrationForm(false); }}>Cancelar</button>
-                  </div>
-                </form>
-              </section>
-            )}
-
-            <div className="devices-grid">
-              {devices.length > 0 ? devices.map((device) => (
-                <div key={device.id} className="device-summary-card" onClick={() => setSelectedDevice(device)}>
-                  <div className="device-card-header">
-                    <div className={`status-indicator status-${device.status?.toLowerCase() || 'unknown'}`}></div>
-                    <strong className="device-name">{device.name}</strong>
-                  </div>
-                  <div className="device-card-body">
-                    <p><strong>Local:</strong> {device.location || 'N/A'}</p>
-                    <p><strong>IP:</strong> {device.ipAddress || 'N/A'}</p>
-                    <p><strong>Usuário:</strong> {device.osUsername || 'N/A'}</p>
-                    <p>{device.type}</p>
-                  </div>
-                  <div className="device-card-footer">
-                    <span>Última Atividade: {formatDate(device.lastSeenAt || device.updatedAt)}</span>
-                  </div>
+          {/* Conteúdo da Sub-aba Ativa */}
+          <div className="inventory-sub-content">
+            {activeInventorySubView === 'approvedList' && (
+              <>
+                <div className="inventory-header">
+                  <h2>Inventário de Dispositivos Aprovados</h2>
+                  {!editingDevice && !showRegistrationForm && (
+                    <button onClick={() => {
+                      setShowRegistrationForm(true);
+                      setEditingDevice(null);
+                      setManualDeviceForm({ name: '', type: '', location: '', patrimony: '' });
+                    }} className="button-submit">
+                      Adicionar Manualmente
+                    </button>
+                  )}
                 </div>
-              )) : <p className="empty-state">Nenhum dispositivo aprovado encontrado.</p>}
-            </div>
-          </>
-        )}
 
-        {activeInventorySubView === 'agentOnboarding' && (
-          <div className="onboarding-section">
-            <h2>Dispositivos de Agentes para Onboarding</h2>
-            {isLoadingPendingAgents && <p>Carregando dispositivos de agentes...</p>}
-            {agentError && <p className="error-message">{agentError}</p>}
-            {!isLoadingPendingAgents && !agentError && pendingAgentDevices.length === 0 && (
-              <p className="empty-state">Nenhum dispositivo de agente aguardando onboarding ou rejeitado.</p>
+                {(showRegistrationForm || editingDevice) && (
+                  <section className="form-section-compact">
+                    <h4>{editingDevice ? "Editar Equipamento Manual" : "Cadastrar Novo Equipamento Manual"}</h4>
+                    <form onSubmit={handleSubmitManualDevice}>
+                      <div className="form-grid">
+                        <div className="form-group"><label>Nome</label><input name="name" value={manualDeviceForm.name} onChange={handleManualDeviceFormChange} required /></div>
+                        <div className="form-group"><label>Tipo</label><input name="type" value={manualDeviceForm.type} onChange={handleManualDeviceFormChange} required /></div>
+                        <div className="form-group"><label>Localização</label><input name="location" value={manualDeviceForm.location} onChange={handleManualDeviceFormChange} required /></div>
+                        <div className="form-group"><label>Patrimônio</label><input name="patrimony" value={manualDeviceForm.patrimony} onChange={handleManualDeviceFormChange} /></div>
+                      </div>
+                      <div className="form-actions">
+                        <button type="submit" className="button-submit">{editingDevice ? "Salvar" : "Cadastrar"}</button>
+                        <button type="button" className="button-cancel" onClick={() => { setEditingDevice(null); setShowRegistrationForm(false); }}>Cancelar</button>
+                      </div>
+                    </form>
+                  </section>
+                )}
+
+                <div className="devices-grid">
+                  {devices.length > 0 ? devices.map((device) => (
+                    <div key={device.id} className="device-summary-card" onClick={() => setSelectedDevice(device)}>
+                      <div className="device-card-header">
+                        <div className={`status-indicator status-${device.status?.toLowerCase() || 'unknown'}`}></div>
+                        <strong className="device-name">{device.name}</strong>
+                      </div>
+                      <div className="device-card-body">
+                        <p><strong>Local:</strong> {device.location || 'N/A'}</p>
+                        <p><strong>IP:</strong> {device.ipAddress || 'N/A'}</p>
+                        <p><strong>Usuário:</strong> {device.osUsername || 'N/A'}</p>
+                        <p>{device.type}</p>
+                      </div>
+                      <div className="device-card-footer">
+                        <span>Última Atividade: {formatDate(device.lastSeenAt || device.updatedAt)}</span>
+                      </div>
+                    </div>
+                  )) : <p className="empty-state">Nenhum dispositivo aprovado encontrado.</p>}
+                </div>
+              </>
             )}
-            {!isLoadingPendingAgents && !agentError && pendingAgentDevices.length > 0 && (
-              <table className="agent-onboarding-table">
-                <thead>
-                  <tr>
-                    <th>Hostname</th><th>Nome (Device)</th><th>Usuário OS</th><th>IP</th><th>Status</th><th>Último Check-in</th><th>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingAgentDevices.map((device) => (
-                    <tr key={device.id}>
-                      <td>{device.hostname || 'N/A'}</td><td>{device.name}</td><td>{device.osUsername || 'N/A'}</td><td>{device.ipAddress || 'N/A'}</td>
-                      <td><span className={`status-badge status-${device.status?.toLowerCase()}`}>{device.status}</span></td>
-                      <td>{formatDate(device.lastSeenAt)}</td>
-                      <td>
-                        {device.status === 'pending' && (<button onClick={() => handleApproveAgentDevice(device.id, device.name)} className="button-approve">Aprovar</button>)}
-                        {(device.status === 'pending' || device.status === 'approved') && (<button onClick={() => handleRejectAgentDevice(device.id, device.name)} className="button-reject">Rejeitar</button>)}
-                        {device.status === 'rejected' && (<button onClick={() => handleApproveAgentDevice(device.id, device.name)} className="button-approve">Aprovar</button>)}
-                        <button onClick={() => handleDeleteDevice(device.id, device.name, true)} className="button-delete">Excluir</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+            {activeInventorySubView === 'agentOnboarding' && (
+              <div className="onboarding-section">
+                <h2>Dispositivos de Agentes para Onboarding</h2>
+                {isLoadingPendingAgents && <p>Carregando dispositivos de agentes...</p>}
+                {agentError && <p className="error-message">{agentError}</p>}
+                {!isLoadingPendingAgents && !agentError && pendingAgentDevices.length === 0 && (
+                  <p className="empty-state">Nenhum dispositivo de agente aguardando onboarding ou rejeitado.</p>
+                )}
+                {!isLoadingPendingAgents && !agentError && pendingAgentDevices.length > 0 && (
+                  <table className="agent-onboarding-table">
+                    <thead>
+                      <tr>
+                        <th>Hostname</th><th>Nome (Device)</th><th>Usuário OS</th><th>IP</th><th>Status</th><th>Último Check-in</th><th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingAgentDevices.map((device) => (
+                        <tr key={device.id}>
+                          <td>{device.hostname || 'N/A'}</td><td>{device.name}</td><td>{device.osUsername || 'N/A'}</td><td>{device.ipAddress || 'N/A'}</td>
+                          <td><span className={`status-badge status-${device.status?.toLowerCase()}`}>{device.status}</span></td>
+                          <td>{formatDate(device.lastSeenAt)}</td>
+                          <td>
+                            {device.status === 'pending' && (<button onClick={() => requestAgentAction(device, 'approve')} className="button-approve">Aprovar</button>)}
+                            {(device.status === 'pending' || device.status === 'approved') && (<button onClick={() => requestAgentAction(device, 'reject')} className="button-reject">Rejeitar</button>)}
+                            {device.status === 'rejected' && (<button onClick={() => requestAgentAction(device, 'approve')} className="button-approve">Aprovar</button>)}
+                            <button onClick={() => requestDeleteDevice(device, true)} className="button-delete">Excluir</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
+        </>
+      )}
+      {/* Modal de Confirmação */}
+      <ConfirmationModal
+        isOpen={isConfirmModalOpen}
+        onClose={handleModalClose}
+        onConfirm={handleModalConfirm}
+        title={`Confirmar ${actionToConfirm === 'approve' ? 'Aprovação' : actionToConfirm === 'reject' ? 'Rejeição' : 'Exclusão'}`}
+        message={getModalMessage()}
+        confirmText={actionToConfirm === 'approve' ? 'Aprovar' : actionToConfirm === 'reject' ? 'Rejeitar' : 'Excluir'}
+        cancelText="Cancelar"
+      />
     </div>
   );
 };

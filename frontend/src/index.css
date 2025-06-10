@@ -6,6 +6,19 @@ body {
   margin: 0;
   padding: 0px;
 }
+/* Exemplo em index.css ou variables.css */
+:root {
+  --primary-color: #007bff;
+  --primary-color-darker: #0056b3;
+  --background-white: #ffffff;
+  --background-light: #f0f2f5;
+  --text-color-dark: #333;
+  --text-color-light: #555;
+  --border-color-light: #ccc;
+  --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --base-font-size: 16px;
+  /* ... etc ... */
+}
 
 .page-container {
   max-width: 900px; /* Limita a largura máxima da página */
