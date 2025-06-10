@@ -1,49 +1,79 @@
 // src/components/InventoryView.jsx
-import React, { useState, useEffect, useCallback  } from 'react';
-import API from '../api/api'; // Ajuste o caminho se necessário
-// Não precisa mais do useAuth aqui se o logout for gerenciado pelo Sidebar/DashboardLayout
-import '../pages/Dashboard.css';
-import './InventoryView.css'; // CSS específico para esta visão 
+import React, { useState, useEffect, useCallback } from 'react';
+import API from '../api/api';
+import './InventoryView.css'; // Usaremos este para a lista e o layout geral
+
+// O novo componente que mostrará os detalhes completos
+import DeviceDetailsView from './DeviceDetailsView';
 
 const InventoryView = () => {
- // Estados para a aba "Dispositivos"
   const [devices, setDevices] = useState([]);
-  const [form, setForm] = useState({ name: '', type: '', location: '', patrimony: '' });
+  const [manualDeviceForm, setManualDeviceForm] = useState({ name: '', type: '', location: '', patrimony: '' });
   const [editingDevice, setEditingDevice] = useState(null);
- // Estado para controlar a sub-aba ativa
-  const [activeInventorySubView, setActiveInventorySubView] = useState('devices'); // 'devices' ou 'onboarding'
-  const [showRegistrationForm, setShowRegistrationForm] = useState(false); // Novo estado para controlar visibilidade do form
- // Estados para a aba "Onboarding" (agora são Devices com source='agent')
+  const [showRegistrationForm, setShowRegistrationForm] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState(null); // Novo estado para o dispositivo selecionado
+
+  // Estados para a aba de Onboarding de Agentes
+  const [activeInventorySubView, setActiveInventorySubView] = useState('approvedList'); // 'approvedList' ou 'agentOnboarding'
   const [pendingAgentDevices, setPendingAgentDevices] = useState([]);
   const [isLoadingPendingAgents, setIsLoadingPendingAgents] = useState(false);
   const [agentError, setAgentError] = useState(null);
 
 
-  // Funções para a aba "Dispositivos"
-  const fetchDevices = useCallback(async () => {
+  // Função para buscar dispositivos APROVADOS (para a lista principal de cards)
+  const fetchApprovedDevices = useCallback(async () => {
+    // Não precisa verificar activeInventorySubView aqui, pois pode ser chamada por outras ações
     try {
-      // Busca apenas dispositivos com status 'approved' para a lista principal
-      const res = await API.get('/device?status=approved');
+      const res = await API.get('/device?status=approved'); // Buscando apenas dispositivos aprovados para a lista principal
       setDevices(res.data);
     } catch (error) {
-      console.error("Erro ao buscar dispositivos:", error);
+      console.error("Erro ao buscar dispositivos aprovados:", error);
     }
-  }, []); 
+  }, []);
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  // Função para buscar dispositivos de AGENTES (para onboarding)
+  const fetchAgentDevicesForOnboarding = useCallback(async () => {
+    // Não precisa verificar activeInventorySubView aqui
+    setIsLoadingPendingAgents(true);
+    setAgentError(null);
+    try {
+      // Busca Devices com source 'agent' e status 'pending' ou 'rejected'
+      // Poderia incluir 'approved' se quiséssemos permitir rejeitar um aprovado diretamente desta lista
+      const response = await API.get('/device?source=agent&status=pending,rejected');
+      setPendingAgentDevices(response.data);
+    } catch (err) {
+      console.error("Erro ao buscar dispositivos de agentes para onboarding:", err);
+      setAgentError(err.response?.data?.error || "Falha ao carregar dados de onboarding.");
+    } finally {
+      setIsLoadingPendingAgents(false);
+    }
+  }, []);
 
-  const handleSubmit = async (e) => {
+  // Efeito para buscar dados baseado na sub-aba ativa
+  useEffect(() => {
+    if (activeInventorySubView === 'approvedList') {
+      fetchApprovedDevices();
+    } else if (activeInventorySubView === 'agentOnboarding') {
+      fetchAgentDevicesForOnboarding();
+    }
+  }, [activeInventorySubView, fetchApprovedDevices, fetchAgentDevicesForOnboarding]);
+
+
+  const handleManualDeviceFormChange = (e) => setManualDeviceForm({ ...manualDeviceForm, [e.target.name]: e.target.value });
+
+  const handleSubmitManualDevice = async (e) => {
     e.preventDefault();
     try {
       if (editingDevice) {
-        await API.put(`/device/${editingDevice.id}`, form);
+        await API.put(`/device/${editingDevice.id}`, manualDeviceForm);
       } else {
-        await API.post('/device', form);
+        // Backend já define source='manual' e status='approved' para POST em /device
+        await API.post('/device', manualDeviceForm);
       }
-      setForm({ name: '', type: '', location: '', patrimony: '' });
+      setManualDeviceForm({ name: '', type: '', location: '', patrimony: '' });
       setEditingDevice(null);
       setShowRegistrationForm(false);
-      fetchDevices();
+      fetchApprovedDevices(); // Re-busca a lista de dispositivos aprovados
     } catch (error) {
       console.error("Erro ao salvar dispositivo:", error);
     }
@@ -51,75 +81,51 @@ const InventoryView = () => {
 
   const handleEdit = (device) => {
     setEditingDevice(device);
-    setShowRegistrationForm(true); // Mostra o formulário para edição
-    setForm({
+    setShowRegistrationForm(true);
+    setManualDeviceForm({
       name: device.name,
       type: device.type,
       location: device.location,
       patrimony: device.patrimony || ''
     });
+    setSelectedDevice(null); // Fecha a visão de detalhes se estiver aberta
+    setActiveInventorySubView('approvedList'); // Garante que o form apareça na aba correta
   };
 
-  const handleDelete = async (deviceId) => {
-    if (window.confirm("Tem certeza que deseja excluir este equipamento?")) {
+  const handleDeleteDevice = async (deviceId, deviceName, fromOnboarding = false) => {
+    const confirmationMessage = fromOnboarding
+      ? `Tem certeza que deseja EXCLUIR PERMANENTEMENTE o dispositivo de agente '${deviceName}' (ID: ${deviceId})? Esta ação não pode ser desfeita.`
+      : `Tem certeza que deseja excluir o equipamento '${deviceName}' (ID: ${deviceId})?`;
+
+    if (window.confirm(confirmationMessage)) {
       try {
         await API.delete(`/device/${deviceId}`);
-        fetchDevices();
+        if (fromOnboarding) {
+          fetchAgentDevicesForOnboarding(); // Atualiza a lista de onboarding
+        } else {
+          fetchApprovedDevices(); // Atualiza a lista de aprovados
+          if (selectedDevice && selectedDevice.id === deviceId) {
+            setSelectedDevice(null);
+          }
+        }
+        alert('Dispositivo excluído com sucesso.');
       } catch (error) {
         console.error("Erro ao deletar dispositivo:", error);
+        alert(error.response?.data?.error || "Falha ao excluir dispositivo.");
       }
     }
   };
-  // Funções para a aba "Onboarding" (agora lida com Devices) 
-  const fetchPendingAgentDevices = useCallback(async () => {
-    setIsLoadingPendingAgents(true);
-    setAgentError(null);
-    try {
-      // Busca Devices com source 'agent' e status 'pending'
-      const response = await API.get('/device?source=agent');
-      setPendingAgentDevices(response.data);
-      console.log("resposta do get device no onboarding:");
-      console.log(response.data);
-    } catch (err) {
-      console.error("Erro ao buscar dispositivos de agentes pendentes:", err);
-      setAgentError(err.response?.data?.error || "Falha ao carregar dados de onboarding.");
-    } finally {
-      setIsLoadingPendingAgents(false);
-    }
-  }, []); // useCallback
-
+  
   const handleApproveAgentDevice = async (deviceId, deviceName) => {
     if (window.confirm(`Tem certeza que deseja aprovar o dispositivo '${deviceName}' (ID: ${deviceId})?`)) {
       try {
-        // Usa o endpoint de aprovação de Device
         const response = await API.patch(`/device/${deviceId}/approve`);
-        fetchPendingAgentDevices(); // Re-fetch para atualizar a lista de pendentes
-        // Exibe a mensagem completa do backend
-        alert(response.data.message);
-
-        // Opcional: atualizar a lista principal de dispositivos se a aba "Dispositivos" estiver visível
-        // ou se quiser que ela seja atualizada em background.
-        fetchDevices(); 
-
+        fetchAgentDevicesForOnboarding(); // Atualiza a lista de onboarding
+        fetchApprovedDevices(); // Atualiza a lista de aprovados, pois um novo item pode aparecer lá
+        alert(response.data.message || 'Dispositivo aprovado com sucesso.');
       } catch (error) {
         console.error("Erro ao aprovar dispositivo do agente:", error);
-         alert(error.response?.data?.message || error.response?.data?.error || "Falha ao aprovar dispositivo.");
-      }
-    }
-  };
-
-  // Exclui um Device (pode ser originado por agente ou manual, mas aqui focado nos de agente)
-  const handleDeleteAgentDevice = async (deviceId, deviceName) => {
-    if (window.confirm(`Tem certeza que deseja EXCLUIR PERMANENTEMENTE o dispositivo '${deviceName}' (ID: ${deviceId}) do sistema? Esta ação não pode ser desfeita.`)) {
-      try {
-        // Usa o endpoint de delete de Device
-        const response = await API.delete(`/device/${deviceId}`);
-        fetchPendingAgentDevices(); // Re-fetch para atualizar a lista de pendentes
-        alert(response.data.message);
-        fetchDevices(); // Atualiza a lista principal também
-      } catch (error) {
-        console.error("Erro ao excluir dispositivo do agente:", error);
-        alert(error.response?.data?.error || "Falha ao excluir dispositivo.");
+        alert(error.response?.data?.message || error.response?.data?.error || "Falha ao aprovar dispositivo.");
       }
     }
   };
@@ -127,49 +133,46 @@ const InventoryView = () => {
   const handleRejectAgentDevice = async (deviceId, deviceName) => {
     if (window.confirm(`Tem certeza que deseja rejeitar o dispositivo '${deviceName}' (ID: ${deviceId})?`)) {
       try {
-        await API.patch(`/device/${deviceId}/reject`);
-        fetchPendingAgentDevices(); // Re-fetch para atualizar a lista
+        const response = await API.patch(`/device/${deviceId}/reject`);
+        fetchAgentDevicesForOnboarding(); // Atualiza a lista de onboarding
+        // Não precisa atualizar fetchApprovedDevices aqui, pois um item rejeitado não vai para lá
+        alert(response.data.message || 'Dispositivo rejeitado com sucesso.');
       } catch (error) {
-        console.error("Erro ao rejeitar agente:", error);
-        alert(error.response?.data?.error || "Falha ao rejeitar agente.");
+        console.error("Erro ao rejeitar dispositivo do agente:", error);
+        alert(error.response?.data?.error || "Falha ao rejeitar dispositivo.");
       }
     }
   };
-
-
-  // Efeito para buscar dados da aba "Dispositivos" quando ela estiver ativa
-  useEffect(() => {
-    if (activeInventorySubView === 'devices') {
-      fetchDevices();
-    }
-  }, [activeInventorySubView, fetchDevices]);
-
-  // Efeito para buscar dados da aba "Onboarding" quando ela estiver ativa
-  useEffect(() => {
-    if (activeInventorySubView === 'onboarding') {
-      fetchPendingAgentDevices();
-    }
-  }, [activeInventorySubView, fetchPendingAgentDevices]);
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleString('pt-BR');
   };
 
+  // Se um dispositivo estiver selecionado, mostra a visão de detalhes.
+  // Senão, mostra a lista de inventário.
+  if (selectedDevice) {
+    return (
+      <DeviceDetailsView 
+        device={selectedDevice} 
+        onBack={() => setSelectedDevice(null)} // Passa uma função para voltar
+      />
+    );
+  }
 
   return (
-    <div className="inventory-view-container card-dashboard"> {/* Adicionado card-dashboard ao container principal */}
+    <div className="inventory-view-container card-dashboard">
       {/* Navegação das Sub-abas */}
       <nav className="inventory-sub-nav">
         <button
-          className={`sub-tab-link ${activeInventorySubView === 'devices' ? 'active' : ''}`}
-          onClick={() => setActiveInventorySubView('devices')}
+          className={`sub-tab-link ${activeInventorySubView === 'approvedList' ? 'active' : ''}`}
+          onClick={() => setActiveInventorySubView('approvedList')}
         >
-          Dispositivos
+          Dispositivos Aprovados
         </button>
         <button
-          className={`sub-tab-link ${activeInventorySubView === 'onboarding' ? 'active' : ''}`}
-          onClick={() => setActiveInventorySubView('onboarding')}
+          className={`sub-tab-link ${activeInventorySubView === 'agentOnboarding' ? 'active' : ''}`}
+          onClick={() => setActiveInventorySubView('agentOnboarding')}
         >
           Onboarding Agentes
         </button>
@@ -177,159 +180,87 @@ const InventoryView = () => {
 
       {/* Conteúdo da Sub-aba Ativa */}
       <div className="inventory-sub-content">
-        {activeInventorySubView === 'devices' && (
+        {activeInventorySubView === 'approvedList' && (
           <>
-              {/* Botão para mostrar o formulário de cadastro, se não estiver editando ou já mostrando */}
-            {!editingDevice && !showRegistrationForm && (
-              <div style={{ marginBottom: '20px', textAlign: 'right' }}>
-                <button 
-                  onClick={() => {
-                    setShowRegistrationForm(true);
-                    setEditingDevice(null); // Garante que não está em modo de edição
-                    setForm({ name: '', type: '', location: '', patrimony: '' }); // Limpa o formulário
-                  }} 
-                  className="button-submit"
-                >
-                  Adicionar Novo Equipamento
+            <div className="inventory-header">
+              <h2>Inventário de Dispositivos Aprovados</h2>
+              {!editingDevice && !showRegistrationForm && (
+                <button onClick={() => {
+                  setShowRegistrationForm(true);
+                  setEditingDevice(null);
+                  setManualDeviceForm({ name: '', type: '', location: '', patrimony: '' });
+                }} className="button-submit">
+                  Adicionar Manualmente
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
-            {/* Formulário de Cadastro/Edição */}
             {(showRegistrationForm || editingDevice) && (
-              <section className="form-section">
-                <h2>{editingDevice ? "Editar Equipamento" : "Cadastrar Novo Equipamento"}</h2>
-                <form onSubmit={handleSubmit}>
+              <section className="form-section-compact">
+                <h4>{editingDevice ? "Editar Equipamento Manual" : "Cadastrar Novo Equipamento Manual"}</h4>
+                <form onSubmit={handleSubmitManualDevice}>
                   <div className="form-grid">
-                    <div className="form-group">
-                      <label htmlFor="name">Nome do Equipamento</label>
-                      <input id="name" name="name" placeholder="Ex: Impressora HP Laser" value={form.name} onChange={handleChange} required />
-                    </div>
-                    <div className="form-group">
-                      <label htmlFor="type">Tipo</label>
-                      <input id="type" name="type" placeholder="Ex: Impressora, Notebook" value={form.type} onChange={handleChange} required />
-                    </div>
-                    <div className="form-group">
-                      <label htmlFor="location">Localização</label>
-                      <input id="location" name="location" placeholder="Ex: Sala 101, Almoxarifado" value={form.location} onChange={handleChange} required />
-                    </div>
-                    <div className="form-group">
-                      <label htmlFor="patrimony">Patrimônio (Opcional)</label>
-                      <input id="patrimony" name="patrimony" placeholder="Ex: 12345AB" value={form.patrimony} onChange={handleChange} />
-                    </div>
+                    <div className="form-group"><label>Nome</label><input name="name" value={manualDeviceForm.name} onChange={handleManualDeviceFormChange} required /></div>
+                    <div className="form-group"><label>Tipo</label><input name="type" value={manualDeviceForm.type} onChange={handleManualDeviceFormChange} required /></div>
+                    <div className="form-group"><label>Localização</label><input name="location" value={manualDeviceForm.location} onChange={handleManualDeviceFormChange} required /></div>
+                    <div className="form-group"><label>Patrimônio</label><input name="patrimony" value={manualDeviceForm.patrimony} onChange={handleManualDeviceFormChange} /></div>
                   </div>
-                  <button type="submit" className="button-submit">
-                    {editingDevice ? "Salvar Alterações" : "Cadastrar Equipamento"}
-                  </button>
-                      {(editingDevice || showRegistrationForm) && ( // Mostra cancelar se estiver editando OU cadastrando (form visível)
-                    <button type="button" className="button-cancel" onClick={() => { setEditingDevice(null); setShowRegistrationForm(false); setForm({ name: '', type: '', location: '', patrimony: '' }); }}>
-                      Cancelar
-                    </button>
-                  )}
+                  <div className="form-actions">
+                    <button type="submit" className="button-submit">{editingDevice ? "Salvar" : "Cadastrar"}</button>
+                    <button type="button" className="button-cancel" onClick={() => { setEditingDevice(null); setShowRegistrationForm(false); }}>Cancelar</button>
+                  </div>
                 </form>
               </section>
             )}
-            <section className="devices-section"> {/* Removido card-dashboard daqui */}
-              <h2>Equipamentos Cadastrados</h2>
-              {devices.length === 0 ? (
-                <p className="empty-state">Nenhum equipamento cadastrado ainda.</p>
-              ) : (
-                <ul className="devices-list">
-                  {devices.map((device) => (
-                    <li key={device.id} className="device-item">
-                      <div className="device-info">
-                        <strong>{device.name}</strong> ({device.type})
-                        <span>Local: {device.location}</span>
-                        {device.patrimony && <span>Patrimônio: {device.patrimony}</span>}
-                      </div>
-                      <div className="device-actions">
-                        <button onClick={() => handleEdit(device)} className="button-edit">Editar</button>
-                        <button onClick={() => handleDelete(device.id)} className="button-delete">Excluir</button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+
+            <div className="devices-grid">
+              {devices.length > 0 ? devices.map((device) => (
+                <div key={device.id} className="device-summary-card" onClick={() => setSelectedDevice(device)}>
+                  <div className="device-card-header">
+                    <div className={`status-indicator status-${device.status?.toLowerCase() || 'unknown'}`}></div>
+                    <strong className="device-name">{device.name}</strong>
+                  </div>
+                  <div className="device-card-body">
+                    <p><strong>Local:</strong> {device.location || 'N/A'}</p>
+                    <p><strong>IP:</strong> {device.ipAddress || 'N/A'}</p>
+                    <p><strong>Usuário:</strong> {device.osUsername || 'N/A'}</p>
+                    <p>{device.type}</p>
+                  </div>
+                  <div className="device-card-footer">
+                    <span>Última Atividade: {formatDate(device.lastSeenAt || device.updatedAt)}</span>
+                  </div>
+                </div>
+              )) : <p className="empty-state">Nenhum dispositivo aprovado encontrado.</p>}
+            </div>
           </>
         )}
 
-        {activeInventorySubView === 'onboarding' && (
+        {activeInventorySubView === 'agentOnboarding' && (
           <div className="onboarding-section">
-            <h2>Dispositivos de Agentes Pendentes de Aprovação</h2>
+            <h2>Dispositivos de Agentes para Onboarding</h2>
             {isLoadingPendingAgents && <p>Carregando dispositivos de agentes...</p>}
             {agentError && <p className="error-message">{agentError}</p>}
             {!isLoadingPendingAgents && !agentError && pendingAgentDevices.length === 0 && (
-              <p className="empty-state">Nenhum dispositivo de agente pendente ou todos foram processados.</p>
+              <p className="empty-state">Nenhum dispositivo de agente aguardando onboarding ou rejeitado.</p>
             )}
             {!isLoadingPendingAgents && !agentError && pendingAgentDevices.length > 0 && (
-              <table className="agent-hosts-table">
+              <table className="agent-onboarding-table">
                 <thead>
                   <tr>
-                    <th>Hostname</th>
-                    <th>Usuário OS</th>
-                    <th>Nome (Device)</th>
-                    <th>IP</th>
-                    <th>Versão Agente</th>
-                    <th>OS Info</th>
-                    <th>Status</th>
-                    <th>Primeiro Check-in</th>
-                    <th>Último Check-in</th>
-                    <th>Ações</th>
+                    <th>Hostname</th><th>Nome (Device)</th><th>Usuário OS</th><th>IP</th><th>Status</th><th>Último Check-in</th><th>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pendingAgentDevices.map((device) => ( // Agora iteramos sobre pendingAgentDevices
-                    <tr key={device.id}> {/* Usamos device.id (PK do Device) */}
-                      <td>{device.hostname || 'N/A'}</td>
-                      <td>{device.osUsername || 'N/A'}</td>
-                      <td>{device.name}</td> {/* Nome do Device */}
-                      <td>{device.ipAddress || 'N/A'}</td>
-                      <td>{device.agentVersion || 'N/A'}</td>
-                      <td>{device.osInfo || 'N/A'}</td>
-                      <td>
-                        <span className={`status-badge status-${device.status.toLowerCase()}`}>
-                          {device.status}
-                        </span>
-                      </td>
-                      <td>{formatDate(device.firstSeenAt)}</td>
+                  {pendingAgentDevices.map((device) => (
+                    <tr key={device.id}>
+                      <td>{device.hostname || 'N/A'}</td><td>{device.name}</td><td>{device.osUsername || 'N/A'}</td><td>{device.ipAddress || 'N/A'}</td>
+                      <td><span className={`status-badge status-${device.status?.toLowerCase()}`}>{device.status}</span></td>
                       <td>{formatDate(device.lastSeenAt)}</td>
                       <td>
-                        {/* Ações baseadas no status do Device */}
-                        {device.status === 'pending' && (
-                          <>
-                            <button
-                              onClick={() => handleApproveAgentDevice(device.id, device.name)}
-                              className="button-approve"
-                              style={{ marginRight: '5px' }}
-                            >
-                              Aprovar
-                            </button>
-                            <button
-                              onClick={() => handleRejectAgentDevice(device.id, device.name)}
-                              className="button-reject"
-                            >
-                              Rejeitar
-                             </button>
-                            <button
-                              onClick={() => handleDeleteAgentDevice(device.id, device.name)}
-                              className="button-delete" // Reutilizando estilo existente
-                              style={{ marginLeft: '5px' }}
-                            >
-                              Excluir
-                            </button>
-                          </>
-                        )}
-                        {/* Se um dispositivo aprovado ou rejeitado aparecer aqui por algum motivo, permitir excluir */}
-                        {(device.status === 'approved' || device.status === 'rejected') && (
-                          <>
-                            {device.status === 'approved' && <button onClick={() => handleRejectAgentDevice(device.id, device.name)} className="button-reject" style={{ marginRight: '5px' }}>Rejeitar</button> }
-                            <button
-                              onClick={() => handleDeleteAgentDevice(device.id, device.name)}
-                              className="button-delete"
-                            >Excluir</button>
-                          </>
-                        )}
+                        {device.status === 'pending' && (<button onClick={() => handleApproveAgentDevice(device.id, device.name)} className="button-approve">Aprovar</button>)}
+                        {(device.status === 'pending' || device.status === 'approved') && (<button onClick={() => handleRejectAgentDevice(device.id, device.name)} className="button-reject">Rejeitar</button>)}
+                        {device.status === 'rejected' && (<button onClick={() => handleApproveAgentDevice(device.id, device.name)} className="button-approve">Aprovar</button>)}
+                        <button onClick={() => handleDeleteDevice(device.id, device.name, true)} className="button-delete">Excluir</button>
                       </td>
                     </tr>
                   ))}
@@ -343,4 +274,4 @@ const InventoryView = () => {
   );
 };
 
-export default InventoryView; 
+export default InventoryView;

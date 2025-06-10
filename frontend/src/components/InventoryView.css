@@ -1,268 +1,256 @@
 /* src/components/InventoryView.css */
 .inventory-view-container {
-  /* .card-dashboard já foi adicionado ao container principal no JSX */
-  /* Se precisar de estilos específicos para o container geral do inventário, adicione aqui. */
-}
-.form-section, .devices-section, .onboarding-section {
-  margin-bottom: 25px; /* Espaço entre as seções */
+  /* .card-dashboard já é aplicado, fornecendo o container principal */
 }
 
-/* Reutilize .form-section, .card-dashboard, .devices-section, etc. do Dashboard.css geral
-   ou defina estilos específicos se necessário.
-   As classes .form-grid, .form-group, input, button-*, .devices-list, .device-item, .empty-state
-   já foram definidas no Dashboard.css anterior e devem ser aplicadas.
-   Se você moveu Dashboard.css para DashboardLayout.css ou algo assim,
-   garanta que essas classes ainda estejam acessíveis.
-   Para este exemplo, vou assumir que o .card-dashboard é global ou
-   você pode importar os estilos de botões e formulários de um local comum.
-   Por simplicidade, se você apenas importou o Dashboard.css no Dashboard.jsx (layout),
-   e o InventoryView é renderizado dentro dele, as classes como card-dashboard,
-   form-group, button-submit, etc., já devem ser aplicadas por cascata ou
-   porque os elementos JSX no InventoryView usam essas classes.
-*/
-
-/* Apenas se precisar de algum override ou estilo muito específico para InventoryView: */
-.inventory-view-container .form-section {
-  /* Exemplo: margin-top: 0; se for o primeiro elemento */
-} 
-
-/* --- Estilos para o Submenu dentro de Inventário --- */
-/* Reutilizando e adaptando estilos de SettingsPage.css para consistência */
-
-.inventory-sub-nav {
+.inventory-header {
   display: flex;
-  margin-bottom: 10px;
-  border-bottom: 1px solid #eee; /* Linha sutil abaixo do submenu */
-  padding-bottom: 5px;
-  gap: 10px; /* Espaço entre os botões do submenu */
-  flex-wrap: wrap; /* Permite quebrar linha em telas menores */
-}
-
-.inventory-sub-nav .sub-tab-link { /* Especificidade para evitar conflito se .sub-tab-link for global */
-  background: none;
-  border: none;
-  padding: 8px 10px;
-  cursor: pointer;
-  font-size: 1em;
-  color: #555;
-  border-bottom: 2px solid transparent; /* Borda transparente por padrão */
-  transition: color 0.2s ease, border-bottom-color 0.2s ease;
-}
-
-.inventory-sub-nav .sub-tab-link:hover {
-  color: #333;
-  border-bottom-color: #ccc; /* Borda sutil ao passar o mouse */
-}
-
-.inventory-sub-nav .sub-tab-link.active {
-  color: var(--primary-color, #007bff); /* Usando variável global se definida, senão fallback */
-  border-bottom-color: var(--primary-color, #007bff);
-  font-weight: bold;
-}
-
- 
-
-.inventory-sub-content {
-  /* Estilos para o container do conteúdo do submenu, se necessário */
-}
-
-.inventory-sub-nav {
-  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
+  padding-bottom: 15px;
   border-bottom: 1px solid #eee;
 }
 
-.sub-tab-link {
-  padding: 10px 20px;
-  cursor: pointer;
-  border: none;
-  background-color: transparent;
-  font-size: 1rem;
-  color: #555;
-  border-bottom: 3px solid transparent;
-  margin-right: 10px;
+.inventory-header h2 {
+  margin: 0;
+  font-size: 1.5em;
 }
 
-.sub-tab-link.active {
-  color: var(--primary-color); /* Certifique-se de que esta variável CSS está definida globalmente */
-  border-bottom-color: var(--primary-color);
+/* Formulário Compacto */
+.form-section-compact {
+  padding: 20px;
+  background-color: #f9f9f9;
+  border: 1px solid #e9e9e9;
+  border-radius: 8px;
+  margin-bottom: 25px;
+}
+.form-section-compact h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #333;
+}
+.form-actions {
+  margin-top: 15px;
+  display: flex;
+  gap: 10px;
+}
+
+/* Grid para os cards de dispositivo */
+.devices-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.device-summary-card {
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.device-summary-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.device-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-indicator.status-onboarded, .status-indicator.status-approved { background-color: #28a745; /* Verde */ }
+.status-indicator.status-pending_onboarding { background-color: #ffc107; /* Amarelo */ }
+.status-indicator.status-rejected { background-color: #dc3545; /* Vermelho */ }
+.status-indicator.status-unknown, .status-indicator.status-offline { background-color: #6c757d; /* Cinza */ }
+
+
+.device-name {
   font-weight: bold;
+  font-size: 1.1em;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.device-type {
+  font-size: 0.9em;
+  color: #777;
+  background-color: #f0f2f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.device-card-body {
+  padding: 15px;
+  font-size: 0.9em;
+  color: #555;
+  flex-grow: 1; /* Faz esta área crescer */
+}
+
+.device-card-body p {
+  margin: 0 0 5px 0;
+}
+.device-card-body p strong {
+  color: #444;
+}
+
+.device-card-footer {
+  padding: 10px 15px;
+  background-color: #f9f9f9;
+  border-top: 1px solid #f0f0f0;
+  font-size: 0.8em;
+  color: #777;
+  text-align: right;
+  border-radius: 0 0 7px 7px;
+}
+/* Navegação de Sub-abas */
+.inventory-sub-nav {
+  display: flex;
+  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 25px;
+}
+.inventory-sub-nav .sub-tab-link {
+  padding: 12px 20px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-size: 1em;
+  color: #555;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px; /* Alinha com a borda principal */
+  transition: color 0.2s ease, border-bottom-color 0.2s ease;
+}
+.inventory-sub-nav .sub-tab-link:hover {
+  color: var(--primary-color, #007bff);
+}
+.inventory-sub-nav .sub-tab-link.active {
+  color: var(--primary-color, #007bff);
+  font-weight: 600;
+  border-bottom-color: var(--primary-color, #007bff);
 }
 
 .inventory-sub-content {
-  padding-top: 10px;
+  /* Estilos para o container do conteúdo da sub-aba, se necessário */
+}
+
+/* Seção de Onboarding */
+.onboarding-section {
+  /* Estilos gerais para a seção de onboarding, se necessário */
 }
 
 .onboarding-section h2 {
+  font-size: 1.3em;
   margin-bottom: 15px;
-  font-size: 1.4rem;
   color: #333;
 }
 
-.agent-hosts-table {
+/* Tabela de Onboarding de Agentes */
+.agent-onboarding-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 20px;
-  font-size: 0.9rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  font-size: 0.9em;
 }
 
-.agent-hosts-table th,
-.agent-hosts-table td {
+.agent-onboarding-table th,
+.agent-onboarding-table td {
   border: 1px solid #ddd;
   padding: 10px 12px;
   text-align: left;
   vertical-align: middle;
 }
 
-.agent-hosts-table th {
+.agent-onboarding-table th {
   background-color: #f7f7f7;
   font-weight: 600;
-  color: #333;
+  color: #444;
 }
 
-.agent-hosts-table tbody tr:nth-child(even) {
+.agent-onboarding-table tr:nth-child(even) {
   background-color: #fdfdfd;
 }
 
-.agent-hosts-table tbody tr:hover {
-  background-color: #f0f0f0;
+.agent-onboarding-table tr:hover {
+  background-color: #f0f8ff; /* Um azul bem claro no hover */
 }
 
+/* Botões de Ação na Tabela */
+.agent-onboarding-table .button-approve,
+.agent-onboarding-table .button-reject,
+.agent-onboarding-table .button-delete { /* Reutiliza .button-delete se já definido globalmente */
+  padding: 5px 10px;
+  font-size: 0.85em;
+  margin-right: 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: none;
+  color: white;
+}
+.agent-onboarding-table .button-approve:last-child,
+.agent-onboarding-table .button-reject:last-child,
+.agent-onboarding-table .button-delete:last-child {
+  margin-right: 0;
+}
+
+
+.agent-onboarding-table .button-approve {
+  background-color: var(--success-color, #28a745);
+}
+.agent-onboarding-table .button-approve:hover {
+  background-color: #218838;
+}
+
+.agent-onboarding-table .button-reject {
+  background-color: var(--warning-color, #ffc107);
+  color: #212529;
+}
+.agent-onboarding-table .button-reject:hover {
+  background-color: #e0a800;
+}
+
+/* Se .button-delete já tem estilos globais, eles serão aplicados.
+   Caso contrário, adicione-os aqui ou no seu CSS global: */
+.agent-onboarding-table .button-delete {
+   background-color: var(--error-color, #dc3545); /* Exemplo */
+}
+.agent-onboarding-table .button-delete:hover {
+   background-color: #c82333; /* Exemplo */
+}
+
+
+/* Badges de Status (reutilizados de outros lugares, se já definidos) */
 .status-badge {
   padding: 4px 8px;
   border-radius: 12px;
   font-size: 0.8em;
   font-weight: bold;
-  color: white;
   text-transform: capitalize;
+  color: white;
   display: inline-block;
-  min-width: 70px; /* Para garantir que os badges tenham uma largura mínima */
-  text-align: center;
 }
+.status-badge.status-approved { background-color: #28a745; }
+.status-badge.status-pending { background-color: #ffc107; color: #333; }
+.status-badge.status-rejected { background-color: #dc3545; }
+.status-badge.status-unknown { background-color: #6c757d; }
 
-.status-pending {
-  background-color: #ffc107; /* Amarelo */
-  color: #333;
-}
-
-.status-approved {
-  background-color: #28a745; /* Verde */
-}
-
-.status-rejected {
-  background-color: #dc3545; /* Vermelho */
-}
-
-.button-approve, .button-reject, .button-edit, .button-delete, .button-submit, .button-cancel {
-  padding: 6px 10px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: background-color 0.2s ease, opacity 0.2s ease;
-  margin-right: 5px; /* Espaçamento padrão entre botões */
-}
-.button-approve:last-child, .button-reject:last-child {
-    margin-right: 0;
-}
-
-
-.button-approve {
-  background-color: #28a745; /* Verde */
-  color: white;
-}
-.button-approve:hover {
-  background-color: #218838;
-}
-
-.button-reject {
-  background-color: #dc3545; /* Vermelho */
-  color: white;
-}
-.button-reject:hover {
-  background-color: #c82333;
-}
-.button-reject:disabled {
-  background-color: #6c757d; /* Cinza para desabilitado */
-  color: #ccc;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 20px;
-  color: #777;
-  font-style: italic;
-  background-color: #f9f9f9;
-  border: 1px dashed #ddd;
-  border-radius: 4px;
-}
 
 .error-message {
-  color: #721c24; /* Cor de texto para erro */
-  margin-top: 10px;
-  padding: 10px 15px;
-  background-color: #f8d7da; /* Fundo para erro */
-  border: 1px solid #f5c6cb; /* Borda para erro */
-  border-radius: 4px;
-}
-
-/* Ajustes para o formulário de dispositivos manuais, se necessário */
-.form-section {
-  margin-bottom: 30px;
-  padding: 20px;
-  background-color: #fff;
-  border-radius: 5px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-.form-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 15px;
-    margin-bottom: 20px;
-}
-.form-group label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: 500;
-}
-.form-group input {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    box-sizing: border-box;
-}
-
-.devices-section h2 {
-    margin-bottom: 15px;
-    font-size: 1.4rem;
-    color: #333;
-}
-.devices-list {
-    list-style: none;
-    padding: 0;
-}
-.device-item {
-    background-color: #fff;
-    border: 1px solid #eee;
-    padding: 15px;
-    margin-bottom: 10px;
-    border-radius: 4px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-}
-.device-info strong {
-    font-size: 1.1em;
-    color: #333;
-}
-.device-info span {
-    display: block;
-    font-size: 0.9em;
-    color: #666;
-    margin-top: 3px;
+  color: var(--error-color, red);
+  margin: 10px 0;
 }
