@@ -22,17 +22,13 @@ const InventoryView = () => {
   // Funções para a aba "Dispositivos"
   const fetchDevices = useCallback(async () => {
     try {
-      const res = await API.get('/device');
+      // Busca apenas dispositivos com status 'approved' para a lista principal
+      const res = await API.get('/device?status=approved');
       setDevices(res.data);
     } catch (error) {
       console.error("Erro ao buscar dispositivos:", error);
     }
   }, []); 
-
-// useEffect(() => { // Este useEffect não é mais necessário aqui, pois será chamado condicionalmente
-  //   fetchDevices();
-  // }, [fetchDevices]); // Adicionado fetchDevices às dependências
-
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -74,14 +70,16 @@ const InventoryView = () => {
       }
     }
   };
-  // Funções para a aba "Onboarding" (agora lida com Devices)
+  // Funções para a aba "Onboarding" (agora lida com Devices) 
   const fetchPendingAgentDevices = useCallback(async () => {
     setIsLoadingPendingAgents(true);
     setAgentError(null);
     try {
       // Busca Devices com source 'agent' e status 'pending'
-      const response = await API.get('/device?source=agent&status=pending');
+      const response = await API.get('/device?source=agent');
       setPendingAgentDevices(response.data);
+      console.log("resposta do get device no onboarding:");
+      console.log(response.data);
     } catch (err) {
       console.error("Erro ao buscar dispositivos de agentes pendentes:", err);
       setAgentError(err.response?.data?.error || "Falha ao carregar dados de onboarding.");

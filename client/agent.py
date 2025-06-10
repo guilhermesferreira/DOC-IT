@@ -25,62 +25,85 @@ LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
 AGENT_VERSION = "1.1.0" # Versão do Agente
 
+# --- Configuração Padrão ---
 DEFAULT_CONFIG = {
     "server_base_url": "http://localhost:3000", # URL base do servidor
     "agent_id": None,
     "last_successful_checkin": None,
-    "log_level": "INFO" # Futuro: DEBUG, INFO, WARNING, ERROR
+    "log_level": "INFO" # Níveis: DEBUG, INFO, WARNING, ERROR, CRITICAL
 }
+
+# --- Lógica de Nível de Log (Setup para a função de log) ---
+LOG_LEVELS = {
+    "DEBUG": 10,
+    "INFO": 20,
+    "WARNING": 30,
+    "ERROR": 40,
+    "CRITICAL": 50
+}
+# A configuração global será carregada no início da execução principal.
+config = {}
 
 # --- Logging ---
 def log_event(message, level="INFO"):
-    """Adiciona uma mensagem de log ao arquivo de log."""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f"{timestamp} [{level}] - {message}\n"
-    try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(log_entry)
-    except Exception as e:
-        print(f"Crítico: Falha ao escrever no arquivo de log {LOG_FILE}: {e}")
+    """
+    Adiciona uma mensagem de log ao arquivo de log, respeitando o log_level da configuração.
+    """
+    global config # Usa a config global que será carregada no início
+
+    # Obtém o nível de log configurado do objeto 'config'. Usa 'INFO' como padrão.
+    configured_level_str = config.get("log_level", "INFO").upper()
+    configured_level_num = LOG_LEVELS.get(configured_level_str, 20) # 20 é o valor para INFO
+
+    # Obtém o nível numérico da mensagem atual.
+    message_level_num = LOG_LEVELS.get(level.upper(), 20)
+
+    # CONDIÇÃO: Apenas escreve no log se o nível da mensagem for igual ou mais importante
+    # do que o nível configurado no config.json.
+    if message_level_num >= configured_level_num:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_entry = f"{timestamp} [{level.upper()}] - {message}\n"
+        try:
+            with open(LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(log_entry)
+        except Exception as e:
+            # Erros críticos ao escrever no log ainda são impressos no console.
+            print(f"Crítico: Falha ao escrever no arquivo de log {LOG_FILE}: {e}")
 
 # --- Configuration Management ---
 def load_config():
     """Carrega a configuração do agente de config.json, cria padrão se não encontrado."""
+    log_event(f"iniciando load_config()", "DEBUG")
     if not os.path.exists(CONFIG_FILE):
+        # A primeira chamada ao log_event pode usar o nível padrão se a config ainda não foi carregada.
         log_event(f"Arquivo de configuração {CONFIG_FILE} não encontrado. Criando config padrão.", "WARNING")
         save_config(DEFAULT_CONFIG)
         return DEFAULT_CONFIG
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            config = json.load(f)
-            # Garante que todas as chaves padrão estejam presentes
+            loaded_config = json.load(f)
             for key, value in DEFAULT_CONFIG.items():
-                if key not in config:
-                    config[key] = value
-            return config
-    except json.JSONDecodeError:
-        log_event(f"Erro ao decodificar {CONFIG_FILE}. Usando config padrão e tentando sobrescrever.", "ERROR")
-        save_config(DEFAULT_CONFIG) # Tenta salvar um padrão válido
-        return DEFAULT_CONFIG
-    except Exception as e:
+                if key not in loaded_config:
+                    loaded_config[key] = value
+            return loaded_config
+    except (json.JSONDecodeError, Exception) as e:
         log_event(f"Falha ao carregar config de {CONFIG_FILE}: {e}. Usando config padrão.", "ERROR")
+        save_config(DEFAULT_CONFIG)
         return DEFAULT_CONFIG
 
 def save_config(config_data):
     """Salva os dados de configuração em config.json."""
+    log_event(f"iniciando save_config()", "DEBUG")
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config_data, f, indent=4, ensure_ascii=False)
-        # log_event("Configuração salva com sucesso.", "DEBUG") # Evita loops de log
     except Exception as e:
         log_event(f"Falha ao salvar config em {CONFIG_FILE}: {e}", "ERROR")
 
 
+# --- Funções de Coleta (sem alterações) ---
 def get_installed_software():
-    """
-    Coleta a lista de softwares instalados lendo o Registro do Windows.
-    Esta função é específica para Windows.
-    """
+    log_event(f"iniciando get_installed_software()", "DEBUG")
     software_list = []
     uninstall_paths = [
         r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
@@ -134,6 +157,7 @@ def get_windows_hardware_uuid():
     Obtém o UUID de hardware da máquina Windows usando um comando WMI.
     Este é um identificador mais estável do que um UUID gerado aleatoriamente.
     """
+    log_event(f"iniciando get_windows_hardware_uuid()", "DEBUG")
     try:
         # Comando para obter o UUID da placa-mãe via WMI
         result = subprocess.check_output("wmic csproduct get uuid", shell=True, text=True, stderr=subprocess.DEVNULL)
@@ -152,6 +176,7 @@ def get_windows_hardware_uuid():
 
 def get_os_username():
     """Obtém o nome de usuário atual do SO."""
+    log_event(f"iniciando get_os_username()", "DEBUG")
     try:
         return getpass.getuser()
     except Exception:
@@ -163,6 +188,7 @@ def get_os_username():
 
 def get_primary_ip_address():
     """Tenta obter um endereço IPv4 primário não loopback."""
+    log_event(f"iniciando get_primary_ip_address()", "DEBUG")
     try:
         hostname = socket.gethostname()
         # Isso obtém um IP que pode alcançar um site externo, frequentemente o primário.
@@ -198,12 +224,14 @@ def get_primary_ip_address():
 
 def get_os_info_string():
     """Gera uma string concisa de informações do SO."""
+    log_event(f"iniciando get_os_info_string()", "DEBUG")
     return f"{platform.system()} {platform.release()} ({platform.version()})"
 
 def get_additional_inventory_data():
     """
     Coleta dados de inventário detalhados para serem incluídos no campo additionalData do check-in.
     """
+    log_event(f"iniciando get_additional_inventory_data()", "DEBUG")
     data = {}
     try:
         cpu_model_raw = platform.processor()
@@ -268,6 +296,7 @@ def get_additional_inventory_data():
 # --- Backend Communication ---
 def perform_check_in(config):
     """Envia dados básicos do agente para o endpoint de check-in do backend."""
+    log_event(f"iniciando perform_check_in()", "DEBUG")
     check_in_url = f"{config.get('server_base_url', DEFAULT_CONFIG['server_base_url'])}/agent/check-in"
     
     payload = {
@@ -284,8 +313,9 @@ def perform_check_in(config):
         log_event("ID do Agente ausente. Não é possível realizar o check-in.", "ERROR")
         return False
 
-    log_event(f"Tentando check-in para {check_in_url} com payload: {json.dumps(payload)}", "INFO")
-    
+    # log_event(f"Tentando check-in para {check_in_url} com payload: {json.dumps(payload)}", "INFO")
+    log_event(f"Tentando check-in para {check_in_url}", "INFO")
+    log_event(f"payload: {json.dumps(payload)}", "DEBUG")
     try:
         response = requests.post(check_in_url, json=payload, timeout=10) # Timeout de 10 segundos
         response.raise_for_status() # Levanta HTTPError para respostas ruins (4XX ou 5XX)
@@ -315,6 +345,7 @@ def get_system_inventory(agent_id):
     Coleta todas as informações do sistema e as retorna em um dicionário.
     Inclui o agent_id.
     """
+    log_event(f"iniciando get_system_inventory()", "DEBUG")
     inventory_data = {}
 
     # --- Informações de Sistema e Hardware ---
@@ -418,11 +449,12 @@ def get_system_inventory(agent_id):
     return inventory_data
 
 if __name__ == "__main__":
-    log_event("Script do agente iniciado.", "INFO")
-    
+    # Carrega a configuração no início para que o log_level seja definido globalmente.
     config = load_config()
 
-    # Garante que o ID do Agente esteja definido
+    log_event("Script do agente iniciado.", "INFO")
+    log_event("AVISO ! VOCE ESTA EM DEBUG MODE, CUIDADO COM A PERFORMANCE.", "DEBUG")
+    
     if not config.get("agent_id"):
         log_event("ID do Agente não encontrado no config. Tentando obter UUID de hardware.", "INFO")
         hw_uuid = get_windows_hardware_uuid() # Esta função agora tem seu próprio fallback
@@ -445,8 +477,8 @@ if __name__ == "__main__":
     else:
         log_event("Processo de check-in falhou. Veja logs anteriores para detalhes.", "WARNING")
 
-    # Coleta e salva o inventário completo do sistema localmente (independentemente do status do check-in por enquanto)
-    log_event("Coletando inventário completo do sistema...", "INFO")
+    # Coleta e salva o inventário completo do sistema localmente.
+    log_event("Coletando inventário completo do sistema para salvamento local...", "INFO")
     # Passa o agent_id confirmado para get_system_inventory
     full_inventory = get_system_inventory(config["agent_id"]) 
     

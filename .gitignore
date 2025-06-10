@@ -16,6 +16,10 @@ client/inventario.txt
 client/dist/agent.exe
 \client\dist\*
 
+*/agent.exe
+*\agent.exe
+client\dist\agent.exe
+client\dist\config.json
 client/dist/agent.exe
 client/dist/config.json
 
@@ -43,3 +47,5 @@ ehthumbs.db
 *.sln
 *.swp
 *~
+client/dist/agent.exe
+client/dist/config.json

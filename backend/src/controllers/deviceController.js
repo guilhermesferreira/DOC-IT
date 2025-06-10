@@ -16,7 +16,16 @@ async function getDevices(req, res) {
   //   whereClause.userId = loggedInUserId;
   // }
   if (source) whereClause.source = source; // "agent" ou "manual"
-  if (status) whereClause.status = status; // "pending", "approved", "rejected", "archived"
+
+   if (status) {
+    const statuses = status.split(',');
+    if (statuses.length > 1) {
+      whereClause.status = { in: statuses };
+    } else {
+      whereClause.status = statuses[0]; // "pending", "approved", "rejected"
+    }
+  }
+
 
   try {
     const devices = await prisma.device.findMany({
@@ -99,7 +108,7 @@ async function deleteDevice(req, res) {
   }
 }
 
-// Aprova um dispositivo que foi descoberto por um agente.
+// Aprova um dispositivo que foi descoberto por um agente. 
 async function approveDevice(req, res) {
   const deviceId = parseInt(req.params.id, 10);
   const approverUserId = req.user.id;
@@ -121,8 +130,11 @@ async function approveDevice(req, res) {
       return res.status(400).json({ error: 'Este dispositivo não foi originado por um agente.' });
     }
 
-    if (deviceToApprove.status !== 'pending') {
-      return res.status(400).json({ error: `Dispositivo já está no status '${deviceToApprove.status}'. Só é possível aprovar dispositivos pendentes.` });
+     if (deviceToApprove.status === 'approved') {
+      return res.status(400).json({ error: `Dispositivo já está no status 'approved'.` });
+    }
+    if (!['pending', 'rejected'].includes(deviceToApprove.status)) {
+        return res.status(400).json({ error: `Só é possível aprovar dispositivos com status 'pending' ou 'rejected'. Status atual: '${deviceToApprove.status}'.` });
     }
 
     const updatedDevice = await prisma.device.update({
@@ -148,7 +160,7 @@ async function approveDevice(req, res) {
   }
 }
 
-// Rejeita um dispositivo (geralmente um que foi descoberto por um agente).
+// Rejeita um dispositivo.
 async function rejectDevice(req, res) {
   const deviceId = parseInt(req.params.id, 10);
   // const rejectorUserId = req.user.id; // Opcional: registrar quem rejeitou
