@@ -1,0 +1,76 @@
+/* src/components/ConfirmationModal.css */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000; /* Acima de outros conteúdos */
+}
+
+.modal-content {
+  background-color: #fff;
+  padding: 25px 30px;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  width: 90%;
+  max-width: 450px;
+  text-align: center;
+}
+
+.modal-title {
+  font-size: 1.4em;
+  color: var(--text-color-dark, #333);
+  margin-top: 0;
+  margin-bottom: 15px;
+}
+
+.modal-message {
+  font-size: 1em;
+  color: var(--text-color-light, #555);
+  margin-bottom: 25px;
+  line-height: 1.6;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: center; /* Centraliza os botões se houver espaço */
+  gap: 15px;
+}
+
+/* Estilos para botões dentro do modal (reutilizando classes globais se possível) */
+.modal-actions .button-cancel,
+.modal-actions .button-danger {
+  padding: 10px 20px;
+  font-size: 0.95em;
+  border-radius: 5px;
+  cursor: pointer;
+  border: none;
+  font-weight: 500;
+}
+
+/* Se você não tiver .button-danger globalmente, defina-o: */
+.button-danger {
+  background-color: var(--error-color, #dc3545);
+  color: white;
+}
+.button-danger:hover {
+  background-color: #c82333; /* Mais escuro */
+}
+
+/* .button-cancel já deve estar definido globalmente ou em Dashboard.css */
+/* Se não:
+.button-cancel {
+  background-color: #6c757d;
+  color: white;
+}
+.button-cancel:hover {
+  background-color: #5a6268;
+}
+*/
+
+
