@@ -8,6 +8,17 @@ frontend/.env
 frontend/node_modules/
 frontend\node_modules/
 
+
+client/build/*
+client/dist/*
+client/agent.spec
+client/inventario.txt
+client/dist/agent.exe
+\client\dist\*
+
+client/dist/agent.exe
+client/dist/config.json
+
 *.env.*
 
 logs
@@ -32,13 +43,3 @@ ehthumbs.db
 *.sln
 *.swp
 *~
-client/build/
-client/dis
-client/agent.spec
-client/dist/inventario.txt
-client/inventario.txt
-
-
-
-
-backend/.env
