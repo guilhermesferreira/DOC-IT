@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import API from '../api/api'; // Sua instância configurada do Axios
 import { QRCodeCanvas as QRCode } from 'qrcode.react';
+import ConfirmationModal from '../components/ConfirmationModal'; // <<< 1. Importar o Modal
 import './MfaSetupPage.css'; // Crie este arquivo para estilização
 
 const MfaSetupPage = () => {
@@ -15,6 +16,7 @@ const MfaSetupPage = () => {
   const [isDisablingMfa, setIsDisablingMfa] = useState(false); // Controla se o formulário de desativação está visível
   const [disableMfaCode, setDisableMfaCode] = useState(''); // Código MFA para desativar
   const [disableMfaError, setDisableMfaError] = useState(null); // Erro ao desativar
+  const [isConfirmDisableModalOpen, setIsConfirmDisableModalOpen] = useState(false); // <<< 2. Estado para o modal de confirmação de desativação
 
   // Efeito para verificar o status do MFA ao carregar o componente
   useEffect(() => {
@@ -86,17 +88,11 @@ const MfaSetupPage = () => {
       setIsLoading(false);
     }
   };
-const handleInitiateDisableMfa = () => {
-    if (window.confirm("Tem certeza que deseja desativar a Autenticação de Dois Fatores? Sua conta ficará menos segura.")) {
-      setIsDisablingMfa(true);
-      setDisableMfaError(null); // Limpa erros anteriores
-      setDisableMfaCode(''); // Limpa código anterior
-    }
-  };
 
-  const handleConfirmDisableMfa = async (e) => {
-    e.preventDefault();
+  // Função que realmente executa a desativação após confirmação no modal
+  const executeMfaDisable = async () => {
     if (!disableMfaCode) {
+       // Esta verificação é feita no handler do submit do formulário
       setDisableMfaError("Código MFA é obrigatório para desativar.");
       return;
     }
@@ -112,6 +108,7 @@ const handleInitiateDisableMfa = () => {
       setMfaSetupInfo(null);
       setRecoveryCodes([]);
       setSetupError(null);
+      // O modal de confirmação inicial já terá sido fechado.
     } catch (error) {
       console.error("Erro ao desativar MFA:", error);
       setDisableMfaError(error.response?.data?.error || "Não foi possível desativar o MFA. Verifique o código e tente novamente.");
@@ -120,10 +117,40 @@ const handleInitiateDisableMfa = () => {
     }
   };
 
+   // 1. Chamado pelo botão "Desativar MFA": Abre o modal de confirmação inicial.
+  const handleInitiateDisableMfa = () => {
+        console.log('[MfaSetupPage] handleInitiateDisableMfa chamado. Abrindo modal de confirmação.');
+    setIsConfirmDisableModalOpen(true);
+  };
+
+  // 2. Chamado quando o usuário confirma no modal inicial: Mostra o formulário para inserir o código.
+  const handleProceedToEnterDisableCode = () => {
+    console.log('[MfaSetupPage] handleProceedToEnterDisableCode chamado. Mostrando formulário de código.');
+    setIsConfirmDisableModalOpen(false); // Fecha o modal de confirmação
+    setIsDisablingMfa(true); // Mostra o formulário para inserir o código
+    setDisableMfaError(null); // Limpa erros anteriores
+    setDisableMfaCode(''); // Limpa código anterior
+  };
+
+  // 3. Chamado pelo submit do formulário de desativação (onde o código é inserido)
+  const handleDisableCodeFormSubmit = (e) => {
+    console.log('[MfaSetupPage] handleDisableCodeFormSubmit chamado.');
+    console.log('[MfaSetupPage] handleSubmitDisableMfaForm chamado.');
+    e.preventDefault();
+    if (!disableMfaCode) {
+      console.log('[MfaSetupPage] disableMfaCode está vazio.');
+      setDisableMfaError("Código MFA é obrigatório para desativar.");
+      return;
+    }
+    executeMfaDisable(); // Chama diretamente a função para desativar
+  };
+
   return (
     // Removido .mfa-setup-page-container e .page-container pois este componente
     // é renderizado dentro de .settings-section que já está em um .card-dashboard
     // na SettingsPage.
+    // Adicione este log para verificar o estado antes da renderização do modal:
+    // console.log('[MfaSetupPage] Renderizando. isConfirmDisableModalOpen:', isConfirmDisableModalOpen),
     <div className="mfa-setup-card card-dashboard"> {/* Reutilize .card-dashboard */}
       <h2>Configurar Autenticação de Dois Fatores (MFA)</h2>
 
@@ -224,7 +251,7 @@ const handleInitiateDisableMfa = () => {
         <div className="mfa-disable-section" style={{marginTop: '20px', paddingTop: '20px', borderTop: '1px dashed #ddd'}}>
           <h3>Desativar Autenticação de Dois Fatores</h3>
           <p>Para confirmar a desativação, insira um código MFA atual do seu aplicativo autenticador.</p>
-          <form onSubmit={handleConfirmDisableMfa} className="mfa-verify-form"> {/* Reutilizando classe para consistência */}
+          <form onSubmit={handleDisableCodeFormSubmit} className="mfa-verify-form"> {/* onSubmit agora chama handleDisableCodeFormSubmit */}
             <div className="form-group">
               <label htmlFor="disableMfaCode">Código MFA Atual</label>
               <input
@@ -245,6 +272,18 @@ const handleInitiateDisableMfa = () => {
           </form>
         </div>
       )}
+
+      {/* Modal de Confirmação para Desativar MFA */}
+      <ConfirmationModal
+        // Você também pode adicionar um console.log dentro do ConfirmationModal para ver a prop isOpen recebida
+        isOpen={isConfirmDisableModalOpen}
+        onClose={() => { console.log('[MfaSetupPage] Modal de confirmação fechado (onClose).'); setIsConfirmDisableModalOpen(false); }}
+        onConfirm={handleProceedToEnterDisableCode} // onConfirm agora mostra o formulário de código
+        title="Confirmar Desativação do MFA"
+        message="Tem certeza que deseja desativar a Autenticação de Dois Fatores? Sua conta ficará menos segura."
+        confirmText="Desativar"
+        cancelText="Cancelar"
+      />
     </div>
   );
 };

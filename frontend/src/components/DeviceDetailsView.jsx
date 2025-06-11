@@ -4,7 +4,7 @@ import './DeviceDetailsView.css'; // Criaremos este CSS
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { ArrowLeft, Monitor, Cpu, HardDrive, Wifi, Shield, Clock, Server, Network, Trash2 } from 'lucide-react'; // Adicionado Trash2
 const DeviceDetailsView = ({ device, onBack, onDeleteRequest }) => { // Adicionada prop onDeleteRequest
-  const [activeTab, setActiveTab] = useState("overview");
+const [activeTab, setActiveTab] = useState("overview");
 
   // Função para formatar datas
   const formatDate = (dateString) => {
