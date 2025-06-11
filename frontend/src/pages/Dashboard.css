@@ -1,181 +1,31 @@
 /* src/pages/Dashboard.css */
 
+/* Estas variáveis devem corresponder às definidas em Sidebar.css
+   ou estar em um local global :root acessível por ambos. */
+:root {
+  --sidebar-width-collapsed: 80px;
+  --sidebar-width-expanded: 260px;
+  --sidebar-transition-speed: 0.3s;
+  --content-bg-color: #f0f2f5; /* Cor de fundo para a área de conteúdo */
+}
+
 .dashboard-layout {
   display: flex;
-  min-height: 100vh; /* Ocupa a tela inteira */
+  min-height: 100vh;
+  background-color: var(--content-bg-color); /* Aplica ao layout geral */
 }
 
 .dashboard-main-content {
-  flex-grow: 1; /* Ocupa todo o espaço restante ao lado do sidebar */
-  padding: 15px;
-  background-color: var(--background-light, #f0f2f5); /* Do index.css */
-  overflow-y: auto; /* ESSENCIAL: Permite scroll vertical APENAS nesta área */
-  /* Para garantir que ele saiba sua altura máxima para o scroll: */
-  height: 100vh; /* Ocupa a altura da viewport, o scroll será interno */
-  box-sizing: border-box; /* Garante que o padding não aumente a altura total */
+  flex-grow: 1;
+  padding: 24px; /* Ajuste o padding conforme necessário */
+  transition: margin-left var(--sidebar-transition-speed) ease-in-out;
+  /* background-color: #ffffff; /* Opcional: se a área de conteúdo principal precisar de um fundo diferente */
 }
 
-
-/* Estilo de Card genérico para usar nas seções do dashboard */
-.card-dashboard { /* Renomeei de .card para não conflitar se você tiver .card no index.css */
-  background-color: var(--background-white, #ffffff);
-  padding: 25px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  margin-bottom: 20px;
+.dashboard-main-content.collapsed {
+  margin-left: var(--sidebar-width-collapsed);
 }
 
-.card-dashboard h2 {
-  font-size: 20px;
-  color: var(--text-color-dark, #333);
-  margin-top: 0; /* Remove margem do topo se for o primeiro elemento */
-  margin-bottom: 5px;
-  border-bottom: 1px solid #f0f0f0;
-  padding-bottom: 5px;
-}
-
-/* --- ESTILOS QUE ESTAVAM FALTANDO OU FORAM APAGADOS --- */
-/* Estes são os estilos que realmente dão vida ao formulário e à lista! */
-
-.button-logout,
-.button-submit,
-.button-cancel,
-.button-edit,
-.button-delete {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: bold;
-  transition: background-color 0.2s ease, opacity 0.2s ease;
-}
-
-.button-logout {
-  background-color: var(--error-color, #dc3545);
-  color: white;
-}
-.button-logout:hover {
-  background-color: #c82333; /* Vermelho mais escuro */
-}
-
-.button-submit {
-  background-color: var(--primary-color, #007bff);
-  color: white;
-  margin-right: 10px; /* Espaço se houver botão de cancelar */
-}
-.button-submit:hover {
-  background-color: var(--primary-color-darker, #0056b3);
-}
-
-.button-cancel {
-  background-color: #6c757d; /* Cinza */
-  color: white;
-}
-.button-cancel:hover {
-  background-color: #5a6268;
-}
-
-
-/* Formulário */
-.form-section form .form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Layout responsivo */
-  gap: 20px; /* Espaço entre os campos */
-  margin-bottom: 20px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.form-group label {
-  margin-bottom: 6px;
-  color: var(--text-color-light, #555);
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.form-group input[type="text"],
-.form-group input[type="number"] { /* Adicionei number se patrimônio for numérico */
-  padding: 10px 12px;
-  border: 1px solid var(--border-color-light, #ccc);
-  border-radius: 4px;
-  font-size: 15px;
-}
-
-.form-group input[type="text"]:focus,
-.form-group input[type="number"]:focus {
-  border-color: var(--primary-color, #007bff);
-  outline: none;
-  box-shadow: 0 0 0 0.15rem rgba(0, 123, 255, 0.2);
-}
-
-/* Lista de Dispositivos */
-.devices-list {
-  list-style: none;
-  padding: 0;
-}
-
-.device-item {
-  background-color: #f9f9f9; /* Fundo levemente diferente para itens da lista */
-  padding: 1px;
-  border: 1px solid #e9e9e9;
-  border-radius: 4px;
-  margin-bottom: 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: box-shadow 0.2s ease;
-}
-
-.device-item:hover {
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-
-.device-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.device-info strong {
-  font-size: 17px;
-  color: var(--text-color-dark, #333);
-  margin-bottom: 4px;
-}
-
-.device-info span {
-  font-size: 14px;
-  color: var(--text-color-light, #555);
-  margin-bottom: 2px;
-}
-
-.device-actions button {
-  margin-left: 10px;
-  font-size: 13px;
-  padding: 6px 12px;
-}
-
-.button-edit {
-  background-color: #ffc107; /* Amarelo */
-  color: #212529;
-}
-.button-edit:hover {
-  background-color: #e0a800;
-}
-
-.button-delete {
-  background-color: #dc3545; /* Vermelho */
-  color: white;
-}
-.button-delete:hover {
-  background-color: #c82333;
-}
-
-.empty-state {
-  text-align: center;
-  color: var(--text-color-light, #777);
-  padding: 20px;
-  font-style: italic;
+.dashboard-main-content.expanded {
+  margin-left: var(--sidebar-width-expanded);
 }

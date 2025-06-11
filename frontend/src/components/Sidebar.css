@@ -1,186 +1,166 @@
 /* src/components/Sidebar.css */
+:root {
+  --sidebar-bg-color: #1e293b; /* Azul-acinzentado escuro */
+  --sidebar-text-color: #e2e8f0; /* Cinza claro */
+  --sidebar-icon-color: #94a3b8; /* Cinza suave para ícones */
+  --sidebar-hover-bg-color: #334155; /* Um pouco mais claro para hover */
+  --sidebar-active-bg-color: #475569; /* Para itens ativos/selecionados */
+  --sidebar-accent-color: #3b82f6; /* Destaque azul */
+  --sidebar-border-color: #334155;
+  --sidebar-width-collapsed: 80px;
+  --sidebar-width-expanded: 260px;
+  --sidebar-transition-speed: 0.3s;
+}
 
-/* --- Estilo Base do Sidebar --- */
 .sidebar {
-  width: 70px; 
-  background-color: #2c3e50;
-  color: #ecf0f1;
-  /* padding: 20px 0; Removido padding vertical do container principal do sidebar */
+  background-color: var(--sidebar-bg-color);
+  color: var(--sidebar-text-color);
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  transition: width 0.3s ease; 
-  overflow-x: hidden; 
-  /* white-space: nowrap;  Movido para elementos internos se necessário */
-  position: sticky; /* <<< MUDANÇA IMPORTANTE */
-  top: 0;           /* <<< MUDANÇA IMPORTANTE: Trava no topo */
-  height: 100vh;    /* <<< MUDANÇA IMPORTANTE: Ocupa toda a altura da tela */
-  /* z-index: 1000;  Já estava, bom para sobreposição */
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  transition: width var(--sidebar-transition-speed) ease-in-out;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
+  overflow-x: hidden; /* Esconde o texto quando recolhido */
 }
 
+.sidebar.collapsed {
+  width: var(--sidebar-width-collapsed);
+}
 
 .sidebar.expanded {
-  width: 200px; /* Largura do sidebar quando está expandido */
+  width: var(--sidebar-width-expanded);
 }
 
-/* --- Cabeçalho do Sidebar --- */
 .sidebar-header {
-  padding: 15 15px 15px 15px; /* Espaçamento interno */
-  text-align: center; /* Centraliza o texto (útil para o 'D-IT' quando recolhido) */
-  border-bottom: 1px solid #34495e; /* Linha divisória abaixo do cabeçalho */
-  /* A altura do header será determinada pelo seu conteúdo (h2) */
+  padding: 20px 15px;
+  text-align: center;
+  border-bottom: 1px solid var(--sidebar-border-color);
+  min-height: 60px; /* Garante altura consistente */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .sidebar-header h2 {
-  margin: 0; /* Remove margem padrão do h2 */
-  font-size: 24px; /* Tamanho da fonte para 'Doc-IT Painel' */
-  color: #ffffff; /* Cor do texto branca */
-  opacity: 1; /* Totalmente visível por padrão */
-  overflow: hidden; /* Esconde o texto que não cabe */
-  white-space: nowrap; /* Impede que o texto 'Doc-IT Painel' quebre linha */
-  transition: opacity 0.2s ease, font-size 0.2s ease; /* Animação suave para opacidade e tamanho da fonte */
-  /* A largura será controlada pela opacidade/font-size para o efeito de 'D-IT' */
+  margin: 0;
+  font-size: 1.4rem; /* Ajustado para melhor visual */
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
 }
 
-/* Estilo do H2 quando o sidebar está recolhido (para o texto 'D-IT') */
 .sidebar.collapsed .sidebar-header h2 {
-  font-size: 20; /* Esconde o texto 'Doc-IT Painel' reduzindo a fonte a zero */
-  opacity: 1; /* Torna o texto 'Doc-IT Painel' invisível */
-  /* O ::before vai mostrar o 'D-IT' */
+  font-size: 1.1rem; /* Texto menor para "D-IT" */
 }
 
-/* --- Navegação Principal do Sidebar --- */
+.sidebar-nav {
+  flex-grow: 1;
+  padding-top: 15px;
+  overflow-y: auto; /* Permite scroll se muitos itens */
+  overflow-x: hidden;
+}
+
 .sidebar-nav ul {
-  list-style: none; /* Remove marcadores de lista */
-  padding: 0; /* Remove padding padrão da lista */
-  margin: 20px 0; /* Margem vertical para separar do header e footer */
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
-/* Estilo base para CADA botão de item de navegação */
-.sidebar-nav li button {
-  display: flex; /* Habilita Flexbox para alinhar ícone e texto */
-  align-items: center; /* Alinha ícone e texto verticalmente ao centro */
-  width: 100%; /* Botão ocupa toda a largura do <li> */
-  height: 55px; /* ALTURA FIXA E CONSISTENTE PARA OS BOTÕES */
-  padding: 0 22px; /* Espaçamento interno horizontal (vertical é controlado por align-items e height) */
-  background-color: transparent; /* Fundo transparente */
-  border: none; /* Sem borda */
-  color: #bdc3c7; /* Cor do texto/ícone padrão */
-  text-align: left; /* Alinha o texto à esquerda (quando visível) */
-  font-size: 16px; /* Tamanho da fonte para o texto do botão */
-  cursor: pointer; /* Cursor de mãozinha */
-  gap: 12px; /* Espaço entre o ícone e o texto quando o sidebar está expandido */
-  overflow: hidden; /* Esconde conteúdo que transborda (importante) */
-  white-space: nowrap; /* Impede que o texto quebre linha */
-  transition: background-color 0.2s ease, color 0.2s ease; /* Animações suaves */
-  /* A transição de padding foi removida para manter a altura consistente mais facilmente */
-}
-
-/* Estilo para botões de navegação quando o mouse está sobre ou item está ativo */
-.sidebar-nav li button:hover,
-.sidebar-nav li button.active { /* Adicione a classe .active via JS ao item selecionado */
-  background-color: #34495e; /* Cor de fundo mais escura */
-  color: #ffffff; /* Texto/ícone branco */
-}
-
-/* Estilo dos botões de navegação quando o sidebar está RECOLHIDO */
-.sidebar.collapsed .sidebar-nav li button {
-  justify-content: center; /* Centraliza o ícone horizontalmente */
-  padding: 0; /* Remove todo o padding para o ícone ficar bem centralizado na altura fixa */
-  /* A altura de 55px é herdada */
-  /* O gap não terá efeito pois o texto não estará visível */
-}
-
-/* Estilo para o contêiner do ÍCONE (span.icon) nos botões de navegação */
-.sidebar-nav li button .icon {
-  display: inline-flex; /* Bom para alinhar SVGs */
-  align-items: center;
-  font-size: 22px; /* TAMANHO DO ÍCONE - AJUSTE AQUI */
-  /* A cor é herdada do botão */
-  /* A altura será a do botão devido ao align-items no pai */
-}
-
-/* Estilo para o contêiner do TEXTO (span.button-text) nos botões de navegação */
-.sidebar-nav li button .button-text {
-  /* O texto é controlado pelo JSX: {isExpanded && 'Texto'} */
-  /* Não precisamos de display: none aqui por causa da lógica no JSX */
-  /* Mas garantimos que ele não ocupe espaço se a lógica falhar ou para transições futuras */
-  transition: opacity 0.2s ease;
-  opacity: 1; /* Visível por padrão (mas o JSX controla se é renderizado) */
-}
-
-.sidebar.collapsed .sidebar-nav li button .button-text {
-  opacity: 0; /* Para o caso de o JSX ainda renderizar algo, garante que suma suavemente com a largura do sidebar */
-  /* display: none; Esta regra estava causando problemas antes, pois se aplicava a todos os spans */
-}
-
-
-/* --- Rodapé do Sidebar --- */
-.sidebar-footer {
-  margin-top: auto; /* Empurra o rodapé para baixo */
-  padding: 0px 0; /* Espaçamento interno vertical, sem horizontal no container */
-  border-top: 1px solid #34495e; /* Linha divisória acima */
-}
-/* Estilos para a lista de navegação dentro do rodapé, se precisar diferenciá-la */
-.sidebar-footer .sidebar-nav.footer-nav ul {
-  margin: 0; /* Remove margens da lista de navegação do rodapé se estiverem vindo de .sidebar-nav ul */
-  padding-bottom: 10px; /* Exemplo: Adiciona um espaço antes do botão Sair */
-}
-
-/* Os botões dentro de .footer-nav já devem herdar os estilos de .sidebar-nav li button.
-   Se precisar de ajustes específicos: */
-.sidebar-footer .sidebar-nav.footer-nav li button {
-  /* Exemplo: Menor altura se quiser diferenciar */
-  /* height: 50px; */
-}
-
-
-
-/* Estilo para o botão de SAIR no rodapé */
+.sidebar-nav li button,
 .button-logout-sidebar {
-  /* Reutiliza muitos estilos de .sidebar-nav li button devido à especificidade ou defina aqui */
   display: flex;
   align-items: center;
-  justify-content: center; /* Centraliza por padrão (quando recolhido) */
   width: 100%;
-  height: 50px; /* ALTURA FIXA - ajuste para ser igual aos outros botões se desejar */
-  padding: 0; /* Sem padding para centralizar ícone quando recolhido */
-  background-color: var(--error-color, #e74c3c);
-  color: white;
+  padding: 14px 20px; /* Padding aumentado para melhor toque/clique */
+  background-color: transparent;
   border: none;
-  border-radius: 0px; /* Sem bordas arredondadas para ocupar a largura toda */
-  font-size: 15px; /* Tamanho do texto 'Sair' */
-  font-weight: bold;
+  color: var(--sidebar-text-color);
+  text-align: left;
   cursor: pointer;
-  transition: background-color 0.2s ease;
-  gap: 10px; /* Espaço entre ícone e texto quando expandido */
+  transition: background-color var(--sidebar-transition-speed) ease, color var(--sidebar-transition-speed) ease;
+  font-size: 0.95rem; /* Tamanho de fonte ajustado */
+  white-space: nowrap;
+  border-radius: 4px; /* Cantos levemente arredondados para botões */
+  margin: 4px 8px; /* Margem para separar os botões */
 }
 
-.sidebar.expanded .button-logout-sidebar {
-  justify-content: flex-start; /* Alinha à esquerda quando expandido */
-  padding: 0 22px; /* Adiciona padding horizontal quando expandido */
+.sidebar.collapsed .sidebar-nav li button,
+.sidebar.collapsed .button-logout-sidebar {
+  justify-content: center;
+  padding: 14px 0;
+  margin: 4px auto; /* Centraliza o botão no modo recolhido */
+  width: calc(100% - 16px); /* Ajusta a largura no modo recolhido */
 }
 
+.sidebar-nav li button:hover,
 .button-logout-sidebar:hover {
-  background-color: #c0392b; /* Cor mais escura no hover */
+  background-color: var(--sidebar-hover-bg-color);
+  color: #fff;
 }
 
-/* Ícone do botão de Sair */
+.sidebar-nav li button:focus-visible, /* Melhor para acessibilidade */
+.button-logout-sidebar:focus-visible {
+  outline: 2px solid var(--sidebar-accent-color);
+  outline-offset: -2px;
+  background-color: var(--sidebar-hover-bg-color); /* Mantém o feedback visual */
+}
+
+.sidebar-nav .icon,
 .button-logout-sidebar .button-icon {
-  font-size: 20px; /* Tamanho do ícone de sair */
-  /* Outros estilos de alinhamento já estão no botão pai (display:flex, align-items) */
+  font-size: 1.2rem; /* Tamanho de ícone ajustado */
+  margin-right: 16px; /* Espaçamento do ícone */
+  min-width: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sidebar-icon-color);
+  transition: color var(--sidebar-transition-speed) ease;
 }
 
-/* Texto do botão de Sair */
+.sidebar-nav li button:hover .icon,
+.button-logout-sidebar:hover .button-icon {
+  color: var(--sidebar-accent-color);
+}
+
+.sidebar.collapsed .sidebar-nav .icon,
+.sidebar.collapsed .button-logout-sidebar .button-icon {
+  margin-right: 0;
+  font-size: 1.4rem; /* Ícones um pouco maiores quando recolhido */
+}
+
+.sidebar-nav .button-text,
 .button-logout-sidebar .button-text {
-  /* Ocultado/Mostrado pela lógica do JSX: {isExpanded && 'Sair'} */
-  /* Não precisa de display: none aqui */
-  transition: opacity 0.2s ease;
-  opacity: 1;
+  opacity: 0;
+  transition: opacity var(--sidebar-transition-speed) ease-in-out, visibility var(--sidebar-transition-speed) ease-in-out;
+  visibility: hidden;
+  margin-left: 0; /* Garante que não haja espaço extra */
 }
 
-.sidebar.collapsed .button-logout-sidebar .button-text {
-  opacity: 0; /* Garante que o texto suma suavemente */
-  width: 0; /* Remove o espaço do texto */
-  overflow: hidden;
+.sidebar.expanded .sidebar-nav .button-text,
+.sidebar.expanded .button-logout-sidebar .button-text {
+  opacity: 1;
+  visibility: visible;
+}
+
+.sidebar-footer {
+  padding: 10px 0; /* Padding ajustado */
+  border-top: 1px solid var(--sidebar-border-color);
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.button-logout-sidebar .button-icon {
+  /* Ajustes específicos se o ícone de logout precisar de cor diferente */
+  /* color: #fca5a5; /* Exemplo: tom de vermelho suave */
+}
+
+.button-logout-sidebar:hover .button-icon {
+  /* color: #ef4444; /* Exemplo: vermelho mais forte no hover */
 }

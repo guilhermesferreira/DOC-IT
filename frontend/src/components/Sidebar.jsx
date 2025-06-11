@@ -6,14 +6,14 @@ import './Sidebar.css';
 import { FaHouse, FaBox, FaRightFromBracket } from 'react-icons/fa6'; 
 import { FaCog as FaSettingsIcon } from 'react-icons/fa'; // Importa FaCog de fa e o apelida
 
-const Sidebar = ({ setActiveView, logout }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+const Sidebar = ({ setActiveView, logout, isExpanded, setIsExpanded }) => {
+  // O estado isExpanded agora é controlado pelo componente pai (Dashboard)
 
   return (
     <aside
       className={`sidebar ${isExpanded ? 'expanded' : 'collapsed'}`}
-      onMouseEnter={() => setIsExpanded(true)}
-      onMouseLeave={() => setIsExpanded(false)}
+      onMouseEnter={() => setIsExpanded(true)} // Mantém a lógica de hover
+      onMouseLeave={() => setIsExpanded(false)} // Mantém a lógica de hover
     >
       <div className="sidebar-header">
         <h2>{isExpanded ? 'Doc-IT Painel' : 'D-IT'}</h2>

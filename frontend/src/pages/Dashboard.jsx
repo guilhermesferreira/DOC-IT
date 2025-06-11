@@ -12,6 +12,7 @@ import SettingsPage from './SettingsPage'; // Certifique-se que o caminho está 
 const Dashboard = () => {
   const { logout } = useAuth(); //
   const [activeView, setActiveView] = useState('summary'); // Controla a visão atual: 'summary' ou 'inventory'
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false); // Estado para controlar a sidebar
   const [devices, setDevices] = useState([]); // <-- Adicione este estado para os dispositivos
   // A lógica de fetchDevices, form, editingDevice, handleChange, handleSubmit, handleEdit, handleDelete
   // será movida para o componente InventoryView.jsx
@@ -52,8 +53,13 @@ const renderView = () => {
 
   return (
     <div className="dashboard-layout">
-      <Sidebar setActiveView={setActiveView} logout={logout} />
-      <main className="dashboard-main-content">
+      <Sidebar
+        setActiveView={setActiveView}
+        logout={logout}
+        isExpanded={isSidebarExpanded}
+        setIsExpanded={setIsSidebarExpanded}
+      />
+      <main className={`dashboard-main-content ${isSidebarExpanded ? 'expanded' : 'collapsed'}`}>
         {renderView()}
       </main>
     </div>
