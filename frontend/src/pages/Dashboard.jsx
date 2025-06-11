@@ -19,7 +19,7 @@ const Dashboard = () => {
     // Função para buscar os dispositivos
   const fetchDevices = async () => {
     try {
-      const res = await API.get('/device');
+      const res = await API.get('/device?status=approved'); // <<< MODIFICADO: Busca apenas dispositivos aprovados
       setDevices(res.data); // <-- Atualiza o estado com os dispositivos
     } catch (error) {
       console.error("Erro ao buscar dispositivos no Dashboard:", error);
