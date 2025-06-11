@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import API from '../api/api';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from "../auth/AuthContext.jsx";
+import { useAuth } from "../auth/AuthContext";
 import './LoginPage.css';
 
 const LoginPage = () => {

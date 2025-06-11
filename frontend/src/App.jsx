@@ -5,7 +5,7 @@ import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
 import Devices from "./pages/Devices";
 import MfaSetupPage from "./pages/MfaSetupPage";
-import { useAuth } from "./auth/AuthContext.jsx";
+import { useAuth } from "./auth/AuthContext";
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();

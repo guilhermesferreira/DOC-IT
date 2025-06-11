@@ -1,7 +1,7 @@
 // src/pages/Dashboard.jsx
 import React, { useState, useEffect } from 'react';
 import API from '../api/api';
-import { useAuth } from "../auth/AuthContext.jsx";
+import { useAuth } from "../auth/AuthContext";
 import './Dashboard.css'; // Vamos usar este CSS para o layout geral do dashboard
 // Vamos criar esses componentes em breve:
 import Sidebar from '../components/Sidebar'; // Menu lateral
