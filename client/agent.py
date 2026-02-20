@@ -13,7 +13,6 @@ from datetime import datetime
 
 #futuro: uptime
 #futuro: drivers
-#futuro: status do firewall
 #futuro: portas USB
 #futuro: usuarios locais / ativos / logados
 #futuro: workgroup
@@ -27,10 +26,13 @@ AGENT_VERSION = "1.1.0" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
-    "server_base_url": "http://localhost:3000", # URL base do servidor
+    "server_base_url": "https://localhost:3000", # URL base do servidor (HTTPS)
     "agent_id": None,
     "last_successful_checkin": None,
-    "log_level": "INFO" # Níveis: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    "log_level": "INFO", # Níveis: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    "cert_path": "./certs/agent.crt",
+    "key_path": "./certs/agent.key",
+    "ca_path": "./certs/ca.crt"
 }
 
 # --- Lógica de Nível de Log (Setup para a função de log) ---
@@ -227,23 +229,150 @@ def get_os_info_string():
     log_event(f"iniciando get_os_info_string()", "DEBUG")
     return f"{platform.system()} {platform.release()} ({platform.version()})"
 
+def get_windows_updates():
+    """Verifica atualizações pendentes do Windows Update."""
+    log_event("iniciando get_windows_updates()", "DEBUG")
+    updates_data = {"summary": "N/A", "details": []}
+    try:
+        import win32com.client
+        ua = win32com.client.Dispatch("Microsoft.Update.Session")
+        update_searcher = ua.CreateUpdateSearcher()
+        # Search for updates that are not installed and are software updates
+        log_event("Buscando atualizações do Windows...", "DEBUG")
+        search_result = update_searcher.Search("IsInstalled=0 and Type='Software'")
+        
+        updates_data["summary"] = f"{search_result.Updates.Count} atualizações pendentes."
+        log_event(f"Encontradas {search_result.Updates.Count} atualizações pendentes.", "INFO")
+        
+        for i in range(search_result.Updates.Count):
+            update = search_result.Updates.Item(i)
+            updates_data["details"].append({
+                "title": update.Title,
+                #"description": update.Description, # Pode ser muito grande
+                "is_mandatory": update.IsMandatory,
+                # "download_size": str(update.MaxDownloadSize)
+            })
+            
+    except ImportError:
+        log_event("pywin32 não instalado ou erro na importação. Pulo check de updates.", "WARNING")
+        updates_data["summary"] = "pywin32 não disponível"
+    except Exception as e:
+         log_event(f"Erro ao verificar atualizações do Windows: {e}", "ERROR")
+         updates_data["summary"] = f"Erro na verificação"
+         
+    return updates_data
+
+def get_security_info():
+    """Coleta o status do Firewall do Windows e de serviços do antivírus Sophos Endpoint."""
+    log_event("iniciando get_security_info()", "DEBUG")
+    security_data = {
+        "firewall": {},
+        "antivirus": {
+            "name": "Sophos Endpoint",
+            "installed": False,
+            "running_services": []
+        }
+    }
+    
+    # --- 1. Firewall Status ---
+    try:
+        # Comando netsh para checar os 3 perfis do Windows Firewall (Domain, Private, Public)
+        log_event("Buscando status do Windows Firewall...", "DEBUG")
+        result = subprocess.check_output("netsh advfirewall show allprofiles state", shell=True, text=True, stderr=subprocess.DEVNULL)
+        
+        current_profile = None
+        for line in result.split('\n'):
+            line = line.strip()
+            if "Profile Settings:" in line:
+                current_profile = line.split()[0].lower() # domain, private ou public
+            elif "State" in line and current_profile:
+                state = line.split()[-1].lower() # ON ou OFF
+                security_data["firewall"][current_profile] = state
+                current_profile = None
+                
+    except Exception as e:
+        log_event(f"Erro ao verificar status do Firewall: {e}", "ERROR")
+        security_data["firewall"]["error"] = "Não foi possível verificar"
+
+    # --- 2. Antivírus Status (Sophos) ---
+    try:
+        log_event("Verificando se serviços do Sophos estão instalados e rodando...", "DEBUG")
+        sophos_found = False
+        sophos_services = []
+        
+        for service in psutil.win_service_iter():
+            try:
+                # O nome do serviço do Sophos costuma conter "Sophos"
+                serv_name = service.name()
+                serv_display = service.display_name()
+                
+                if "sophos" in serv_name.lower() or "sophos" in serv_display.lower():
+                    sophos_found = True
+                    is_running = service.status() == psutil.STATUS_RUNNING
+                    sophos_services.append({
+                        "name": serv_display,
+                        "status": "Running" if is_running else "Stopped"
+                    })
+            except psutil.AccessDenied:
+                 # Pass if we don't have permission to view a specific service
+                pass
+            except Exception:
+                pass
+                
+        security_data["antivirus"]["installed"] = sophos_found
+        security_data["antivirus"]["running_services"] = sophos_services
+        
+    except Exception as e:
+        log_event(f"Erro ao verificar serviços do Sophos: {e}", "ERROR")
+        security_data["antivirus"]["error"] = "Não foi possível verificar serviços"
+        
+    return security_data
+
+def get_cpu_model_clean():
+    """Tenta obter o nome comercial limpo do processador, acionando o WMIC ou o Registro no Windows."""
+    try:
+        cpu_model_raw = platform.processor()
+        if platform.system() == "Windows":
+            # Windows 11 deprecates WMIC, checking Registry directly is safer and faster
+            import winreg
+            try:
+                registry_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
+                cpu_model_raw, _ = winreg.QueryValueEx(registry_key, "ProcessorNameString")
+                winreg.CloseKey(registry_key)
+            except Exception:
+                # Fallback to WMIC if registry read fails for permissions
+                try:
+                    import subprocess
+                    output = subprocess.check_output("wmic cpu get name", shell=True, text=True, stderr=subprocess.DEVNULL)
+                    lines = output.strip().split('\n')
+                    if len(lines) > 1:
+                        cpu_model_raw = lines[-1].strip()
+                except Exception:
+                    pass
+                
+        cpu_model_clean = re.sub(r'\((TM|tm|R|r)\)', '', cpu_model_raw).strip()
+        cpu_model_clean = re.sub(r' +', ' ', cpu_model_clean)
+        return cpu_model_clean
+    except Exception:
+        return platform.processor()
+
 def get_additional_inventory_data():
     """
     Coleta dados de inventário detalhados para serem incluídos no campo additionalData do check-in.
     """
     log_event(f"iniciando get_additional_inventory_data()", "DEBUG")
     data = {}
-    try:
-        cpu_model_raw = platform.processor()
-        cpu_model_clean = re.sub(r'\((TM|tm|R|r)\)', '', cpu_model_raw).strip()
-        cpu_model_clean = re.sub(r' +', ' ', cpu_model_clean)
-        data["cpu_model"] = cpu_model_clean
-    except Exception:
-        data["cpu_model"] = platform.processor()
+    data["cpu_model"] = get_cpu_model_clean()
 
     mem = psutil.virtual_memory()
     data["ram_total_gb"] = round(mem.total / (1024**3), 2)
     data["ram_available_gb"] = round(mem.available / (1024**3), 2)
+    data["ram_used_gb"] = round((mem.total - mem.available) / (1024**3), 2)
+    
+    try:
+        data["boot_time_timestamp"] = psutil.boot_time()
+    except Exception:
+        data["boot_time_timestamp"] = None
 
     disks_info = []
     try:
@@ -290,12 +419,19 @@ def get_additional_inventory_data():
         log_event(f"Erro ao coletar informações da interface de rede para additional_inventory: {e}", "WARNING")
     data["network_interfaces"] = network_interfaces_info
     data["installed_software"] = get_installed_software()
+    
+    # Adicionar Windows Updates
+    data["windows_updates"] = get_windows_updates()
+    
+    # Adicionar Informações de Segurança (Firewall e Antivírus)
+    data["security"] = get_security_info()
+    
     data["collection_timestamp"] = datetime.now().isoformat()
     return data
 
 # --- Backend Communication ---
 def perform_check_in(config):
-    """Envia dados básicos do agente para o endpoint de check-in do backend."""
+    """Envia dados básicos do agente para o endpoint de check-in do backend com mTLS."""
     log_event(f"iniciando perform_check_in()", "DEBUG")
     check_in_url = f"{config.get('server_base_url', DEFAULT_CONFIG['server_base_url'])}/agent/check-in"
     
@@ -313,20 +449,48 @@ def perform_check_in(config):
         log_event("ID do Agente ausente. Não é possível realizar o check-in.", "ERROR")
         return False
 
-    # log_event(f"Tentando check-in para {check_in_url} com payload: {json.dumps(payload)}", "INFO")
     log_event(f"Tentando check-in para {check_in_url}", "INFO")
-    log_event(f"payload: {json.dumps(payload)}", "DEBUG")
+    
+    # Preparar caminhos dos certificados
+    cert_path = config.get("cert_path", DEFAULT_CONFIG["cert_path"])
+    key_path = config.get("key_path", DEFAULT_CONFIG["key_path"])
+    ca_path = config.get("ca_path", DEFAULT_CONFIG["ca_path"])
+
+    # Verificar se certificados existem
+    log_event("Verificando se os certificados existem no host...", "INFO")
+    missing_certs = []
+    if not os.path.exists(cert_path): missing_certs.append(f"Cert: {cert_path}")
+    if not os.path.exists(key_path): missing_certs.append(f"Key: {key_path}")
+    if not os.path.exists(ca_path): missing_certs.append(f"CA: {ca_path}")
+
+    if missing_certs:
+        log_event(f"Certificados faltando: {', '.join(missing_certs)}", "ERROR")
+        return False
+    else:
+        log_event("Todos os certificados (Cert, Key e CA) encontrados e parecem OK no host local.", "INFO")
+
     try:
-        response = requests.post(check_in_url, json=payload, timeout=10) # Timeout de 10 segundos
-        response.raise_for_status() # Levanta HTTPError para respostas ruins (4XX ou 5XX)
+        # Check-in usando mTLS
+        log_event("Iniciando conexão e handshake TLS com o servidor...", "INFO")
+        response = requests.post(
+            check_in_url, 
+            json=payload, 
+            timeout=30, # Aumentado timeout pois check de updates pode demorar? Não, updates já coletados.
+            cert=(cert_path, key_path),
+            verify=ca_path
+        )
+        log_event("Handshake TLS e conexão concluídos com sucesso!", "INFO")
+        response.raise_for_status() 
         
         response_data = response.json()
         log_event(f"Check-in bem-sucedido. Resposta do servidor: {response_data}", "INFO")
         
         config["last_successful_checkin"] = datetime.now().isoformat()
-        save_config(config) # Salva o horário do último check-in atualizado
+        save_config(config) 
         
         return True
+    except requests.exceptions.SSLError as ssl_err:
+        log_event(f"Erro SSL durante o check-in (Verifique certificados): {ssl_err}", "ERROR")
     except requests.exceptions.HTTPError as http_err:
         log_event(f"Erro HTTP durante o check-in: {http_err} - Resposta: {http_err.response.text if http_err.response else 'Sem texto de resposta'}", "ERROR")
     except requests.exceptions.ConnectionError as conn_err:
@@ -336,7 +500,7 @@ def perform_check_in(config):
     except requests.exceptions.RequestException as req_err:
         log_event(f"Erro geral durante o check-in: {req_err}", "ERROR")
     except json.JSONDecodeError:
-        log_event(f"Falha ao decodificar resposta JSON do servidor. Resposta crua: {response.text if 'response' in locals() else 'Sem objeto de resposta'}", "ERROR")
+        log_event(f"Falha ao decodificar resposta JSON do servidor.", "ERROR")
     
     return False
 
@@ -354,22 +518,18 @@ def get_system_inventory(agent_id):
     inventory_data["os_name_release"] = f"{platform.system()} {platform.release()}" # Renomeado para clareza
     inventory_data["os_version_full"] = platform.version() # Renomeado para clareza
     
-    # Tenta obter um nome de processador mais limpo
-    try:
-        # No Windows, platform.processor() pode já ser bom.
-        # Em outros sistemas, ou para mais detalhes, cpuinfo poderia ser usado, mas para simplificar:
-        cpu_model = platform.processor()
-        # Tenta limpar strings comuns de informações extras em alguns sistemas
-        cpu_model = re.sub(r'\((TM|tm|R|r)\)', '', cpu_model).strip()
-        cpu_model = re.sub(r' +', ' ', cpu_model) # Remove espaços múltiplos
-        inventory_data["cpu_model"] = cpu_model
-    except Exception:
-        inventory_data["cpu_model"] = platform.processor() # Fallback
+    inventory_data["cpu_model"] = get_cpu_model_clean()
 
     
     mem = psutil.virtual_memory()
     inventory_data["ram_total_gb"] = round(mem.total / (1024**3), 2)
     inventory_data["ram_available_gb"] = round(mem.available / (1024**3), 2) # RAM disponível adicionada
+    inventory_data["ram_used_gb"] = round((mem.total - mem.available) / (1024**3), 2) # RAM usada adicionada
+
+    try:
+        inventory_data["boot_time_timestamp"] = psutil.boot_time()
+    except Exception:
+        inventory_data["boot_time_timestamp"] = None
 
     disks_info = []
     try:

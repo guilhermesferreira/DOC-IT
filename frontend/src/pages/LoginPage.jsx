@@ -25,7 +25,7 @@ const LoginPage = () => {
     try {
       // A resposta da sua API precisa ser acessada com .data
       const response = await API.post("/auth/login", { username, password });
-      
+
       if (response.data.mfaRequired) {
         setMfaRequired(true);
         setUserIdForMfa(response.data.userId);
@@ -37,7 +37,21 @@ const LoginPage = () => {
         setError("Resposta inesperada do servidor durante o login.");
       }
     } catch (err) {
-      setError(err.response?.data?.error || "Usuário ou senha inválidos. Tente novamente.");
+      console.error("Erro no login:", err);
+      if (err.code === "ERR_NETWORK" || !err.response) {
+        setError(
+          <span>
+            Erro de conexão com o servidor. <br />
+            <strong>Atenção:</strong> Como estamos usando um certificado autoassinado, você precisa acessar{" "}
+            <a href="https://localhost:3000" target="_blank" rel="noopener noreferrer" style={{ color: 'white', textDecoration: 'underline' }}>
+              https://localhost:3000
+            </a>{" "}
+            em outra aba e aceitar o risco ("Avançado" {"->"} "Ir para localhost").
+          </span>
+        );
+      } else {
+        setError(err.response?.data?.error || "Usuário ou senha inválidos. Tente novamente.");
+      }
     }
   };
 
@@ -50,7 +64,7 @@ const LoginPage = () => {
     }
     try {
       const response = await API.post("/auth/mfa/verify-mfa", { userId: userIdForMfa, mfaCode });
-      
+
       if (response.data.token) {
         login(response.data.token);
         navigate("/dashboard");
