@@ -49,3 +49,8 @@ ehthumbs.db
 *~
 client/dist/agent.exe
 client/dist/config.json
+*.crt
+*.key
+*.pem
+build/agent/*
+/build/*
