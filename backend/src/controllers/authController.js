@@ -33,10 +33,10 @@ async function login(req, res) {
     const user = await prisma.user.findUnique({ where: { username } });
 
     // DEBUG: Ver o objeto user completo e o campo isMfaEnabled
-    console.log('--- User Object Fetched During Login ---');
-    console.log(user); // Log do objeto user completo
+    // console.log('--- User Object Fetched During Login ---');
+    // console.log(user); // Log do objeto user completo REMOVIDO POR SEGURANÇA
     if (user) {
-      console.log(`User: ${user.username}, Raw isMfaEnabled: ${user.isMfaEnabled}, Type: ${typeof user.isMfaEnabled}`);
+      console.log(`User: ${user.username}, MFA Enabled: ${user.isMfaEnabled}`);
     }
     // --- Fim do DEBUG ---
 
@@ -56,7 +56,7 @@ async function login(req, res) {
       console.log(`MFA IS ENABLED for user: ${username}. Requiring MFA step.`);
       return res.json({ mfaRequired: true, userId: user.id });
     } else {
-      console.log(`MFA IS NOT ENABLED (or value is not strictly true) for user: ${username} (isMfaEnabled: ${user.isMfaEnabled}). Issuing token directly.`);
+      console.log(`MFA IS NOT ENABLED for user: ${username}. Issuing token directly.`);
       const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '1d' });
       res.json({ token });
     }   

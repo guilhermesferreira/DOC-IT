@@ -350,7 +350,8 @@ const authenticateToken = require('../middleware/auth');
  */
 
 
-router.post('/register', authController.register);
+// Rotas Protegidas
+router.post('/register', authenticateToken, authController.register);
 
 router.post('/login', authController.login);
 

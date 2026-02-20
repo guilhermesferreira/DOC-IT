@@ -10,6 +10,10 @@ const deviceRoutes = require('./routes/devices');
 const healthRoutes = require('./routes/health');
 const agentRoutes = require('./routes/agentRoutes'); 
 
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -27,7 +31,17 @@ app.get('/', (req, res) => {
   res.json({ message: 'API doc-it Backend funcionando!' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend rodando na porta ${PORT}`);
+// HTTPS Configuration
+const certsDir = path.join(__dirname, '..', 'certs');
+const httpsOptions = {
+  key: fs.readFileSync(path.join(certsDir, 'server.key')),
+  cert: fs.readFileSync(path.join(certsDir, 'server.crt')),
+  ca: fs.readFileSync(path.join(certsDir, 'ca.crt')),
+  requestCert: true, // Request client certificate
+  rejectUnauthorized: false // Allow connections without cert (for frontend), validate in controller
+};
+
+https.createServer(httpsOptions, app).listen(PORT, () => {
+  console.log(`Backend HTTPS rodando na porta ${PORT}`);
   console.log("Swagger disponível em /api-docs");
 });
