@@ -1,6 +1,7 @@
 // src/pages/SettingsPage.jsx
 import React, { useState } from 'react';
 import MfaSetupPage from './MfaSetupPage'; // Importa a página de setup do MFA que já criamos
+import SettingsView from '../components/SettingsView'; // Painel Global de Settings
 import './SettingsPage.css'; // Criaremos este arquivo CSS para estilizar as abas e o conteúdo
 
 const SettingsPage = () => {
@@ -42,9 +43,9 @@ const SettingsPage = () => {
               )}
 
               {activeUserSecuritySubView === 'mfa' && (
-                 <div className="settings-section mfa-settings-section">
-                   <MfaSetupPage /> {/* Renderiza o componente de setup do MFA */}
-                 </div>
+                <div className="settings-section mfa-settings-section">
+                  <MfaSetupPage /> {/* Renderiza o componente de setup do MFA */}
+                </div>
               )}
             </div>
 
@@ -52,19 +53,8 @@ const SettingsPage = () => {
         );
       case 'applicationSettings':
         return (
-          <div className="tab-pane active">
-            <h3>Configurações do Aplicativo</h3>
-            <p>Ajuste as preferências gerais do aplicativo Doc-IT.</p>
-            {/* Exemplo:
-            <div className="settings-section">
-              <h4>Tema</h4>
-              <p>Opções para tema claro/escuro...</p>
-            </div>
-            <div className="settings-section">
-              <h4>Notificações</h4>
-              <p>Gerenciar preferências de notificação...</p>
-            </div>
-            */}
+          <div className="tab-pane active" style={{ padding: 0 }}>
+            <SettingsView />
           </div>
         );
       // Adicione mais 'case' para outras abas de configuração no futuro
@@ -90,7 +80,7 @@ const SettingsPage = () => {
           className={`tab-link ${activeTab === 'applicationSettings' ? 'active' : ''}`}
           onClick={() => setActiveTab('applicationSettings')}
         >
-          Aplicativo
+          Sistema e Agentes
         </button>
         {/* Adicione mais botões de aba aqui, por exemplo:
         <button
