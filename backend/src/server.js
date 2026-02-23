@@ -14,13 +14,19 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
+const cookieParser = require('cookie-parser');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 setupSwagger(app); // chama o swagger aqui
 
-app.use(cors());
+app.use(cors({
+  origin: 'https://localhost:5173', // Frontend URL
+  credentials: true // Permits sending cookies
+}));
 app.use(express.json());
+app.use(cookieParser());
 
 app.use('/auth', authRoutes);
 app.use('/device', deviceRoutes);

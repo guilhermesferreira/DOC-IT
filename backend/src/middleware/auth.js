@@ -6,18 +6,17 @@ if (!JWT_SECRET) {
 }
 
 function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization;
+  // Lê o token diretamente do cookie injetado de forma segura pelo navegador
+  const token = req.cookies?.token;
 
-  if (!authHeader) return res.status(401).json({ error: 'Token não fornecido' });
-
-  const token = authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Token não fornecido ou cookie ausente' });
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded; // { id, username }
     next();
   } catch (err) {
-    return res.status(403).json({ error: 'Token inválido' });
+    return res.status(403).json({ error: 'Token inválido ou expirado' });
   }
 }
 
