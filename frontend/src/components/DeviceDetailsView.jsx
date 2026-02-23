@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import './DeviceDetailsView.css'; // Criaremos este CSS
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { ArrowLeft, Monitor, Cpu, HardDrive, Wifi, Shield, Clock, Server, Network, Trash2 } from 'lucide-react'; // Adicionado Trash2
+import { ArrowLeft, Monitor, Cpu, HardDrive, Wifi, Shield, Clock, Server, Network, Trash2, Users, FileText } from 'lucide-react'; // Adicionado Trash2 e Users
 const DeviceDetailsView = ({ device, onBack, onDeleteRequest }) => { // Adicionada prop onDeleteRequest
   const [activeTab, setActiveTab] = useState("overview");
   const [activeSecurityTab, setActiveSecurityTab] = useState("firewall");
@@ -71,6 +71,8 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest }) => { // Adiciona
 
       // New Security payload from Agent
       securityDetails: data.security || null,
+      userDetails: data.users || { local_accounts: [], active_sessions: [] },
+      adGpoDetails: data.ad_gpo || { domain_or_workgroup: 'N/A', is_domain_joined: false, applied_gpos: [] },
     };
   };
 
@@ -326,6 +328,80 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest }) => { // Adiciona
                 </div>
               ) : (
                 <p>Dados de Antivírus indisponíveis. Aguardando sincronização do agente.</p>
+              )}
+            </div>
+
+            {/* Card: Usuários Locais e Sessões Ativas */}
+            <div className="card-dashboard">
+              <h2><Users size={16} /> Contas de Usuários e Sessões</h2>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ fontSize: '1em', color: '#555', marginBottom: '10px' }}>Contas Locais do Windows:</h3>
+                {agentData.userDetails.local_accounts.length > 0 ? (
+                  <ul className="software-list" style={{ maxHeight: '150px' }}>
+                    {agentData.userDetails.local_accounts.map((user, idx) => (
+                      <li key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #eee' }}>
+                        <span>{user.name}</span>
+                        <strong style={{ color: user.enabled ? '#28a745' : '#6c757d', fontSize: '0.85em' }}>
+                          {user.enabled ? 'Ativo' : 'Desativado'}
+                        </strong>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p style={{ fontSize: '0.9em', color: '#777' }}>Nenhuma conta local detectada.</p>
+                )}
+              </div>
+
+              <div>
+                <h3 style={{ fontSize: '1em', color: '#555', marginBottom: '10px' }}>Sessões Logadas Agora:</h3>
+                {agentData.userDetails.active_sessions.length > 0 ? (
+                  <ul className="software-list" style={{ maxHeight: '150px' }}>
+                    {agentData.userDetails.active_sessions.map((session, idx) => (
+                      <li key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #eee' }}>
+                        <span>
+                          <strong>{session.username}</strong>
+                          <span style={{ fontSize: '0.8em', color: '#888', marginLeft: '8px' }}>({session.terminal})</span>
+                        </span>
+                        <span style={{ fontSize: '0.85em', color: '#555' }}>Desde: {session.started.split(' ')[0]}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p style={{ fontSize: '0.9em', color: '#777' }}>Nenhum usuário logado neste instante.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Card: Active Directory e GPOs */}
+            <div className="card-dashboard">
+              <h2><Network size={16} /> Domínio e Políticas (GPO)</h2>
+              <ul>
+                <li>
+                  <span>Tipo de Rede:</span>
+                  <strong>{agentData.adGpoDetails.is_domain_joined ? 'Active Directory (Domínio)' : 'Workgroup Local'}</strong>
+                </li>
+                <li>
+                  <span>Nome do Domínio/Workgroup:</span>
+                  <strong>{agentData.adGpoDetails.domain_or_workgroup}</strong>
+                </li>
+              </ul>
+
+              {agentData.adGpoDetails.is_domain_joined && (
+                <div style={{ marginTop: '1.5rem', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+                  <h3 style={{ fontSize: '1em', color: '#555', marginBottom: '10px' }}>Políticas Aplicadas (GPO Computador):</h3>
+                  {agentData.adGpoDetails.applied_gpos.length > 0 ? (
+                    <ul className="software-list" style={{ maxHeight: '250px' }}>
+                      {agentData.adGpoDetails.applied_gpos.map((gpo, idx) => (
+                        <li key={idx} style={{ padding: '6px 0', borderBottom: '1px solid #eee', justifyContent: 'flex-start' }}>
+                          <span style={{ fontSize: '0.95em' }}>{gpo}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p style={{ fontSize: '0.9em', color: '#777' }}>Nenhuma GPO detectada além das locais.</p>
+                  )}
+                </div>
               )}
             </div>
 
