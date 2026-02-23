@@ -132,7 +132,7 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest }) => { // Adiciona
                 <li><span>Hostname:</span> <strong>{device.hostname}</strong></li>
                 <li><span>Usuário Principal:</span> <strong>{device.osUsername}</strong></li>
                 <li><span>Domínio/Workgroup:</span> <strong>{agentData.domain}</strong></li>
-                <li><span>ID do Agente:</span> <strong>{device.agentId}</strong></li>
+                <li><span>Versão do Agente:</span> <strong>v{device.agentVersion || '1.0.0'}</strong></li>
                 <li><span>Tempo Ligado (Uptime):</span> <strong>{agentData.uptime}</strong></li>
               </ul>
             </div>
