@@ -423,16 +423,17 @@ def get_ad_gpo_info():
             in_applied_section = False
             for line in output.split("\n"):
                 clean_line = line.strip()
-                if "Applied Group Policy Objects" in clean_line:
+                # Suporte a Windows em Inglês e Português (com caracteres mal codificados tipo pol¡tica)
+                if "Applied Group Policy Objects" in clean_line or ("Objetos de pol" in clean_line and "grupo aplicados" in clean_line):
                     in_applied_section = True
                     continue
-                if in_applied_section and clean_line == "-" * len(clean_line):
+                if in_applied_section and clean_line == "-" * len(clean_line) and len(clean_line) > 5:
                     continue
                 if in_applied_section and clean_line == "":
                     # Fim da lista de GPOs nessa seção
                     in_applied_section = False
                     continue
-                if in_applied_section and clean_line and "N/A" not in clean_line:
+                if in_applied_section and clean_line and "N/A" not in clean_line and "N/D" not in clean_line:
                     if clean_line not in ad_data["applied_gpos"]:
                         ad_data["applied_gpos"].append(clean_line)
                         

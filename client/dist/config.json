@@ -1,7 +1,7 @@
 {
     "server_base_url": "https://localhost:3000",
     "agent_id": "4C4C4544-0057-4B10-8058-C2C04F513534",
-    "last_successful_checkin": "2026-02-20T18:06:57.676354",
+    "last_successful_checkin": "2026-02-23T12:25:44.437095",
     "log_level": "INFO",
     "cert_path": "./certs/agent.crt",
     "key_path": "./certs/agent.key",
