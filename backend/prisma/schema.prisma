@@ -54,3 +54,10 @@ model Device {
   @@index([agentId])
   @@index([source])
 }
+
+model GlobalSettings {
+  id                         Int      @id @default(autoincrement())
+  inventoryIntervalMinutes   Int      @default(60) // Frequência que o agente coleta e envia inventário (System/Hardware/etc)
+  updateCheckIntervalMinutes Int      @default(120) // Frequência que o agente checa o Auto-Updater no servidor Node.js
+  updatedAt                  DateTime @updatedAt
+}
