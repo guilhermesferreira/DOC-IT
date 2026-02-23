@@ -8,7 +8,7 @@ const DashboardSummary = ({ totalDevices }) => {
   return (
     <div className="summary-container card-dashboard"> {/* Reutilizando card-dashboard se definido globalmente */}
       <h2>Resumo do Painel</h2>
-      <p>Bem-vindo ao seu painel Doc-IT!</p>
+      <p>Bem-vindo ao seu painel {import.meta.env.VITE_PROJECT_NAME || 'Doc-IT'}!</p>
       <div className="summary-metrics">
         <div className="metric-card">
           <h3>Total de Equipamentos</h3>
