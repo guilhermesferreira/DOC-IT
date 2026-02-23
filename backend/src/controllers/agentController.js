@@ -97,7 +97,45 @@ async function checkIn(req, res) {
   }
 }
 
+// Retorna as informações da última versão e seus Hashes SHA-256
+async function getVersion(req, res) {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const versionPath = path.join(__dirname, '..', '..', 'updates', 'version.json');
+    
+    if (fs.existsSync(versionPath)) {
+      const versionData = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
+      return res.json(versionData);
+    } else {
+      return res.status(404).json({ error: 'Nenhuma atualização disponível.' });
+    }
+  } catch (error) {
+    console.error('Erro ao ler versão do agente:', error);
+    res.status(500).json({ error: 'Erro interno ao consultar versão.' });
+  }
+}
+
+// Serve os arquivos executáveis do update .exe
+async function downloadUpdate(req, res) {
+  try {
+    const { file } = req.params;
+    
+    // Segurança: Previne Path Traversal garantindo que a requisição não saia da pasta updates
+    if (file !== 'agent.exe' && file !== 'updater.exe') {
+      return res.status(403).json({ error: 'Arquivo não autorizado.' });
+    }
+
+    const path = require('path');
+    const filePath = path.join(__dirname, '..', '..', 'updates', file);
+
+    res.download(filePath);
+  } catch (error) {
+    console.error('Erro ao baixar arquivo do agente:', error);
+    res.status(500).json({ error: 'Erro interno ao iniciar o download.' });
+  }
+}
 
 // As funções getAgentHosts, approveAgentHost, rejectAgentHost, deleteAgentHost
 // foram movidas e adaptadas para o deviceController.js
-module.exports = { checkIn };
+module.exports = { checkIn, getVersion, downloadUpdate };
