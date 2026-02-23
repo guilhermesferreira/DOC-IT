@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import './Sidebar.css';
 
 // Usar FaCog de fa (Font Awesome 5) ou FaGear de fa6
-import { FaHouse, FaBox, FaRightFromBracket } from 'react-icons/fa6'; 
+import { FaHouse, FaBox, FaRightFromBracket } from 'react-icons/fa6';
 import { FaCog as FaSettingsIcon } from 'react-icons/fa'; // Importa FaCog de fa e o apelida
 
 const Sidebar = ({ setActiveView, logout, isExpanded, setIsExpanded }) => {
@@ -16,7 +16,7 @@ const Sidebar = ({ setActiveView, logout, isExpanded, setIsExpanded }) => {
       onMouseLeave={() => setIsExpanded(false)} // Mantém a lógica de hover
     >
       <div className="sidebar-header">
-        <h2>{isExpanded ? 'Doc-IT Painel' : 'D-IT'}</h2>
+        <h2>{isExpanded ? `${import.meta.env.VITE_PROJECT_NAME || 'Doc-IT'} Painel` : (import.meta.env.VITE_PROJECT_NAME ? import.meta.env.VITE_PROJECT_NAME.substring(0, 1) + '-IT' : 'D-IT')}</h2>
       </div>
       <nav className="sidebar-nav">
         <ul>
