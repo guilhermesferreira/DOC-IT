@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
 
+if (!JWT_SECRET) {
+  console.error("FATAL ERROR: JWT_SECRET is missing in auth.js. Tokens cannot be verified.");
+}
+
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 

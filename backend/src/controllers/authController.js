@@ -5,7 +5,13 @@ const jwt = require('jsonwebtoken');
 const { decrypt } = require('../utils/encryption'); // Para descriptografar mfaSecret
 const otplib = require('otplib'); // Para verificar o token mfa
 
-const JWT_SECRET = process.env.JWT_SECRET || 'troque_esta_chave';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// Segurança: Não permite subir endpoints de autenticação sem uma chave verdadeira.
+if (!JWT_SECRET) {
+  console.error("FATAL ERROR: JWT_SECRET environment variable is not set. Authentication will fail.");
+  process.exit(1); // Derruba o servidor se a segurança não for garantida.
+}
 
 async function register(req, res) {
   const { username, password, email } = req.body;
