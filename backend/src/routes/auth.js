@@ -373,5 +373,9 @@ router.get('/mfa/status-mfa', authenticateToken, authController.getMfaStatus);
 
 router.post('/mfa/disable', authenticateToken, mfaController.disableMfa);
 
+router.post('/logout', authController.logout);
+
+router.get('/verify-session', authenticateToken, authController.verifySession);
+
 module.exports = router;
   

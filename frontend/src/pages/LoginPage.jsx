@@ -30,8 +30,8 @@ const LoginPage = () => {
         setMfaRequired(true);
         setUserIdForMfa(response.data.userId);
         setPassword('');
-      } else if (response.data.token) {
-        login(response.data.token);
+      } else if (response.data.success) { // agora o backend devolve success: true
+        login();
         navigate("/dashboard");
       } else {
         setError("Resposta inesperada do servidor durante o login.");
@@ -65,8 +65,8 @@ const LoginPage = () => {
     try {
       const response = await API.post("/auth/mfa/verify-mfa", { userId: userIdForMfa, mfaCode });
 
-      if (response.data.token) {
-        login(response.data.token);
+      if (response.data.success) {
+        login();
         navigate("/dashboard");
       } else {
         setMfaError("Resposta inesperada do servidor após verificação do MFA.");

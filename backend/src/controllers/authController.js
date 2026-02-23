@@ -13,6 +13,20 @@ if (!JWT_SECRET) {
   process.exit(1); // Derruba o servidor se a segurança não for garantida.
 }
 
+async function logout(req, res) {
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  });
+  res.json({ message: 'Logout realizado com sucesso' });
+}
+
+async function verifySession(req, res) {
+  // Se o req.user existe, o authMiddleware já leu o cookie e decodificou o JWT com sucesso
+  res.json({ isAuthenticated: true, user: req.user });
+}
+
 async function register(req, res) {
   const { username, password, email } = req.body;
   // CORREÇÃO: Validação do email também e sem duplicar !password
@@ -64,7 +78,15 @@ async function login(req, res) {
     } else {
       console.log(`MFA IS NOT ENABLED for user: ${username}. Issuing token directly.`);
       const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '1d' });
-      res.json({ token });
+      
+      // Armazena no cookie HttpOnly
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // true em produção (HTTPS)
+        sameSite: 'strict', // Protege contra CSRF
+        maxAge: 24 * 60 * 60 * 1000 // 1 dia
+      });
+      res.json({ success: true, message: 'Login successful' });
     }   
   } catch (err) {
     console.error("Erro no login:", err);
@@ -91,7 +113,15 @@ async function verifyMfaLogin(req, res) {
 
     if (isValid) {
       const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '1d' });
-      res.json({ token });
+      
+      // Armazena no cookie HttpOnly
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 24 * 60 * 60 * 1000
+      });
+      res.json({ success: true, message: 'MFA Verified and Login successful' });
     } else {
       res.status(401).json({ error: 'Código MFA inválido.' });
     }
@@ -119,4 +149,4 @@ async function getMfaStatus(req, res) {
   }
 }
 
-module.exports = { register, login, verifyMfaLogin, getMfaStatus };
+module.exports = { register, login, verifyMfaLogin, getMfaStatus, logout, verifySession };
