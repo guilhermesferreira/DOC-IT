@@ -7,9 +7,14 @@ import json
 import winreg # Módulo específico para o Registro do Windows
 import subprocess # Para obter UUID de hardware
 import os # Para os.getlogin(), os.path.exists()
+import sys # Importado para Auto-Updater sys.executable
 import getpass # Para getpass.getuser()
 import requests # Para HTTP requests
+import urllib3
 from datetime import datetime
+
+# Suprime os avisos de conexões HTTPS não verificadas (comuns no localhost ou servidores de teste sem certificado válido)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 #futuro: uptime
 #futuro: drivers
@@ -22,7 +27,7 @@ from datetime import datetime
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
-AGENT_VERSION = "1.1.0" # Versão do Agente
+AGENT_VERSION = "1.2.9" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
@@ -233,6 +238,13 @@ def get_windows_updates():
     """Verifica atualizações pendentes do Windows Update."""
     log_event("iniciando get_windows_updates()", "DEBUG")
     updates_data = {"summary": "N/A", "details": []}
+    
+    try:
+        import pythoncom
+        pythoncom.CoInitialize()
+    except Exception:
+        pass
+
     try:
         import win32com.client
         ua = win32com.client.Dispatch("Microsoft.Update.Session")
@@ -405,6 +417,12 @@ def get_ad_gpo_info():
     }
     
     try:
+        import pythoncom
+        pythoncom.CoInitialize()
+    except Exception:
+        pass
+
+    try:
         import wmi
         c = wmi.WMI()
         for sys in c.Win32_ComputerSystem():
@@ -576,7 +594,19 @@ def perform_check_in(config):
         config["last_successful_checkin"] = datetime.now().isoformat()
         save_config(config) 
         
-        return True
+        # --- Buscando as Configurações Globais (Poolings) ---
+        settings_url = f"{config.get('server_base_url', DEFAULT_CONFIG['server_base_url'])}/settings/agent"
+        settings_response = requests.get(
+            settings_url,
+            timeout=15,
+            cert=(cert_path, key_path),
+            verify=ca_path
+        )
+        settings_response.raise_for_status()
+        global_settings = settings_response.json()
+        log_event(f"Configuracoes Globais carregadas: {global_settings}", "INFO")
+        
+        return True, global_settings
     except requests.exceptions.SSLError as ssl_err:
         log_event(f"Erro SSL durante o check-in (Verifique certificados): {ssl_err}", "ERROR")
     except requests.exceptions.HTTPError as http_err:
@@ -589,8 +619,10 @@ def perform_check_in(config):
         log_event(f"Erro geral durante o check-in: {req_err}", "ERROR")
     except json.JSONDecodeError:
         log_event(f"Falha ao decodificar resposta JSON do servidor.", "ERROR")
+    except Exception as general_err:
+        log_event(f"Falha desconhecida no checkin ou configuracoes: {general_err}", "ERROR")
     
-    return False
+    return False, None
 
 def get_system_inventory(agent_id):
     """
@@ -696,6 +728,90 @@ def get_system_inventory(agent_id):
     
     return inventory_data
 
+def check_and_apply_updates(config):
+    """
+    Verifica atualizações no backend, faz o download verificando o hash SHA-256 e inicia o updater.
+    """
+    log_event("Checando por atualizaçoes do Agente (Auto-Updater)...", "INFO")
+    
+    version_url = f"{config.get('server_base_url', DEFAULT_CONFIG['server_base_url'])}/agent/version"
+    cert_path = config.get("cert_path", DEFAULT_CONFIG["cert_path"])
+    key_path = config.get("key_path", DEFAULT_CONFIG["key_path"])
+    ca_path = config.get("ca_path", DEFAULT_CONFIG["ca_path"])
+
+    try:
+        if os.path.exists(cert_path) and os.path.exists(key_path) and os.path.exists(ca_path):
+            response = requests.get(version_url, cert=(cert_path, key_path), verify=ca_path, timeout=10)
+        else:
+            response = requests.get(version_url, verify=False, timeout=10)
+        
+        if response.status_code == 200:
+            version_data = response.json()
+            latest_version = version_data.get('version')
+            
+            # Simple semantic version string comparison 
+            if latest_version and latest_version != AGENT_VERSION:
+                log_event(f"Nova versao {latest_version} detectada! Iniciando download seguro...", "INFO")
+                
+                # Setup urls
+                base_update_url = f"{config.get('server_base_url', DEFAULT_CONFIG['server_base_url'])}/agent/update"
+                import hashlib
+                
+                def download_and_verify(file_name, expected_hash, save_path):
+                    log_event(f"Baixando {file_name}...", "INFO")
+                    file_url = f"{base_update_url}/{file_name}"
+                    
+                    if os.path.exists(cert_path) and os.path.exists(key_path) and os.path.exists(ca_path):
+                        r = requests.get(file_url, cert=(cert_path, key_path), verify=ca_path, stream=True, timeout=30)
+                    else:
+                        r = requests.get(file_url, verify=False, stream=True, timeout=30)
+                        
+                    if r.status_code != 200:
+                        log_event(f"Falha no download HTTP de {file_name} Status: {r.status_code}", "ERROR")
+                        return False
+                        
+                    sha256 = hashlib.sha256()
+                    with open(save_path, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                            sha256.update(chunk)
+                    
+                    calc_hash = sha256.hexdigest()
+                    if calc_hash != expected_hash:
+                        log_event(f"SECURITY ALERT: Hash SHA-256 incorreto para {file_name}. Esperado: {expected_hash}, Calculado: {calc_hash}", "CRITICAL")
+                        os.remove(save_path)
+                        return False
+                    
+                    log_event(f"Download e verificacao de Criptografia do {file_name} concluidos com sucesso.", "INFO")
+                    return True
+                
+                # Define the correct names from backend or fallback to legacy names
+                agent_filename = version_data.get('agentFileName', "agent.exe")
+                updater_filename = version_data.get('updaterFileName', "updater.exe")
+
+                # Baixa o agente novo e o updater.exe
+                if download_and_verify(agent_filename, version_data.get('agentHash'), "agent_new.exe"):
+                    if download_and_verify(updater_filename, version_data.get('updaterHash'), updater_filename):
+                        log_event(f"Baixados todos os binarios da atualizacao com sucesso. Passando controle para o {updater_filename} de forma separada...", "INFO")
+                        
+                        try:
+                            # Start Updater and exit IMMEDIATELY to free the file lock
+                            current_executable = os.path.basename(sys.executable) if getattr(sys, 'frozen', False) else "agent.exe"
+                            subprocess.Popen([updater_filename, current_executable, "agent_new.exe"], creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NO_WINDOW)
+                            os._exit(0)
+                        except Exception as e:
+                            log_event(f"Falha ao lancar o {updater_filename} subprocess: {e}", "CRITICAL")
+                            
+            else:
+                log_event("O Agente ja esta na versao mais recente.", "INFO")
+        else:
+             log_event(f"Nao foi possivel verificar atualizacao. Backend retornou HTTP {response.status_code}", "WARNING")
+
+    except requests.exceptions.RequestException as e:
+        log_event(f"Erro de rede ao verificar updates: {e}", "ERROR")
+    except Exception as e:
+        log_event(f"Erro inesperado no Auto-Updater: {e}", "ERROR")
+
 if __name__ == "__main__":
     # Carrega a configuração no início para que o log_level seja definido globalmente.
     config = load_config()
@@ -717,31 +833,79 @@ if __name__ == "__main__":
     else:
         log_event(f"Usando ID do Agente do config: {config['agent_id']}", "INFO")
 
-    # Realiza o check-in
-    check_in_successful = perform_check_in(config)
-    
-    if check_in_successful:
-        log_event("Processo de check-in concluído com sucesso.", "INFO")
-    else:
-        log_event("Processo de check-in falhou. Veja logs anteriores para detalhes.", "WARNING")
-
-    # Coleta e salva o inventário completo do sistema localmente.
-    log_event("Coletando inventário completo do sistema para salvamento local...", "INFO")
-    # Passa o agent_id confirmado para get_system_inventory
-    full_inventory = get_system_inventory(config["agent_id"]) 
-    
-    try:
-        with open(INVENTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(full_inventory, f, indent=4, ensure_ascii=False)
-        log_event(f"Inventário completo salvo localmente em: {INVENTORY_FILE}", "INFO")
-    except Exception as e:
-        log_event(f"Erro ao salvar inventário completo em {INVENTORY_FILE}: {e}", "ERROR")
-        
-    log_event("Inicializando conexão WebSocket para o Terminal Remoto...", "INFO")
     import socketio
     import threading
     import os
     import time
+    
+    # Realiza o check-in e pega as configurações
+    check_in_successful, global_settings = perform_check_in(config)
+    
+    # Valores fallback de segurança (Minutos)
+    inventory_interval = 60
+    update_interval = 120
+    
+    if check_in_successful:
+        log_event("Processo de check-in inicial concluído com sucesso.", "INFO")
+        if global_settings:
+            inventory_interval = global_settings.get("inventoryIntervalMinutes", 60)
+            update_interval = global_settings.get("updateCheckIntervalMinutes", 120)
+    else:
+        log_event("Processo de check-in falhou. Usando intervalos padrão.", "WARNING")
+
+    # --- Thread 1: Auto-Updater Loop ---
+    def auto_updater_loop():
+        log_event(f"Iniciando thread de Auto-Update (Checagem a cada {update_interval} minutos).", "INFO")
+        
+        # IMPORTANTE: Inicializa a COM library para essa Thread, necessário para chamadas WMI/Windows Update em background
+        try:
+            import pythoncom
+            pythoncom.CoInitialize()
+        except Exception as e:
+            log_event(f"Aviso: Não foi possível inicializar COM para a thread de Update: {e}", "WARNING")
+            
+        while True:
+            try:
+                check_and_apply_updates(config)
+            except Exception as e:
+                log_event(f"Erro no loop de Auto-Update: {e}", "ERROR")
+            
+            # Dorme pelo intervalo (convertido pra segundos)
+            time.sleep(update_interval * 60)
+            
+    threading.Thread(target=auto_updater_loop, daemon=True).start()
+
+    # --- Thread 2: Inventory Collector Loop ---
+    def inventory_collector_loop():
+        log_event(f"Iniciando thread de Inventário (Coleta a cada {inventory_interval} minutos).", "INFO")
+        
+        # IMPORTANTE: Inicializa a COM library para essa Thread, necessário para chamadas WMI/Windows Update em background
+        try:
+            import pythoncom
+            pythoncom.CoInitialize()
+        except Exception as e:
+            log_event(f"Aviso: Não foi possível inicializar COM para a thread de Inventário: {e}", "WARNING")
+
+        while True:
+            try:
+                log_event("Coletando inventário completo do sistema para salvamento local...", "INFO")
+                full_inventory = get_system_inventory(config["agent_id"]) 
+                
+                with open(INVENTORY_FILE, "w", encoding="utf-8") as f:
+                    json.dump(full_inventory, f, indent=4, ensure_ascii=False)
+                log_event(f"Inventário completo salvo localmente em: {INVENTORY_FILE}", "INFO")
+                
+                # Aproveita pra fazer Check-in de novo pra manter Online no painel
+                perform_check_in(config) 
+            except Exception as e:
+                log_event(f"Erro no loop de Inventário: {e}", "ERROR")
+
+            # Dorme pelo intervalo (convertido pra segundos)
+            time.sleep(inventory_interval * 60)
+
+    threading.Thread(target=inventory_collector_loop, daemon=True).start()
+        
+    log_event("Inicializando conexão WebSocket para o Terminal Remoto...", "INFO")
 
     # Desabilitando verificação SSL no socketio primariamente por causa do localhost self-signed CA no client. 
     sio = socketio.Client(ssl_verify=False)
