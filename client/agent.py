@@ -737,4 +737,98 @@ if __name__ == "__main__":
     except Exception as e:
         log_event(f"Erro ao salvar inventário completo em {INVENTORY_FILE}: {e}", "ERROR")
         
+    log_event("Inicializando conexão WebSocket para o Terminal Remoto...", "INFO")
+    import socketio
+    import threading
+    import os
+    import time
+
+    # Desabilitando verificação SSL no socketio primariamente por causa do localhost self-signed CA no client. 
+    sio = socketio.Client(ssl_verify=False)
+    terminal_process = None
+    cmd_buffer = ""
+
+    @sio.event
+    def connect():
+        log_event("Conectado ao servidor WebSocket para o Terminal.", "INFO")
+
+    @sio.event
+    def disconnect():
+        log_event("Desconectado do servidor WebSocket.", "WARNING")
+
+    @sio.on('terminal:start')
+    def on_terminal_start(data):
+        log_event(f"Recebido pedido de iniciar terminal: {data}", "DEBUG")
+        if data.get('agentId') != config['agent_id']:
+            return
+        
+        global terminal_process
+        global cmd_buffer
+        if terminal_process is None or terminal_process.poll() is not None:
+            log_event("Iniciando processo cmd.exe para o terminal...", "INFO")
+            cmd_buffer = "" # Reseta o histórico a cada conexão
+            terminal_process = subprocess.Popen(
+                ["cmd.exe", "/Q"], # /Q Mode Quieto: O terminal nÆo ecoa os comandos, a gente ecoa no frontend React
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=0
+            )
+
+            def read_stdout():
+                log_event("Thread de leitura do terminal iniciada.", "DEBUG")
+                while True:
+                    if terminal_process is None or terminal_process.poll() is not None:
+                        break
+                    try:
+                        output_bytes = os.read(terminal_process.stdout.fileno(), 1024)
+                        if not output_bytes:
+                            break
+                        # A comunicação do cmd no Windows pt-BR costuma ser cp850
+                        text = output_bytes.decode('cp850', errors='replace')
+                        sio.emit('terminal:output', {'agentId': config['agent_id'], 'data': text})
+                    except Exception as e:
+                        log_event(f"Erro na thread de leitura do terminal: {e}", "ERROR")
+                        break
+                log_event("Thread de leitura do terminal encerrada.", "DEBUG")
+
+            threading.Thread(target=read_stdout, daemon=True).start()
+
+    @sio.on('terminal:data')
+    def on_terminal_data(data):
+        if data.get('agentId') != config['agent_id']:
+            return
+        global terminal_process
+        if terminal_process and terminal_process.poll() is None:
+            try:
+                line_data = data.get('data', '')
+                
+                # O React agora envia a linha inteira ao apertar Enter
+                if line_data.strip():
+                    log_event(f"[Terminal] Comando Remoto Executado: {line_data.strip()}", "INFO")
+
+                terminal_process.stdin.write(line_data.encode('cp850'))
+                terminal_process.stdin.flush() # CRÍTICO: Força o envio dos bytes para o processo filho
+            except Exception as e:
+                log_event(f"Erro ao escrever no terminal: {e}", "ERROR")
+
+    @sio.on('terminal:stop')
+    def on_terminal_stop(data):
+        if data.get('agentId') != config['agent_id']:
+            return
+        global terminal_process
+        if terminal_process and terminal_process.poll() is None:
+            terminal_process.terminate()
+            terminal_process = None
+            log_event("Processo de terminal encerrado pelo servidor.", "INFO")
+
+    socket_url = config.get('server_base_url', DEFAULT_CONFIG['server_base_url'])
+    try:
+        log_event(f"Conectando ao WebSocket na URL: {socket_url}", "INFO")
+        sio.connect(socket_url)
+        # Mantém o script python vivo escutando os eventos
+        sio.wait()
+    except Exception as e:
+        log_event(f"Erro ao conectar ao WebSocket: {e}", "CRITICAL")
+        
     log_event("Script do agente finalizado.", "INFO")

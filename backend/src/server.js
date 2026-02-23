@@ -47,7 +47,13 @@ const httpsOptions = {
   rejectUnauthorized: false // Allow connections without cert (for frontend), validate in controller
 };
 
-https.createServer(httpsOptions, app).listen(PORT, () => {
+const server = https.createServer(httpsOptions, app);
+
+// Configuração do WebSocket (Socket.IO)
+const configureSockets = require('./sockets/terminalSocket');
+const io = configureSockets(server);
+
+server.listen(PORT, () => {
   console.log(`Backend HTTPS rodando na porta ${PORT}`);
   console.log("Swagger disponível em /api-docs");
 });
