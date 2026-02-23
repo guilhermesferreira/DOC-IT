@@ -356,6 +356,91 @@ def get_cpu_model_clean():
     except Exception:
         return platform.processor()
 
+def get_local_users_info():
+    users_data = {
+        "local_accounts": [],
+        "active_sessions": []
+    }
+    try:
+        if platform.system() == "Windows":
+            import subprocess
+            # Get purely local user accounts
+            output = subprocess.check_output(
+                ["powershell", "-NoProfile", "-Command", "Get-LocalUser | Select-Object Name, Enabled | ConvertTo-Json -Compress"],
+                text=True, stderr=subprocess.DEVNULL
+            )
+            if output.strip():
+                try:
+                    import json
+                    parsed_users = json.loads(output.strip())
+                    if isinstance(parsed_users, dict): # Single user case
+                        parsed_users = [parsed_users]
+                    for u in parsed_users:
+                        users_data["local_accounts"].append({
+                            "name": u.get("Name", "Desconhecido"),
+                            "enabled": u.get("Enabled", False)
+                        })
+                except json.JSONDecodeError:
+                    pass
+                    
+        # Get active logged-in sessions using psutil
+        for user in psutil.users():
+            users_data["active_sessions"].append({
+                "username": user.name,
+                "terminal": user.terminal or "Desconhecido",
+                "started": datetime.fromtimestamp(user.started).strftime('%Y-%m-%d %H:%M:%S')
+            })
+            
+    except Exception as e:
+        log_event(f"Erro ao coletar usuários: {e}", "ERROR")
+        
+    return users_data
+
+
+def get_ad_gpo_info():
+    ad_data = {
+        "domain_or_workgroup": "Desconhecido",
+        "is_domain_joined": False,
+        "applied_gpos": []
+    }
+    
+    try:
+        import wmi
+        c = wmi.WMI()
+        for sys in c.Win32_ComputerSystem():
+            ad_data["domain_or_workgroup"] = sys.Domain
+            ad_data["is_domain_joined"] = sys.PartOfDomain
+            
+        if ad_data["is_domain_joined"] and platform.system() == "Windows":
+            import subprocess
+            # Acelera o gpresult lendo apenas o escopo do Computador. 
+            # Pode exigir privilégios em alguns cenários, mas o agente roda como Admin.
+            output = subprocess.check_output(
+                ["gpresult", "/Scope", "Computer", "/v"],
+                text=True, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            # Simple parsing to get Applied GPOs names
+            in_applied_section = False
+            for line in output.split("\n"):
+                clean_line = line.strip()
+                if "Applied Group Policy Objects" in clean_line:
+                    in_applied_section = True
+                    continue
+                if in_applied_section and clean_line == "-" * len(clean_line):
+                    continue
+                if in_applied_section and clean_line == "":
+                    # Fim da lista de GPOs nessa seção
+                    in_applied_section = False
+                    continue
+                if in_applied_section and clean_line and "N/A" not in clean_line:
+                    if clean_line not in ad_data["applied_gpos"]:
+                        ad_data["applied_gpos"].append(clean_line)
+                        
+    except Exception as e:
+        log_event(f"Erro ao coletar AD/GPO info: {e}", "ERROR")
+        
+    return ad_data
+
 def get_additional_inventory_data():
     """
     Coleta dados de inventário detalhados para serem incluídos no campo additionalData do check-in.
@@ -363,6 +448,8 @@ def get_additional_inventory_data():
     log_event(f"iniciando get_additional_inventory_data()", "DEBUG")
     data = {}
     data["cpu_model"] = get_cpu_model_clean()
+    data["users"] = get_local_users_info()
+    data["ad_gpo"] = get_ad_gpo_info()
 
     mem = psutil.virtual_memory()
     data["ram_total_gb"] = round(mem.total / (1024**3), 2)
