@@ -6,12 +6,15 @@ async function checkIn(req, res) {
 
   // Força o mTLS para o Agente (certificado válido assinado pela nossa CA)
   const isDirectMTLS = req.socket.authorized;
-  const isProxyMTLS = req.headers['x-ssl-client-verify'] === 'SUCCESS'; // Injetado pelo Nginx no futuro
+  
+  // Segurança: Previne spoofing do cabeçalho 'x-ssl-client-verify' 
+  // Aceita o cabeçalho apenas se a requisição vier do próprio servidor (onde o Nginx roda local).
+  const internalIps = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+  const isProxyMTLS = req.headers['x-ssl-client-verify'] === 'SUCCESS' && internalIps.includes(req.socket.remoteAddress || req.ip);
 
   // Em ambiente sem Nginx, isDirectMTLS será true se o Python bater direto no Node.js
   // Em ambiente com Nginx, o Node.js perde o req.socket (pois o Nginx faz o bypass),
   // então dependemos do cabeçalho que o próprio Nginx validou e anexou à requisição.
-  // AVISO: Quando usar Nginx, certifique-se de limpar o cabeçalho de requests externos!
   if (!isDirectMTLS && !isProxyMTLS) {
     console.log('Tentativa de check-in de agente recusada: Certificado inválido ou ausente.');
     return res.status(401).json({

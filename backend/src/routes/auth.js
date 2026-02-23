@@ -350,12 +350,20 @@ const authenticateToken = require('../middleware/auth');
  */
 
 
-// Rotas Protegidas
-router.post('/register', authenticateToken, authController.register);
+const rateLimit = require('express-rate-limit');
 
-router.post('/login', authController.login);
+const authLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutos
+  max: 10, // Limita a 10 requisições por IP na janela
+  message: { error: 'Muitas tentativas de login ou registro. Tente novamente após 5 minutos.' }
+});
 
-router.post('/mfa/verify-mfa', authController.verifyMfaLogin);
+// Rotas Protegidas ou com Limite de Taxa
+router.post('/register', authenticateToken, authController.register); // O registro já era protegido por token de admin, mas adicionamos limiter por garantia.
+
+router.post('/login', authLimiter, authController.login);
+
+router.post('/mfa/verify-mfa', authLimiter, authController.verifyMfaLogin);
 
 router.post('/mfa/generate-secret', authenticateToken, mfaController.generateMfaSecret);
 
