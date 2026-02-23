@@ -54,3 +54,4 @@ client/dist/config.json
 *.pem
 build/agent/*
 /build/*
+frontend/.env
