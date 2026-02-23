@@ -22,7 +22,7 @@ const PORT = process.env.PORT || 3000;
 setupSwagger(app); // chama o swagger aqui
 
 app.use(cors({
-  origin: 'https://localhost:5173', // Frontend URL
+  origin: ['http://localhost:5173', 'https://localhost:5173'], // Frontend URL
   credentials: true // Permits sending cookies
 }));
 app.use(express.json());

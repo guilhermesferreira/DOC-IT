@@ -16,8 +16,8 @@ if (!JWT_SECRET) {
 async function logout(req, res) {
   res.clearCookie('token', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
+    secure: true, // true em dev (pois tem https local) e prod (requisito pro SameSite None)
+    sameSite: 'none' // Permite mandar cookie entre 5173 e 3000
   });
   res.json({ message: 'Logout realizado com sucesso' });
 }
@@ -82,8 +82,8 @@ async function login(req, res) {
       // Armazena no cookie HttpOnly
       res.cookie('token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // true em produção (HTTPS)
-        sameSite: 'strict', // Protege contra CSRF
+        secure: true, 
+        sameSite: 'none', 
         maxAge: 24 * 60 * 60 * 1000 // 1 dia
       });
       res.json({ success: true, message: 'Login successful' });
@@ -117,8 +117,8 @@ async function verifyMfaLogin(req, res) {
       // Armazena no cookie HttpOnly
       res.cookie('token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        secure: true,
+        sameSite: 'none',
         maxAge: 24 * 60 * 60 * 1000
       });
       res.json({ success: true, message: 'MFA Verified and Login successful' });
