@@ -41,7 +41,7 @@ const RemoteTerminal = ({ agentId }) => {
         xtermRef.current = term;
         fitAddonRef.current = fitAddon;
 
-        term.writeln('Iniciando conexão segura com a API do Doc-IT...');
+        term.writeln(`Iniciando conexão segura com a API do ${import.meta.env.VITE_PROJECT_NAME || 'Doc-IT'}...`);
 
         // 2. Conecta no WebSocket do Backend (com withCredentials para o HTTPOnly cookie)
         const socket = io('https://localhost:3000', {
@@ -52,7 +52,7 @@ const RemoteTerminal = ({ agentId }) => {
 
         socket.on('connect', () => {
             setIsConnected(true);
-            term.writeln('\x1b[32m[+] Conectado ao Servidor WebSocket (Doc-IT API)\x1b[0m');
+            term.writeln(`\x1b[32m[+] Conectado ao Servidor WebSocket (${import.meta.env.VITE_PROJECT_NAME || 'Doc-IT'} API)\x1b[0m`);
             term.writeln('\x1b[33m[*] Solicitando handshake com o Agente Python...\x1b[0m');
 
             // Quando conecta, pede para iniciar o terminal remoto
