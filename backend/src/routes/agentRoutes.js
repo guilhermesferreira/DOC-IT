@@ -165,4 +165,8 @@ const authMiddleware = require('../middleware/auth');
 // será tratada através das rotas de /devices, operando em entidades Device com source='agent'.
 router.post('/check-in', agentController.checkIn);
 
+// Rotas de Auto-Update do Agente
+router.get('/version', agentController.getVersion);
+router.get('/update/:file', agentController.downloadUpdate);
+
 module.exports = router;
