@@ -100,7 +100,7 @@ const LoginPage = () => {
             </svg>
           </div>
           <h1 className="header-title">
-            {!mfaRequired ? "Doc-IT" : "Verificação Segura"}
+            {!mfaRequired ? (import.meta.env.VITE_PROJECT_NAME || "Doc-IT") : "Verificação Segura"}
           </h1>
           <p className="header-subtitle">
             {!mfaRequired ? "" : "Confirme sua identidade para continuar"}
@@ -151,7 +151,7 @@ const LoginPage = () => {
         </div>
 
         <div className="login-footer">
-          <p>© 2024 Doc-IT.</p>
+          <p>© 2024 {import.meta.env.VITE_PROJECT_NAME || "Doc-IT"}.</p>
         </div>
       </div>
     </div>
