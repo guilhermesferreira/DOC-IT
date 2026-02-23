@@ -7,7 +7,7 @@ import './Dashboard.css'; // Vamos usar este CSS para o layout geral do dashboar
 import Sidebar from '../components/Sidebar'; // Menu lateral
 import InventoryView from '../components/InventoryView'; // A antiga lógica de inventário
 import DashboardSummary from '../components/DashboardSummary'; // Para o resumo
-import SettingsPage from './SettingsPage'; // Certifique-se que o caminho está correto (ex: './SettingsPage' se estiver na mesma pasta)
+import SettingsPage from './SettingsPage'; // Página de Configurações Geral
 
 const Dashboard = () => {
   const { logout } = useAuth(); //
@@ -17,7 +17,7 @@ const Dashboard = () => {
   // A lógica de fetchDevices, form, editingDevice, handleChange, handleSubmit, handleEdit, handleDelete
   // será movida para o componente InventoryView.jsx
 
-    // Função para buscar os dispositivos
+  // Função para buscar os dispositivos
   const fetchDevices = async () => {
     try {
       const res = await API.get('/device?status=approved'); // <<< MODIFICADO: Busca apenas dispositivos aprovados
@@ -39,12 +39,12 @@ const Dashboard = () => {
     }
   }, [activeView]); // Roda sempre que activeView mudar
 
-const renderView = () => {
+  const renderView = () => {
     switch (activeView) {
       case 'inventory':
         return <InventoryView />;
-      case 'settings': 
-        return <SettingsPage />; 
+      case 'settings':
+        return <SettingsPage />;
       case 'summary':
       default:
         return <DashboardSummary totalDevices={devices.length} />;
