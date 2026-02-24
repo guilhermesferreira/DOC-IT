@@ -9,6 +9,7 @@ import './SettingsPage.css'; // Criaremos este arquivo CSS para estilizar as aba
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState('userProfile'); // Aba principal ativa por padrão
   const [activeUserSecuritySubView, setActiveUserSecuritySubView] = useState('profile'); // Sub-visão ativa dentro de 'userProfile'
+  const [activeAgentsSubView, setActiveAgentsSubView] = useState('scheduling'); // Sub-visão ativa dentro de 'applicationSettings' (Agentes)
 
   // Conteúdo para diferentes abas
   const renderTabContent = () => {
@@ -55,8 +56,24 @@ const SettingsPage = () => {
         );
       case 'applicationSettings':
         return (
-          <div className="tab-pane active" style={{ padding: 0 }}>
-            <SettingsView />
+          <div className="tab-pane active">
+            <nav className="user-security-sub-nav">
+              <button
+                className={`sub-tab-link ${activeAgentsSubView === 'scheduling' ? 'active' : ''}`}
+                onClick={() => setActiveAgentsSubView('scheduling')}
+              >
+                Agendamento
+              </button>
+              {/* Espaço para futuras sub-abas de agentes: "Listagem", "Políticas", etc */}
+            </nav>
+
+            <div className="user-security-sub-content">
+              {activeAgentsSubView === 'scheduling' && (
+                <div className="settings-section">
+                  <SettingsView />
+                </div>
+              )}
+            </div>
           </div>
         );
       case 'usersSettings':
@@ -91,7 +108,7 @@ const SettingsPage = () => {
           className={`tab-link ${activeTab === 'applicationSettings' ? 'active' : ''}`}
           onClick={() => setActiveTab('applicationSettings')}
         >
-          Sistema e Agentes
+          Agentes
         </button>
         <button
           className={`tab-link ${activeTab === 'usersSettings' ? 'active' : ''}`}

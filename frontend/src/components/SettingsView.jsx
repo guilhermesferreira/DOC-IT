@@ -60,60 +60,69 @@ const SettingsView = () => {
 
     return (
         <div className="settings-view-embedded">
-            <div style={{ marginBottom: '20px' }}>
-                <h3>Ajustes Globais e Comunicação</h3>
-                <p className="text-secondary">Defina os parâmetros de polling paramétricos de Agentes.</p>
+            <div style={{ marginBottom: '35px' }}>
+                <h3 style={{ fontSize: '1.25rem', color: '#1f2937', marginBottom: '8px' }}>Ajustes Globais e Comunicação</h3>
+                <p className="text-secondary" style={{ fontSize: '0.9rem', maxWidth: '600px' }}>
+                    Defina o comportamento padrão e os temporizadores da sua frota. Agentes processam essa mudança no próximo check-in de forma transparente.
+                </p>
             </div>
 
             {message && (
-                <div className={`status-badge ${message.includes('sucesso') ? 'status-approved' : 'status-rejected'}`} style={{ marginBottom: '20px', padding: '10px 15px', display: 'flex' }}>
+                <div className={`status-badge ${message.includes('sucesso') ? 'status-approved' : 'status-rejected'}`} style={{ marginBottom: '25px', padding: '10px 15px', display: 'inline-flex' }}>
                     {message}
                 </div>
             )}
 
-            <div style={{ maxWidth: '600px' }}>
-                <p className="text-secondary" style={{ marginBottom: '20px' }}>
-                    Os Agentes processam esta solicitação em background no próximo check-in deles.
-                </p>
-
+            <div style={{ maxWidth: '550px' }}>
                 <form onSubmit={handleSubmit} className="mfa-verify-form">
-                    <div className="form-group">
-                        <label htmlFor="inventoryIntervalMinutes">
-                            <Clock size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
-                            Intervalo de Inventário (Minutos)
+                    <div className="form-group" style={{ marginBottom: '30px' }}>
+                        <label htmlFor="inventoryIntervalMinutes" style={{ fontSize: '0.95rem', fontWeight: 600, color: '#374151', marginBottom: '4px' }}>
+                            <Clock size={16} style={{ marginRight: '8px', verticalAlign: '-3px', color: 'var(--primary-color)' }} />
+                            Intervalo de Inventário
                         </label>
-                        <input
-                            id="inventoryIntervalMinutes"
-                            type="number"
-                            name="inventoryIntervalMinutes"
-                            value={settings.inventoryIntervalMinutes}
-                            onChange={handleChange}
-                            min="1"
-                            required
-                        />
-                        <p className="text-secondary" style={{ fontSize: '0.85em', marginTop: '4px' }}>Padrão da Indústria: 60 minutos.</p>
+                        <p className="text-secondary" style={{ fontSize: '0.8rem', marginTop: 0, marginBottom: '12px' }}>Frequência com que o agente reporta os dados de hardware e software.</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <input
+                                id="inventoryIntervalMinutes"
+                                type="number"
+                                name="inventoryIntervalMinutes"
+                                value={settings.inventoryIntervalMinutes}
+                                onChange={handleChange}
+                                min="1"
+                                required
+                                style={{ maxWidth: '120px', padding: '8px 12px' }}
+                            />
+                            <span className="premium-badge badge-gray" style={{ fontSize: '0.75rem' }}>Alvo: 60 min</span>
+                        </div>
                     </div>
 
-                    <div className="form-group">
-                        <label htmlFor="updateCheckIntervalMinutes">
-                            <RefreshCw size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
-                            Atualização Binária (Minutos)
+                    <div className="form-group" style={{ marginBottom: '30px' }}>
+                        <label htmlFor="updateCheckIntervalMinutes" style={{ fontSize: '0.95rem', fontWeight: 600, color: '#374151', marginBottom: '4px' }}>
+                            <RefreshCw size={16} style={{ marginRight: '8px', verticalAlign: '-3px', color: 'var(--avatar-teal)' }} />
+                            Frequência de atualização automática
                         </label>
-                        <input
-                            id="updateCheckIntervalMinutes"
-                            type="number"
-                            name="updateCheckIntervalMinutes"
-                            value={settings.updateCheckIntervalMinutes}
-                            onChange={handleChange}
-                            min="1"
-                            required
-                        />
-                        <p className="text-secondary" style={{ fontSize: '0.85em', marginTop: '4px' }}>Ciclo do Auto-Updater. Padrão: 120 minutos.</p>
+                        <p className="text-secondary" style={{ fontSize: '0.8rem', marginTop: 0, marginBottom: '12px' }}>Tempo entre as verificações de novas versões do motor binário Doc-IT.</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <input
+                                id="updateCheckIntervalMinutes"
+                                type="number"
+                                name="updateCheckIntervalMinutes"
+                                value={settings.updateCheckIntervalMinutes}
+                                onChange={handleChange}
+                                min="1"
+                                required
+                                style={{ maxWidth: '120px', padding: '8px 12px' }}
+                            />
+                            <span className="premium-badge badge-gray" style={{ fontSize: '0.75rem' }}>Motor: 120 min</span>
+                        </div>
                     </div>
 
-                    <button type="submit" disabled={saving} className="button-submit" style={{ marginTop: '20px' }}>
-                        {saving ? 'Aplicando...' : 'Gravar Regras no Servidor'}
-                    </button>
+                    <div style={{ paddingTop: '20px', borderTop: '1px solid #e5e7eb' }}>
+                        <button type="submit" disabled={saving} className="button-submit" style={{ display: 'flex', alignItems: 'center', fontSize: '0.95rem', padding: '10px 20px' }}>
+                            <Save size={16} style={{ marginRight: '8px' }} />
+                            {saving ? 'Aplicando Regras...' : 'Gravar Alterações'}
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
