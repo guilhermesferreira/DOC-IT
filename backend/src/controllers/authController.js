@@ -50,15 +50,14 @@ async function login(req, res) {
   if (!username || !password) return res.status(400).json({ error: 'Usuário e senha obrigatórios' });
 
   try {
-    const user = await prisma.user.findUnique({ where: { username } });
+    const user = await prisma.user.findUnique({ 
+      where: { username },
+      include: { group: true } // Injetando os privilégios do grupo
+    });
 
-    // DEBUG: Ver o objeto user completo e o campo isMfaEnabled
-    // console.log('--- User Object Fetched During Login ---');
-    // console.log(user); // Log do objeto user completo REMOVIDO POR SEGURANÇA
     if (user) {
       console.log(`User: ${user.username}, MFA Enabled: ${user.isMfaEnabled}`);
     }
-    // --- Fim do DEBUG ---
 
     if (!user) {
       console.log(`Login attempt for non-existent user: ${username}`);
@@ -77,7 +76,13 @@ async function login(req, res) {
       return res.json({ mfaRequired: true, userId: user.id });
     } else {
       console.log(`MFA IS NOT ENABLED for user: ${username}. Issuing token directly.`);
-      const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '1d' });
+      
+      // Assinar TOKEN JWT com Identidade + Poderes (RBAC) do Grupo
+      const token = jwt.sign({ 
+        id: user.id, 
+        username: user.username,
+        group: user.group // Passa pro Token toda a matriz de Permissões deste cara
+      }, JWT_SECRET, { expiresIn: '1d' });
       
       // Armazena no cookie HttpOnly
       res.cookie('token', token, {
@@ -86,7 +91,11 @@ async function login(req, res) {
         sameSite: 'none', 
         maxAge: 24 * 60 * 60 * 1000 // 1 dia
       });
-      res.json({ success: true, message: 'Login successful' });
+      res.json({ 
+        success: true, 
+        message: 'Login successful',
+        user: { id: user.id, username: user.username, group: user.group }
+      });
     }   
   } catch (err) {
     console.error("Erro no login:", err);
@@ -103,7 +112,11 @@ async function verifyMfaLogin(req, res) {
   }
 
   try {
-    const user = await prisma.user.findUnique({ where: { id: Number(userId) } }); 
+    const user = await prisma.user.findUnique({ 
+      where: { id: Number(userId) },
+      include: { group: true } // Injetando os privilégios do grupo
+    }); 
+
     if (!user || !user.isMfaEnabled || !user.mfaSecret) {
       return res.status(401).json({ error: 'MFA não habilitado ou usuário inválido.' });
     }
@@ -112,7 +125,12 @@ async function verifyMfaLogin(req, res) {
     const isValid = otplib.authenticator.check(mfaCode, decryptedSecret);
 
     if (isValid) {
-      const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '1d' });
+      // Assinar TOKEN JWT com Identidade + Poderes (RBAC) do Grupo
+      const token = jwt.sign({ 
+        id: user.id, 
+        username: user.username,
+        group: user.group // Passa pro Token toda a matriz de Permissões deste cara
+      }, JWT_SECRET, { expiresIn: '1d' });
       
       // Armazena no cookie HttpOnly
       res.cookie('token', token, {
@@ -121,7 +139,11 @@ async function verifyMfaLogin(req, res) {
         sameSite: 'none',
         maxAge: 24 * 60 * 60 * 1000
       });
-      res.json({ success: true, message: 'MFA Verified and Login successful' });
+      res.json({ 
+        success: true, 
+        message: 'MFA Verified and Login successful',
+        user: { id: user.id, username: user.username, group: user.group }
+      });
     } else {
       res.status(401).json({ error: 'Código MFA inválido.' });
     }
