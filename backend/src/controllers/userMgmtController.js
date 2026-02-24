@@ -71,6 +71,22 @@ exports.updateUser = async (req, res) => {
   const { username, email, groupId } = req.body;
 
   try {
+    // 1. Busca o usuário que está sendo atacado/alterado
+    const targetUser = await prisma.user.findUnique({
+        where: { id: parseInt(id) },
+        include: { group: true }
+    });
+
+    if (!targetUser) return res.status(404).json({ message: 'Usuário não encontrado.' });
+
+    // 2. Regra Anti-Rebelião: Um Administrador normal NÃO PODE alterar dados de um SuperAdministrator
+    if (targetUser.group && targetUser.group.name === 'SuperAdministrator') {
+        const callerGroup = req.user.group; // Variável injetada pelo rbac/auth middleware no jwt payload
+        if (!callerGroup || callerGroup.name !== 'SuperAdministrator') {
+            return res.status(403).json({ message: 'Permissão negada. Apenas um SuperAdministrador pode editar a conta de outro SuperAdministrador.' });
+        }
+    }
+
     const dataToUpdate = {};
     if (username) dataToUpdate.username = username;
     if (email) dataToUpdate.email = email;
@@ -103,6 +119,22 @@ exports.deleteUser = async (req, res) => {
     // Proteger contra deletar a si próprio (req.user.id injetado p/ verifyToken)
     if (req.user && parseInt(id) === parseInt(req.user.id)) {
         return res.status(400).json({ message: 'Você não pode excluir sua própria conta enquanto estiver logado.' });
+    }
+
+    // Busca o alvo pra checar nível hierárquico
+    const targetUser = await prisma.user.findUnique({
+        where: { id: parseInt(id) },
+        include: { group: true }
+    });
+
+    if (!targetUser) return res.status(404).json({ message: 'Usuário não encontrado.' });
+
+    // Regra Anti-Mutiny: Um Administrador normal não pode DELETAR um SuperAdministrator
+    if (targetUser.group && targetUser.group.name === 'SuperAdministrator') {
+        const callerGroup = req.user.group;
+        if (!callerGroup || callerGroup.name !== 'SuperAdministrator') {
+            return res.status(403).json({ message: 'Permissão negada. Apenas um SuperAdministrador tem privilégio para destituir outro SuperAdministrador.' });
+        }
     }
 
     await prisma.user.delete({

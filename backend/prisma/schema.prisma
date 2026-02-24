@@ -12,54 +12,72 @@ model UserGroup {
   name        String   @unique
   description String?
   users       User[]
+
+  // Permissões: Módulo de Usuários
+  canViewUsers   Boolean @default(false)
+  canCreateUsers Boolean @default(false)
+  canEditUsers   Boolean @default(false)
+  canDeleteUsers Boolean @default(false)
+
+  // Permissões: Módulo RBAC (Grupos)
+  canViewGroups   Boolean @default(false)
+  canCreateGroups Boolean @default(false)
+  canEditGroups   Boolean @default(false)
+  canDeleteGroups Boolean @default(false)
+
+  // Permissões: Módulo Dispositivos / Inventário
+  canViewDevices   Boolean @default(false)
+  canManageDevices Boolean @default(false) // Aprovar, rejeitar, arquivar
+
+  // Permissões: Módulo Acesso Remoto (Agentes)
+  canAccessRemote  Boolean @default(false) // Acesso especifico de seguranca pro Web Terminal / VNC
+
+  // Permissões: Módulo Configurações Globais (Settings)
+  canViewSettings  Boolean @default(false)
+  canEditSettings  Boolean @default(false)
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
-  email     String   @unique
-  password  String
-  
-  groupId   Int?
-  group     UserGroup? @relation(fields: [groupId], references: [id])
-  
-  devices   Device[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  mfaSecret         String?  
-  isMfaEnabled      Boolean  @default(false)
-  // Futuro: mfaRecoveryCodes String[] // Para códigos de recuperação 
+  id             Int        @id @default(autoincrement())
+  username       String     @unique
+  email          String     @unique
+  password       String
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  mfaSecret      String?
+  isMfaEnabled   Boolean    @default(false)
+  groupId        Int?
+  authProvider   String     @default("local")
+  domainUsername String?    @unique
+  devices        Device[]
+  group          UserGroup? @relation(fields: [groupId], references: [id])
 }
 
 model Device {
-  id          Int      @id @default(autoincrement())
-  name        String
-  type        String
-  location    String
-  patrimony   String?
-  userId      Int?      // User who owns/manages this device, or who approved it. Optional because agent devices are unowned until approved.
-  user        User?     @relation(fields: [userId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Fields for agent-discovered devices
-  agentId          String?   @unique // UUID from agent
-  hostname         String?   // Can be same as 'name' for agent devices
-  osUsername       String?
-  ipAddress        String?
-  agentVersion     String?
-  osInfo           String?
-  additionalData   Json?
-
-  // Status and tracking
-  status           String    @default("pending") // "pending", "approved", "rejected", "archived"
-                                                // Manually added devices can be set to "approved" directly.
-  source           String    @default("manual")  // "manual", "agent"
-  firstSeenAt      DateTime? // For agent-discovered devices
-  lastSeenAt       DateTime? // For agent pings, or general last known activity
-  approvedAt       DateTime? // When status changed to "approved"
+  id             Int       @id @default(autoincrement())
+  name           String
+  type           String
+  location       String
+  patrimony      String?
+  userId         Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  agentId        String?   @unique
+  hostname       String?
+  osUsername     String?
+  ipAddress      String?
+  agentVersion   String?
+  osInfo         String?
+  additionalData Json?
+  status         String    @default("pending")
+  source         String    @default("manual")
+  firstSeenAt    DateTime?
+  lastSeenAt     DateTime?
+  approvedAt     DateTime?
+  user           User?     @relation(fields: [userId], references: [id])
 
   @@index([status])
   @@index([hostname])
@@ -70,7 +88,7 @@ model Device {
 
 model GlobalSettings {
   id                         Int      @id @default(autoincrement())
-  inventoryIntervalMinutes   Int      @default(60) // Frequência que o agente coleta e envia inventário (System/Hardware/etc)
-  updateCheckIntervalMinutes Int      @default(120) // Frequência que o agente checa o Auto-Updater no servidor Node.js
+  inventoryIntervalMinutes   Int      @default(60)
+  updateCheckIntervalMinutes Int      @default(120)
   updatedAt                  DateTime @updatedAt
 }

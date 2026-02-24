@@ -17,16 +17,36 @@ exports.getAllGroups = async (req, res) => {
   }
 };
 
+// Objeto helper com apenas as colunas válidas permitidas na tabela UserGroup
+const buildGroupDataMatrix = (body) => {
+    return {
+        name: body.name,
+        description: body.description,
+        canViewUsers: Boolean(body.canViewUsers),
+        canCreateUsers: Boolean(body.canCreateUsers),
+        canEditUsers: Boolean(body.canEditUsers),
+        canDeleteUsers: Boolean(body.canDeleteUsers),
+        canViewGroups: Boolean(body.canViewGroups),
+        canCreateGroups: Boolean(body.canCreateGroups),
+        canEditGroups: Boolean(body.canEditGroups),
+        canDeleteGroups: Boolean(body.canDeleteGroups),
+        canViewDevices: Boolean(body.canViewDevices),
+        canManageDevices: Boolean(body.canManageDevices),
+        canAccessRemote: Boolean(body.canAccessRemote),
+        canViewSettings: Boolean(body.canViewSettings),
+        canEditSettings: Boolean(body.canEditSettings)
+    };
+};
+
 // Criar um novo grupo
 exports.createGroup = async (req, res) => {
-  const { name, description } = req.body;
-  if (!name) {
+  if (!req.body.name) {
     return res.status(400).json({ message: 'Nome do grupo é obrigatório.' });
   }
 
   try {
     const newGroup = await prisma.userGroup.create({
-      data: { name, description },
+      data: buildGroupDataMatrix(req.body)
     });
     res.status(201).json(newGroup);
   } catch (error) {
@@ -42,12 +62,11 @@ exports.createGroup = async (req, res) => {
 // Atualizar um grupo
 exports.updateGroup = async (req, res) => {
   const { id } = req.params;
-  const { name, description } = req.body;
 
   try {
     const group = await prisma.userGroup.update({
       where: { id: parseInt(id) },
-      data: { name, description },
+      data: buildGroupDataMatrix(req.body)
     });
     res.json(group);
   } catch (error) {
