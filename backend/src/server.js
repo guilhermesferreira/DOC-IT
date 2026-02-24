@@ -10,6 +10,8 @@ const deviceRoutes = require('./routes/devices');
 const healthRoutes = require('./routes/health');
 const agentRoutes = require('./routes/agentRoutes'); 
 const settingsRoutes = require('./routes/settingsRoutes');
+const userRoutes = require('./routes/userRoutes');
+const userGroupRoutes = require('./routes/userGroupRoutes');
 
 const https = require('https');
 const fs = require('fs');
@@ -34,6 +36,8 @@ app.use('/device', deviceRoutes);
 app.use('/VerifyHealth', healthRoutes);
 app.use('/agent', agentRoutes); 
 app.use('/settings', settingsRoutes);
+app.use('/users', userRoutes);
+app.use('/user-groups', userGroupRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'API doc-it Backend funcionando!' });
