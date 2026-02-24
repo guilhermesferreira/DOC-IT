@@ -233,3 +233,42 @@ textarea:focus::placeholder {
     transform: translateY(0) scale(1);
   }
 }
+
+/* ========================================================================= */
+/* PREMIUM DATA TABLES */
+/* ========================================================================= */
+
+.data-table-container {
+  overflow-x: auto;
+  border-radius: 8px;
+  background-color: var(--background-white);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.devices-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.devices-table th,
+.devices-table td {
+  padding: 16px;
+  border-bottom: 1px solid #edf2f7;
+  vertical-align: middle;
+  text-align: left;
+}
+
+.devices-table th {
+  background-color: #f8fafc;
+  color: #4b5563;
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.devices-table tbody tr:hover td {
+  background-color: #f1f5f9;
+}

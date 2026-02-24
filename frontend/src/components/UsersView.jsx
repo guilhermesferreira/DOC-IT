@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/api';
-import { UserCog, Trash2, Info, ShieldAlert, Plus } from 'lucide-react';
+import { UserCog, Trash2, Info, ShieldAlert, Plus, X } from 'lucide-react';
 
 const UsersView = () => {
     const [users, setUsers] = useState([]);
@@ -8,6 +8,7 @@ const UsersView = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const [newUser, setNewUser] = useState({ username: '', email: '', password: '', groupId: 'null' });
 
     useEffect(() => {
@@ -40,6 +41,7 @@ const UsersView = () => {
             const res = await api.post('/users', payload);
             setUsers([...users, res.data]);
             setNewUser({ username: '', email: '', password: '', groupId: 'null' });
+            setIsModalOpen(false);
             setMessage("Usuário criado com sucesso!");
             setTimeout(() => setMessage(''), 3000);
         } catch (error) {
@@ -76,11 +78,23 @@ const UsersView = () => {
 
     if (loading) return <div className="loading-state">Carregando painel de administradores...</div>;
 
+    const getAvatarColor = (name) => {
+        const colors = ['var(--avatar-blue)', 'var(--avatar-purple)', 'var(--avatar-teal)', 'var(--avatar-pink)', 'var(--avatar-orange)'];
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
+    };
+
     return (
         <div className="settings-view-embedded">
-            <div style={{ marginBottom: '20px' }}>
-                <h3>Administração e Identidades</h3>
-                <p className="text-secondary">Associe as contas ativas do Doc-IT a seus devidos Grupos de Permissão.</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <div>
+                    <h3>Administração e Identidades</h3>
+                    <p className="text-secondary">Associe as contas ativas do Doc-IT a seus devidos Grupos de Permissão.</p>
+                </div>
+                <button className="button-submit" onClick={() => setIsModalOpen(true)} style={{ display: 'flex', alignItems: 'center' }}>
+                    <Plus size={16} strokeWidth={3} style={{ marginRight: '6px' }} /> Novo Usuário
+                </button>
             </div>
 
             {message && (
@@ -89,119 +103,107 @@ const UsersView = () => {
                 </div>
             )}
 
-            <div className="dashboard-grid" style={{ gridTemplateColumns: 'minmax(300px, 1fr) 2fr', gap: '20px', alignItems: 'start' }}>
-                {/* Painel de Criação */}
-                <div className="card-dashboard">
-                    <h4>Criar Nova Conta</h4>
-                    <form onSubmit={handleCreate} className="mfa-verify-form" style={{ marginTop: '15px' }}>
-                        <div className="form-group">
-                            <label>Nome de Usuário</label>
-                            <input
-                                type="text"
-                                placeholder="ex: admin_sec"
-                                value={newUser.username}
-                                onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                                required
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label>E-Mail Comercial</label>
-                            <input
-                                type="email"
-                                placeholder="seu@email.com"
-                                value={newUser.email}
-                                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                                required
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label>Senha Inicial</label>
-                            <input
-                                type="password"
-                                placeholder="Uma senha forte"
-                                value={newUser.password}
-                                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                                required
-                                minLength={6}
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label>Grupo (Opcional)</label>
-                            <select
-                                value={newUser.groupId}
-                                onChange={(e) => setNewUser({ ...newUser, groupId: e.target.value })}
-                            >
-                                <option value="null">-- Sem Acesso --</option>
-                                {groups.map(g => (
-                                    <option key={g.id} value={g.id}>{g.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <button type="submit" disabled={saving} className="button-submit" style={{ width: '100%', justifyContent: 'center' }}>
-                            <Plus size={16} style={{ marginRight: '5px', verticalAlign: 'middle' }} />
-                            {saving ? 'Criando...' : 'Criar Usuário'}
-                        </button>
-                    </form>
-                </div>
-
-                {/* Lista de Usuários */}
-                <div>
-                    <div className="data-table-container">
-                        <table className="devices-table">
-                            <thead>
-                                <tr>
-                                    <th>Identificação</th>
-                                    <th>E-Mail Comercial</th>
-                                    <th>Grupo de Acesso Associado</th>
-                                    <th>Autenticação 2FA</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {users.map((u) => (
-                                    <tr key={u.id}>
-                                        <td>
+            <div className="data-table-container">
+                <table className="devices-table">
+                    <thead>
+                        <tr>
+                            <th>Identificação</th>
+                            <th>E-Mail Comercial</th>
+                            <th>Grupo de Acesso</th>
+                            <th>Status de Segurança</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {users.map((u) => (
+                            <tr key={u.id}>
+                                <td>
+                                    <div className="table-row-profile">
+                                        <div className="premium-avatar" style={{ backgroundColor: getAvatarColor(u.username) }}>
+                                            {u.username.charAt(0)}
+                                        </div>
+                                        <div>
                                             <strong>{u.username}</strong>
-                                            <div className="text-secondary" style={{ fontSize: '0.8rem' }}>Cadastrado em {new Date(u.createdAt).toLocaleDateString()}</div>
-                                        </td>
-                                        <td>{u.email}</td>
-                                        <td>
-                                            <select
-                                                className="form-group"
-                                                style={{ padding: '6px 10px', height: 'auto', marginBottom: 0, minWidth: '180px' }}
-                                                value={u.groupId === null ? "null" : u.groupId}
-                                                onChange={(e) => handleGroupChange(u.id, e.target.value)}
-                                            >
-                                                <option value="null">-- Sem Acesso Administrativo --</option>
-                                                {groups.map(g => (
-                                                    <option key={g.id} value={g.id}>{g.name}</option>
-                                                ))}
-                                            </select>
-                                        </td>
-                                        <td>
-                                            {u.isMfaEnabled ? (
-                                                <span className="status-badge status-approved"><ShieldAlert size={12} style={{ marginRight: '4px' }} /> Blindado</span>
-                                            ) : (
-                                                <span className="status-badge status-rejected">Exposto</span>
-                                            )}
-                                        </td>
-                                        <td>
-                                            <button className="button-ghost" onClick={() => handleDelete(u.id)} title="Desvincular e Excluir Usuário" style={{ color: 'var(--status-rejected)' }}>
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {users.length === 0 && (
-                                    <tr>
-                                        <td colSpan="5" className="text-center text-secondary">Nenhum usuário localizado.</td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                            <div className="text-secondary" style={{ fontSize: '0.8rem' }}>Adicionado em {new Date(u.createdAt).toLocaleDateString()}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{u.email}</td>
+                                <td>
+                                    <select
+                                        className="form-group"
+                                        style={{ padding: '4px 8px', height: 'auto', marginBottom: 0, minWidth: '160px', borderRadius: '6px', backgroundColor: 'var(--background-light)', border: 'none', fontWeight: 500 }}
+                                        value={u.groupId === null ? "null" : u.groupId}
+                                        onChange={(e) => handleGroupChange(u.id, e.target.value)}
+                                    >
+                                        <option value="null">Visitante s/ Acesso</option>
+                                        {groups.map(g => (
+                                            <option key={g.id} value={g.id}>{g.name}</option>
+                                        ))}
+                                    </select>
+                                </td>
+                                <td>
+                                    {u.isMfaEnabled ? (
+                                        <span className="premium-badge badge-green"><ShieldAlert size={12} style={{ marginRight: '4px' }} /> Blindado</span>
+                                    ) : (
+                                        <span className="premium-badge badge-red">Exposto</span>
+                                    )}
+                                </td>
+                                <td>
+                                    <button className="button-ghost" onClick={() => handleDelete(u.id)} title="Desvincular e Excluir Usuário" style={{ color: 'var(--badge-red-text)' }}>
+                                        <Trash2 size={16} />
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                        {users.length === 0 && (
+                            <tr>
+                                <td colSpan="5" className="text-center text-secondary" style={{ padding: '30px' }}>Nenhuma conta de administrador localizada no banco de dados.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Modal de Criação (Premium UI) */}
+            {isModalOpen && (
+                <div className="modal-backdrop" onClick={() => setIsModalOpen(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h4>Criar Nova Conta</h4>
+                            <button className="button-ghost" onClick={() => setIsModalOpen(false)} style={{ padding: '4px', height: 'auto', color: 'var(--text-color-light)' }}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleCreate}>
+                            <div className="form-group">
+                                <label>Nome de Usuário</label>
+                                <input type="text" placeholder="Ex: amanda_sec" value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} required />
+                            </div>
+                            <div className="form-group">
+                                <label>E-Mail Comercial</label>
+                                <input type="email" placeholder="amanda@empresa.com" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} required />
+                            </div>
+                            <div className="form-group">
+                                <label>Senha Inicial</label>
+                                <input type="password" placeholder="Defina uma senha segura" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} required minLength={6} />
+                            </div>
+                            <div className="form-group">
+                                <label>Grupo (Papel base)</label>
+                                <select value={newUser.groupId} onChange={(e) => setNewUser({ ...newUser, groupId: e.target.value })}>
+                                    <option value="null">-- Sem Acesso --</option>
+                                    {groups.map(g => (
+                                        <option key={g.id} value={g.id}>{g.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <button type="submit" disabled={saving} className="button-submit" style={{ width: '100%', justifyContent: 'center', marginTop: '10px' }}>
+                                {saving ? 'Processando Inclusão...' : 'Finalizar Criação'}
+                            </button>
+                        </form>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 };
