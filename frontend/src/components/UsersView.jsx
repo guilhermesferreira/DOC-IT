@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/api';
-import { UserCog, Trash2, Info, ShieldAlert, Plus, X } from 'lucide-react';
+import { UserCog, Trash2, Info, ShieldAlert, Plus, X, Lock } from 'lucide-react';
+import { useAuth } from '../auth/AuthContext';
 
 const UsersView = () => {
     const [users, setUsers] = useState([]);
@@ -9,46 +10,102 @@ const UsersView = () => {
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [newUser, setNewUser] = useState({ username: '', email: '', password: '', groupId: 'null' });
+    const defaultUserState = { username: '', email: '', password: '', groupId: 'null' };
+    const [newUser, setNewUser] = useState(defaultUserState);
+    const [editingUserId, setEditingUserId] = useState(null);
+    const { user } = useAuth(); // Importa os privilégios injetados pelo Backend!
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        if (user && user.group?.canViewUsers) {
+            fetchData();
+        } else {
+            setLoading(false); // Já mata o loading se não tem nem permissão de GET
+        }
+    }, [user]);
 
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [usersRes, groupsRes] = await Promise.all([
-                api.get('/users'),
-                api.get('/user-groups')
-            ]);
-            setUsers(usersRes.data);
-            setGroups(groupsRes.data);
-        } catch (error) {
-            console.error("Erro ao carregar dados:", error);
-            setMessage("Erro crítico ao sincronizar Usuários e Grupos com o Servidor.");
+            setMessage('');
+
+            // Tenta puxar usuários
+            try {
+                const usersRes = await api.get('/users');
+                setUsers(usersRes.data);
+            } catch (err) {
+                if (err.response?.status === 403) {
+                    setMessage("Permissão Negada: Você não pode visualizar a lista de usuários.");
+                } else {
+                    console.error("Erro /users:", err);
+                    setMessage("Erro ao buscar usuários do servidor.");
+                }
+            }
+
+            // Tenta puxar grupos apenas se o usuário tiver a flag visual
+            if (user?.group?.canViewGroups || user?.group?.name === 'SuperAdministrator') {
+                try {
+                    const groupsRes = await api.get('/user-groups');
+                    setGroups(groupsRes.data);
+                } catch (err) {
+                    if (err.response?.status === 403) {
+                        console.warn("Sem acesso de leitura aos grupos, o select ficará vazio.");
+                    } else {
+                        console.error("Erro /groups:", err);
+                    }
+                }
+            }
+
         } finally {
             setLoading(false);
         }
     };
 
-    const handleCreate = async (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         try {
             setSaving(true);
             setMessage('');
             const payload = { ...newUser, groupId: newUser.groupId === 'null' ? null : parseInt(newUser.groupId) };
-            const res = await api.post('/users', payload);
-            setUsers([...users, res.data]);
-            setNewUser({ username: '', email: '', password: '', groupId: 'null' });
+
+            // Se a senha estiver vazia na edição, remove do payload para não atualizar
+            if (editingUserId && !payload.password) {
+                delete payload.password;
+            }
+
+            if (editingUserId) {
+                const res = await api.put(`/users/${editingUserId}`, payload);
+                setUsers(users.map(u => u.id === editingUserId ? { ...u, ...res.data } : u));
+                setMessage("Conta de administrador atualizada.");
+            } else {
+                const res = await api.post('/users', payload);
+                setUsers([...users, res.data]);
+                setMessage("Usuário criado com sucesso!");
+            }
+
             setIsModalOpen(false);
-            setMessage("Usuário criado com sucesso!");
             setTimeout(() => setMessage(''), 3000);
         } catch (error) {
-            setMessage(error.response?.data?.message || "Falha ao criar o usuário. Nome ou E-mail já utilizados.");
+            setMessage(error.response?.data?.message || "Falha ao processar o usuário.");
         } finally {
             setSaving(false);
         }
+    };
+
+    const handleOpenCreate = () => {
+        setNewUser(defaultUserState);
+        setEditingUserId(null);
+        setIsModalOpen(true);
+    };
+
+    const handleOpenEdit = (user) => {
+        setNewUser({
+            username: user.username,
+            email: user.email,
+            password: '', // Senha não preenche por segurança, se vazia não muda no PUT
+            groupId: user.groupId || 'null'
+        });
+        setEditingUserId(user.id);
+        setIsModalOpen(true);
     };
 
     const handleGroupChange = async (userId, newGroupId) => {
@@ -78,6 +135,16 @@ const UsersView = () => {
 
     if (loading) return <div className="loading-state">Carregando painel de administradores...</div>;
 
+    if (!user || !user.group?.canViewUsers) {
+        return (
+            <div className="settings-view-embedded" style={{ textAlign: 'center', padding: '60px 20px' }}>
+                <Lock size={48} style={{ color: 'var(--text-color-light)', marginBottom: '20px' }} />
+                <h3>Acesso Negado ao Perfil</h3>
+                <p className="text-secondary">O seu grupo administrativo ({user?.group?.name || 'Indefinido'}) não possui privilégios de leitura (Visualização) para o Módulo de Usuários do Doc-IT.</p>
+            </div>
+        );
+    }
+
     const getAvatarColor = (name) => {
         const colors = ['var(--avatar-blue)', 'var(--avatar-purple)', 'var(--avatar-teal)', 'var(--avatar-pink)', 'var(--avatar-orange)'];
         let hash = 0;
@@ -92,9 +159,11 @@ const UsersView = () => {
                     <h3>Administração e Identidades</h3>
                     <p className="text-secondary">Associe as contas ativas do Doc-IT a seus devidos Grupos de Permissão.</p>
                 </div>
-                <button className="button-submit" onClick={() => setIsModalOpen(true)} style={{ display: 'flex', alignItems: 'center' }}>
-                    <Plus size={16} strokeWidth={3} style={{ marginRight: '6px' }} /> Novo Usuário
-                </button>
+                {user.group?.canCreateUsers && (
+                    <button className="button-submit" onClick={handleOpenCreate} style={{ display: 'flex', alignItems: 'center' }}>
+                        <Plus size={16} strokeWidth={3} style={{ marginRight: '6px' }} /> Novo Usuário
+                    </button>
+                )}
             </div>
 
             {message && (
@@ -135,8 +204,16 @@ const UsersView = () => {
                                         style={{ padding: '4px 8px', height: 'auto', marginBottom: 0, minWidth: '160px', borderRadius: '6px', backgroundColor: 'var(--background-light)', border: 'none', fontWeight: 500 }}
                                         value={u.groupId === null ? "null" : u.groupId}
                                         onChange={(e) => handleGroupChange(u.id, e.target.value)}
+                                        disabled={!user.group?.canEditUsers} // Desabilita mudança rápida se não puder editar
                                     >
                                         <option value="null">Visitante s/ Acesso</option>
+
+                                        {/* Fallback de Visualização: Se o array `groups` estiver vazio (por falta de permissão canViewGroups),
+                                            ainda assim precisamos mostrar onde o usuário está alocado usando os dados do GET /users */}
+                                        {u.groupId !== null && !groups.some(g => g.id === u.groupId) && (
+                                            <option value={u.groupId}>{u.group?.name || `Grupo #${u.groupId}`}</option>
+                                        )}
+
                                         {groups.map(g => (
                                             <option key={g.id} value={g.id}>{g.name}</option>
                                         ))}
@@ -150,9 +227,18 @@ const UsersView = () => {
                                     )}
                                 </td>
                                 <td>
-                                    <button className="button-ghost" onClick={() => handleDelete(u.id)} title="Desvincular e Excluir Usuário" style={{ color: 'var(--badge-red-text)' }}>
-                                        <Trash2 size={16} />
-                                    </button>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        {user.group?.canEditUsers && (
+                                            <button className="button-ghost" onClick={() => handleOpenEdit(u)} title="Editar Conta" style={{ color: 'var(--text-color-light)' }}>
+                                                <UserCog size={16} />
+                                            </button>
+                                        )}
+                                        {user.group?.canDeleteUsers && (
+                                            <button className="button-ghost" onClick={() => handleDelete(u.id)} title="Desvincular e Excluir Usuário" style={{ color: 'var(--badge-red-text)' }}>
+                                                <Trash2 size={16} />
+                                            </button>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         ))}
@@ -175,7 +261,7 @@ const UsersView = () => {
                                 <X size={20} />
                             </button>
                         </div>
-                        <form onSubmit={handleCreate}>
+                        <form onSubmit={handleSubmit}>
                             <div className="form-group">
                                 <label>Nome de Usuário</label>
                                 <input type="text" placeholder="Ex: amanda_sec" value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} required />
@@ -185,8 +271,8 @@ const UsersView = () => {
                                 <input type="email" placeholder="amanda@empresa.com" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} required />
                             </div>
                             <div className="form-group">
-                                <label>Senha Inicial</label>
-                                <input type="password" placeholder="Defina uma senha segura" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} required minLength={6} />
+                                <label>{editingUserId ? 'Nova Senha (deixe em branco para não alterar)' : 'Senha Inicial'}</label>
+                                <input type="password" placeholder="Defina uma senha segura" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} required={!editingUserId} minLength={6} />
                             </div>
                             <div className="form-group">
                                 <label>Grupo (Papel base)</label>
@@ -198,7 +284,7 @@ const UsersView = () => {
                                 </select>
                             </div>
                             <button type="submit" disabled={saving} className="button-submit" style={{ width: '100%', justifyContent: 'center', marginTop: '10px' }}>
-                                {saving ? 'Processando Inclusão...' : 'Finalizar Criação'}
+                                {saving ? 'Processando Inclusão...' : (editingUserId ? 'Gravar Alterações' : 'Finalizar Criação')}
                             </button>
                         </form>
                     </div>

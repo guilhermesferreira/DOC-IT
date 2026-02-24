@@ -5,6 +5,7 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null); // Adicionado para guardar payload do RBAC
   const [loading, setLoading] = useState(true);
 
   // No carregamento inicial, o Frontend pergunta pro Backend se ele tem um cookie logado
@@ -15,10 +16,12 @@ export const AuthProvider = ({ children }) => {
         const response = await API.get("/auth/verify-session");
         if (response.data.isAuthenticated) {
           setIsAuthenticated(true);
+          setUser(response.data.user); // Backend agora deverá retornar o payload descriptografado
         }
       } catch (err) {
         // Se der 401/403 ou qualquer erro, usuário não tem sessão ativa
         setIsAuthenticated(false);
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -27,12 +30,15 @@ export const AuthProvider = ({ children }) => {
     checkAuthStatus();
   }, []);
 
-  // Login agora apenas ativa a flag no Frontend, pois o Backend já chumbou o Cookie
-  const login = () => {
+  // Login agora ativa a flag e armazena os dados vindos diretamente da verificação
+  const login = (userData) => {
     setIsAuthenticated(true);
+    if (userData) {
+      setUser(userData);
+    }
   };
 
-  // Logout precisa avisar o Backend para apagar o Cookie
+  // Logout precisa avisar o Backend para apagar o Cookie e limpa as variáveis de Permissão locais
   const logout = async () => {
     try {
       await API.post("/auth/logout");
@@ -40,11 +46,12 @@ export const AuthProvider = ({ children }) => {
       console.error("Erro ao fazer logout", e);
     } finally {
       setIsAuthenticated(false);
+      setUser(null);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout, loading }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

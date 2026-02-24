@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/api';
-import { Settings, Save, Clock, RefreshCw } from 'lucide-react';
+import { Settings, Save, Clock, RefreshCw, Lock } from 'lucide-react';
+import { useAuth } from '../auth/AuthContext';
 import '../pages/Dashboard.css';
 
 const SettingsView = () => {
@@ -11,6 +12,7 @@ const SettingsView = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState('');
+    const { user } = useAuth(); // Importa os privilégios injetados pelo Backend
 
     useEffect(() => {
         fetchSettings();
@@ -90,6 +92,7 @@ const SettingsView = () => {
                                 onChange={handleChange}
                                 min="1"
                                 required
+                                disabled={!user?.group?.canEditSettings}
                                 style={{ maxWidth: '120px', padding: '8px 12px' }}
                             />
                             <span className="premium-badge badge-gray" style={{ fontSize: '0.75rem' }}>Alvo: 60 min</span>
@@ -111,6 +114,7 @@ const SettingsView = () => {
                                 onChange={handleChange}
                                 min="1"
                                 required
+                                disabled={!user?.group?.canEditSettings}
                                 style={{ maxWidth: '120px', padding: '8px 12px' }}
                             />
                             <span className="premium-badge badge-gray" style={{ fontSize: '0.75rem' }}>Motor: 120 min</span>
@@ -118,10 +122,12 @@ const SettingsView = () => {
                     </div>
 
                     <div style={{ paddingTop: '20px', borderTop: '1px solid #e5e7eb' }}>
-                        <button type="submit" disabled={saving} className="button-submit" style={{ display: 'flex', alignItems: 'center', fontSize: '0.95rem', padding: '10px 20px' }}>
-                            <Save size={16} style={{ marginRight: '8px' }} />
-                            {saving ? 'Aplicando Regras...' : 'Gravar Alterações'}
-                        </button>
+                        {user?.group?.canEditSettings && (
+                            <button type="submit" disabled={saving} className="button-submit" style={{ display: 'flex', alignItems: 'center', fontSize: '0.95rem', padding: '10px 20px' }}>
+                                <Save size={16} style={{ marginRight: '8px' }} />
+                                {saving ? 'Aplicando Regras...' : 'Gravar Alterações'}
+                            </button>
+                        )}
                     </div>
                 </form>
             </div>
