@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import MfaSetupPage from './MfaSetupPage'; // Importa a página de setup do MFA que já criamos
 import SettingsView from '../components/SettingsView'; // Painel Global de Settings
+import UsersView from '../components/UsersView'; // Gestão de Usuários
+import UserGroupsView from '../components/UserGroupsView'; // Gestão de Grupos de Usuários
 import './SettingsPage.css'; // Criaremos este arquivo CSS para estilizar as abas e o conteúdo
 
 const SettingsPage = () => {
@@ -57,9 +59,18 @@ const SettingsPage = () => {
             <SettingsView />
           </div>
         );
-      // Adicione mais 'case' para outras abas de configuração no futuro
-      // case 'billingSettings':
-      //   return <div className="tab-pane active"><h3>Faturamento</h3><p>Detalhes de faturamento...</p></div>;
+      case 'usersSettings':
+        return (
+          <div className="tab-pane active" style={{ padding: 0 }}>
+            <UsersView />
+          </div>
+        );
+      case 'userGroupsSettings':
+        return (
+          <div className="tab-pane active" style={{ padding: 0 }}>
+            <UserGroupsView />
+          </div>
+        );
       default:
         return <div>Selecione uma aba de configuração.</div>;
     }
@@ -82,14 +93,18 @@ const SettingsPage = () => {
         >
           Sistema e Agentes
         </button>
-        {/* Adicione mais botões de aba aqui, por exemplo:
         <button
-          className={`tab-link ${activeTab === 'billingSettings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('billingSettings')}
+          className={`tab-link ${activeTab === 'usersSettings' ? 'active' : ''}`}
+          onClick={() => setActiveTab('usersSettings')}
         >
-          Faturamento
+          Usuários
         </button>
-        */}
+        <button
+          className={`tab-link ${activeTab === 'userGroupsSettings' ? 'active' : ''}`}
+          onClick={() => setActiveTab('userGroupsSettings')}
+        >
+          Grupos de Acesso
+        </button>
       </nav>
 
       <div className="settings-content">
