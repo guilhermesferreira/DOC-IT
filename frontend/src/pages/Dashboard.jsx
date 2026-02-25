@@ -47,7 +47,7 @@ const Dashboard = () => {
         return <SettingsPage />;
       case 'summary':
       default:
-        return <DashboardSummary totalDevices={devices.length} />;
+        return <DashboardSummary devices={devices} setActiveView={setActiveView} />;
     }
   };
 

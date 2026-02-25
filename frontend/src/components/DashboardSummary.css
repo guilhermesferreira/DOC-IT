@@ -1,38 +1,289 @@
 /* src/components/DashboardSummary.css */
+
 .summary-container {
-  /* .card-dashboard já aplica os estilos base de card */
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  animation: fadeIn 0.4s ease-out;
 }
 
-.summary-container p {
-  font-size: 16px;
-  line-height: 1.7;
-  margin-bottom: 20px;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.summary-metrics {
+/* 1. KPI Grid */
+.kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 20px;
 }
 
-.metric-card {
-  background-color: #f9f9f9;
+.kpi-card {
+  background-color: #ffffff;
+  border-radius: 12px;
   padding: 20px;
-  border-radius: 6px;
-  border: 1px solid #e9e9e9;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.metric-card h3 {
-  font-size: 16px;
-  color: var(--text-color-light, #555);
-  margin-top: 0;
-  margin-bottom: 8px;
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
 }
 
-.metric-value {
-  font-size: 28px;
-  font-weight: bold;
-  color: var(--primary-color, #007bff);
+.kpi-icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kpi-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kpi-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #64748b;
   margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.kpi-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  line-height: 1;
+}
+
+
+/* 2. Main Grid Inferior */
+.dashboard-main-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 3. Estilos dos Cards Base */
+.card-dashboard {
+  background-color: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.card-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+}
+
+.card-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-body {
+  padding: 20px;
+}
+
+/* 4. Activity Feed */
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.feed-item {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.feed-item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.feed-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #f1f5f9;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.feed-content {
+  flex-grow: 1;
+}
+
+.feed-title {
+  margin: 0 0 4px 0;
+  font-size: 0.95rem;
+  color: #334155;
+}
+
+.feed-meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.feed-time {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+
+.no-data-text {
+  text-align: center;
+  color: #94a3b8;
+  font-style: italic;
+  padding: 20px 0;
+}
+
+/* 5. Quick Actions */
+.quick-actions-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quick-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: #ffffff;
+}
+
+.qa-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.qa-text strong {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.qa-text span {
+  font-size: 0.75rem;
+}
+
+/* Variantes de Quick Action */
+.quick-action-btn.primary {
+  border-color: #bfdbfe;
+  background-color: #eff6ff;
+}
+
+.quick-action-btn.primary .qa-icon {
+  color: #2563eb;
+}
+
+.quick-action-btn.primary .qa-text strong {
+  color: #1e3a8a;
+}
+
+.quick-action-btn.primary .qa-text span {
+  color: #3b82f6;
+}
+
+.quick-action-btn.primary:hover {
+  background-color: #dbeafe;
+  border-color: #93c5fd;
+  transform: translateY(-1px);
+}
+
+.quick-action-btn.secondary {
+  border-color: #f3f4f6;
+  background-color: #f9fafb;
+}
+
+.quick-action-btn.secondary .qa-icon {
+  color: #4b5563;
+}
+
+.quick-action-btn.secondary .qa-text strong {
+  color: #374151;
+}
+
+.quick-action-btn.secondary .qa-text span {
+  color: #6b7280;
+}
+
+.quick-action-btn.secondary:hover {
+  background-color: #f3f4f6;
+  border-color: #e5e7eb;
+  transform: translateY(-1px);
+}
+
+.quick-action-btn.outline {
+  border-color: #e2e8f0;
+  background-color: #ffffff;
+}
+
+.quick-action-btn.outline .qa-icon {
+  color: #64748b;
+}
+
+.quick-action-btn.outline .qa-text strong {
+  color: #475569;
+}
+
+.quick-action-btn.outline .qa-text span {
+  color: #94a3b8;
+}
+
+.quick-action-btn.outline:hover {
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+  transform: translateY(-1px);
 }
