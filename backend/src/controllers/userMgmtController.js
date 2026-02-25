@@ -42,6 +42,14 @@ exports.createUser = async (req, res) => {
       password: hashedPassword,
     };
     if (groupId) {
+      // Regra de Elevação de Privilégio no momento da Criação
+      const targetGroup = await prisma.userGroup.findUnique({ where: { id: parseInt(groupId) } });
+      if (targetGroup && targetGroup.name === 'SuperAdministrator') {
+           const callerGroup = req.user.group;
+           if (!callerGroup || callerGroup.name !== 'SuperAdministrator') {
+               return res.status(403).json({ message: 'Permissão negada. Você não tem autorização para criar contas com nível SuperAdministrador.' });
+           }
+      }
       dataToCreate.groupId = parseInt(groupId);
     }
 
@@ -84,6 +92,18 @@ exports.updateUser = async (req, res) => {
         const callerGroup = req.user.group; // Variável injetada pelo rbac/auth middleware no jwt payload
         if (!callerGroup || callerGroup.name !== 'SuperAdministrator') {
             return res.status(403).json({ message: 'Permissão negada. Apenas um SuperAdministrador pode editar a conta de outro SuperAdministrador.' });
+        }
+    }
+
+    // 3. Regra de Elevação de Privilégio: Impedir que um Administrador normal atribua o cargo de SuperAdministrator
+    if (groupId !== undefined && groupId !== null) {
+        // Precisamos verificar se o groupId de destino é o SuperAdministrator
+        const targetGroup = await prisma.userGroup.findUnique({ where: { id: parseInt(groupId) } });
+        if (targetGroup && targetGroup.name === 'SuperAdministrator') {
+             const callerGroup = req.user.group;
+             if (!callerGroup || callerGroup.name !== 'SuperAdministrator') {
+                 return res.status(403).json({ message: 'Permissão negada. Você não tem autorização para promover um usuário a SuperAdministrador.' });
+             }
         }
     }
 

@@ -1,56 +1,75 @@
-// src/components/Sidebar.jsx
-import React, { useState } from 'react';
+import React from 'react';
 import './Sidebar.css';
-
-// Usar FaCog de fa (Font Awesome 5) ou FaGear de fa6
+import { ShieldAlert } from 'lucide-react';
 import { FaHouse, FaBox, FaRightFromBracket } from 'react-icons/fa6';
-import { FaCog as FaSettingsIcon } from 'react-icons/fa'; // Importa FaCog de fa e o apelida
+import { FaCog as FaSettingsIcon } from 'react-icons/fa';
+import { useAuth } from '../auth/AuthContext';
 
 const Sidebar = ({ setActiveView, logout, isExpanded, setIsExpanded }) => {
-  // O estado isExpanded agora é controlado pelo componente pai (Dashboard)
+  const { user } = useAuth();
+
+  const getAvatarColor = (name) => {
+    if (!name) return 'var(--sidebar-active-bg-color)';
+    const colors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return colors[Math.abs(hash) % colors.length];
+  };
 
   return (
     <aside
       className={`sidebar ${isExpanded ? 'expanded' : 'collapsed'}`}
-      onMouseEnter={() => setIsExpanded(true)} // Mantém a lógica de hover
-      onMouseLeave={() => setIsExpanded(false)} // Mantém a lógica de hover
+      onMouseEnter={() => setIsExpanded(true)}
+      onMouseLeave={() => setIsExpanded(false)}
     >
       <div className="sidebar-header">
-        <h2>{isExpanded ? `${import.meta.env.VITE_PROJECT_NAME || 'Doc-IT'} Painel` : (import.meta.env.VITE_PROJECT_NAME ? import.meta.env.VITE_PROJECT_NAME.substring(0, 1) + '-IT' : 'D-IT')}</h2>
+        <h2>
+          <ShieldAlert className="logo-icon" size={24} strokeWidth={2.5} />
+          {isExpanded && (import.meta.env.VITE_PROJECT_NAME || 'Doc-IT')}
+        </h2>
       </div>
+
       <nav className="sidebar-nav">
         <ul>
           <li>
             <button onClick={() => setActiveView('summary')}>
               <span className="icon"><FaHouse /></span>
-              <span className="button-text">{isExpanded && 'Resumo'}</span>
+              <span className="button-text">Painel Principal</span>
             </button>
           </li>
           <li>
             <button onClick={() => setActiveView('inventory')}>
               <span className="icon"><FaBox /></span>
-              <span className="button-text">{isExpanded && 'Inventário'}</span>
+              <span className="button-text">Gestão de Dispositivos</span>
             </button>
           </li>
-          {/* O botão de Configurações foi movido para o sidebar-footer */}
-        </ul>
-      </nav>
-      <div className="sidebar-footer">
-        {/* Nova lista de navegação no rodapé para o botão Configurações */}
-        <nav className="sidebar-nav footer-nav"> {/* Adicionada classe footer-nav para estilização específica se necessário */}
-          <ul>
+          {user?.group?.name === 'SuperAdministrator' && (
             <li>
               <button onClick={() => setActiveView('settings')}>
                 <span className="icon"><FaSettingsIcon /></span>
-                <span className="button-text">{isExpanded && 'Configurações'}</span>
+                <span className="button-text">Configurações Base</span>
               </button>
             </li>
-          </ul>
-        </nav>
-        {/* Botão de Sair abaixo do de Configurações */}
-        <button onClick={logout} className="button-logout-sidebar">
+          )}
+        </ul>
+      </nav>
+
+      <div className="sidebar-footer">
+        {user && (
+          <div className="sidebar-user-profile" title={`Logado como ${user.username}`}>
+            <div className="sidebar-avatar" style={{ backgroundColor: getAvatarColor(user.username) }}>
+              {user.username.charAt(0).toUpperCase()}
+            </div>
+            <div className="sidebar-user-info">
+              <span className="sidebar-username">{user.username}</span>
+              <span className="sidebar-role">{user.group?.name || 'Admin'}</span>
+            </div>
+          </div>
+        )}
+
+        <button onClick={logout} className="button-logout-sidebar" title="Encerrar Sessão">
           <span className="button-icon"><FaRightFromBracket /></span>
-          <span className="button-text">{isExpanded && 'Sair'}</span>
+          <span className="button-text">Sair do Sistema</span>
         </button>
       </div>
     </aside>

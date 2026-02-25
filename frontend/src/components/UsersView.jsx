@@ -199,25 +199,13 @@ const UsersView = () => {
                                 </td>
                                 <td>{u.email}</td>
                                 <td>
-                                    <select
-                                        className="form-group"
-                                        style={{ padding: '4px 8px', height: 'auto', marginBottom: 0, minWidth: '160px', borderRadius: '6px', backgroundColor: 'var(--background-light)', border: 'none', fontWeight: 500 }}
-                                        value={u.groupId === null ? "null" : u.groupId}
-                                        onChange={(e) => handleGroupChange(u.id, e.target.value)}
-                                        disabled={!user.group?.canEditUsers} // Desabilita mudança rápida se não puder editar
-                                    >
-                                        <option value="null">Visitante s/ Acesso</option>
-
-                                        {/* Fallback de Visualização: Se o array `groups` estiver vazio (por falta de permissão canViewGroups),
-                                            ainda assim precisamos mostrar onde o usuário está alocado usando os dados do GET /users */}
-                                        {u.groupId !== null && !groups.some(g => g.id === u.groupId) && (
-                                            <option value={u.groupId}>{u.group?.name || `Grupo #${u.groupId}`}</option>
+                                    <div style={{ display: 'inline-block', padding: '4px 8px', borderRadius: '6px', backgroundColor: 'var(--background-light)', fontWeight: 500 }}>
+                                        {u.groupId === null ? (
+                                            "Visitante s/ Acesso"
+                                        ) : (
+                                            u.group?.name || `Grupo #${u.groupId}`
                                         )}
-
-                                        {groups.map(g => (
-                                            <option key={g.id} value={g.id}>{g.name}</option>
-                                        ))}
-                                    </select>
+                                    </div>
                                 </td>
                                 <td>
                                     {u.isMfaEnabled ? (
@@ -228,12 +216,12 @@ const UsersView = () => {
                                 </td>
                                 <td>
                                     <div style={{ display: 'flex', gap: '8px' }}>
-                                        {user.group?.canEditUsers && (
+                                        {user.group?.canEditUsers && (u.group?.name !== 'SuperAdministrator' || user.group?.name === 'SuperAdministrator') && (
                                             <button className="button-ghost" onClick={() => handleOpenEdit(u)} title="Editar Conta" style={{ color: 'var(--text-color-light)' }}>
                                                 <UserCog size={16} />
                                             </button>
                                         )}
-                                        {user.group?.canDeleteUsers && (
+                                        {user.group?.canDeleteUsers && (u.group?.name !== 'SuperAdministrator' || user.group?.name === 'SuperAdministrator') && (
                                             <button className="button-ghost" onClick={() => handleDelete(u.id)} title="Desvincular e Excluir Usuário" style={{ color: 'var(--badge-red-text)' }}>
                                                 <Trash2 size={16} />
                                             </button>
@@ -277,8 +265,10 @@ const UsersView = () => {
                             <div className="form-group">
                                 <label>Grupo (Papel base)</label>
                                 <select value={newUser.groupId} onChange={(e) => setNewUser({ ...newUser, groupId: e.target.value })}>
-                                    <option value="null">-- Sem Acesso --</option>
-                                    {groups.map(g => (
+                                    {(user.group?.name === 'SuperAdministrator' || !editingUserId) && (
+                                        <option value="null">-- Sem Acesso --</option>
+                                    )}
+                                    {groups.filter(g => user.group?.name === 'SuperAdministrator' || g.name !== 'SuperAdministrator').map(g => (
                                         <option key={g.id} value={g.id}>{g.name}</option>
                                     ))}
                                 </select>
