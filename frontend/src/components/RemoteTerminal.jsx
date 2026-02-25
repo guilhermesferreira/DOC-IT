@@ -44,7 +44,8 @@ const RemoteTerminal = ({ agentId }) => {
         term.writeln(`Iniciando conexão segura com a API do ${import.meta.env.VITE_PROJECT_NAME || 'Doc-IT'}...`);
 
         // 2. Conecta no WebSocket do Backend (com withCredentials para o HTTPOnly cookie)
-        const socket = io('https://localhost:3000', {
+        const BACKEND_URL = import.meta.env.VITE_API_URL || `https://${window.location.hostname}:3000`;
+        const socket = io(BACKEND_URL, {
             withCredentials: true,
             transports: ['websocket', 'polling']
         });

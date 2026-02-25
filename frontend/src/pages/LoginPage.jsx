@@ -43,8 +43,8 @@ const LoginPage = () => {
           <span>
             Erro de conexão com o servidor. <br />
             <strong>Atenção:</strong> Como estamos usando um certificado autoassinado, você precisa acessar{" "}
-            <a href="https://localhost:3000" target="_blank" rel="noopener noreferrer" style={{ color: 'white', textDecoration: 'underline' }}>
-              https://localhost:3000
+            <a href={`https://${window.location.hostname}:3000`} target="_blank" rel="noopener noreferrer" style={{ color: 'white', textDecoration: 'underline' }}>
+              https://{window.location.hostname}:3000
             </a>{" "}
             em outra aba e aceitar o risco ("Avançado" {"->"} "Ir para localhost").
           </span>

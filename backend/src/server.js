@@ -25,7 +25,10 @@ const PORT = process.env.PORT || 3000;
 setupSwagger(app); // chama o swagger aqui
 
 app.use(cors({
-  origin: ['http://localhost:5173', 'https://localhost:5173'], // Frontend URL
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
+    return callback(null, true); // Allow all origins for network access
+  },
   credentials: true // Permits sending cookies
 }));
 app.use(express.json());
