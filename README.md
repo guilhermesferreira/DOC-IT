@@ -12,17 +12,17 @@ O **Doc-IT** é um sistema moderno de Inventário Técnico e Monitoramento de At
 ## 🚀 Principais Funcionalidades
 
 - **Dashboard Executivo:** Métricas em tempo real do ecossistema computacional, incluindo alertas, hardwares ativos e relatórios rápidos.
-![Painel Dashboard](C:\Users\guilherme.ferreira\.gemini\antigravity\brain\d5022cc5-51ae-4873-867b-0d00728ca728\dashboard_view_1771977383634.png)
+![Painel Dashboard](docs/assets/dashboard_view_1771977383634.png)
 - **Detalhamento Modular do Agente:** Ao abrir um dipositivo coletado, visualize em abas categorizadas o Perfil de Rede (IPv4/IPv6, MAC), Instalações de Software e Componentes de Hardware atualizados e geridos em tempo real.
-![Abas do Agente](C:\Users\guilherme.ferreira\.gemini\antigravity\brain\d5022cc5-51ae-4873-867b-0d00728ca728\device_details_tabs_1771977646019.png)
+![Abas do Agente](docs/assets/device_details_tabs_1771977646019.png)
 - **Console Web Reverso (Remote Control):** Operadores avançados possuem acesso a um Terminal via WebSocket embutido no Dashboard, permitindo execução de comandos no shell nativo do host sem necessidade de RDP ou conexões LAN diretas.
-![Console Web Remoto](C:\Users\guilherme.ferreira\.gemini\antigravity\brain\d5022cc5-51ae-4873-867b-0d00728ca728\device_remote_control_1771977657665.png)
+![Console Web Remoto](docs/assets/device_remote_control_1771977657665.png)
 - **Inventário Contínuo:** Visão de ponta a ponta sobre computadores aprovados e comunicáveis na rede.
-![Tabela de Dispositivos e Status](C:\Users\guilherme.ferreira\.gemini\antigravity\brain\d5022cc5-51ae-4873-867b-0d00728ca728\inventory_view_1771977392454.png)
+![Tabela de Dispositivos e Status](docs/assets/inventory_view_1771977392454.png)
 - **Matriz de Acessos Dinâmica (RBAC):** Sistema robusto onde o `SuperAdministrador` cria perfis ilimitados na plataforma (Grupos). Um atendente, por exemplo, pode ser proibido de ler informações cruciais mas ter acesso livre para listar equipamentos do Inventário. As telas reagem omitindo os botões.
-![O Painel RBAC](C:\Users\guilherme.ferreira\.gemini\antigravity\brain\d5022cc5-51ae-4873-867b-0d00728ca728\settings_groups_1771977441913.png)
+![O Painel RBAC](docs/assets/settings_groups_1771977441913.png)
 - **Painel de Segurança e MFA:** Suporte altamente integrado na UI de Perfil de Usuário para vincular Google Workspace ou Microsoft Authenticator (2FA). O próprio backend armazena e exige as restrições secretas MFA bloqueando acessos diretos via API.
-![Setup do MFA na interface do usuário](C:\Users\guilherme.ferreira\.gemini\antigravity\brain\d5022cc5-51ae-4873-867b-0d00728ca728\settings_mfa_1771977624859.png)
+![Setup do MFA na interface do usuário](docs/assets/settings_mfa_1771977624859.png)
 - **Gerenciamento de Scripts Remotos:** Permissão granular de gestão do motor (Polling/Sync) que rege as sondas remotas Python responsáveis pelas varreduras.
 
 ---
