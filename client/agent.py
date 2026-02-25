@@ -818,6 +818,13 @@ if __name__ == "__main__":
 
     log_event("Script do agente iniciado.", "INFO")
     log_event("AVISO ! VOCE ESTA EM DEBUG MODE, CUIDADO COM A PERFORMANCE.", "DEBUG")
+
+    # Captura qualquer exceção não tratada e grava no log antes de sair
+    def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
+        import traceback
+        tb_str = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        log_event(f"CRASH NAO TRATADO: {tb_str}", "CRITICAL")
+    sys.excepthook = handle_unhandled_exception
     
     if not config.get("agent_id"):
         log_event("ID do Agente não encontrado no config. Tentando obter UUID de hardware.", "INFO")
@@ -987,9 +994,13 @@ if __name__ == "__main__":
             log_event("Processo de terminal encerrado pelo servidor.", "INFO")
 
     socket_url = config.get('server_base_url', DEFAULT_CONFIG['server_base_url'])
+    agent_id = config.get('agent_id', 'unknown')
     try:
         log_event(f"Conectando ao WebSocket na URL: {socket_url}", "INFO")
-        sio.connect(socket_url)
+        sio.connect(
+            socket_url,
+            headers={'x-agent-id': agent_id}  # Identifica o agente para o middleware de auth do servidor
+        )
         # Mantém o script python vivo escutando os eventos
         sio.wait()
     except Exception as e:
