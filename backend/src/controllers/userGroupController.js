@@ -1,4 +1,5 @@
 const prisma = require('../../prisma/prismaClient');
+const { logAudit } = require('../services/auditService');
 
 // Listar todos os grupos
 exports.getAllGroups = async (req, res) => {
@@ -48,6 +49,7 @@ exports.createGroup = async (req, res) => {
     const newGroup = await prisma.userGroup.create({
       data: buildGroupDataMatrix(req.body)
     });
+    await logAudit('GROUPS', req.user?.id || null, 'CREATE', 'GROUP', newGroup, req.ip);
     res.status(201).json(newGroup);
   } catch (error) {
     console.error('Erro ao criar grupo:', error);
@@ -68,6 +70,7 @@ exports.updateGroup = async (req, res) => {
       where: { id: parseInt(id) },
       data: buildGroupDataMatrix(req.body)
     });
+    await logAudit('GROUPS', req.user?.id || null, 'UPDATE', 'GROUP', group, req.ip);
     res.json(group);
   } catch (error) {
     console.error('Erro ao atualizar grupo:', error);
@@ -92,6 +95,7 @@ exports.deleteGroup = async (req, res) => {
     await prisma.userGroup.delete({
       where: { id: parseInt(id) },
     });
+    await logAudit('GROUPS', req.user?.id || null, 'DELETE', 'GROUP', { id }, req.ip);
     res.json({ message: 'Grupo excluído com sucesso.' });
   } catch (error) {
     console.error('Erro ao excluir grupo:', error);

@@ -1,5 +1,6 @@
 const prisma = require('../../prisma/prismaClient');
 const bcrypt = require('bcrypt');
+const { logAudit } = require('../services/auditService');
 
 // Listar todos os usuários (painel administrativo)
 exports.getAllUsers = async (req, res) => {
@@ -66,6 +67,7 @@ exports.createUser = async (req, res) => {
       }
     });
 
+    await logAudit('USERS', req.user?.id || null, 'CREATE', 'USER', newUser, req.ip);
     res.status(201).json(newUser);
   } catch (error) {
     console.error('Erro ao criar usuário:', error);
@@ -124,6 +126,7 @@ exports.updateUser = async (req, res) => {
       }
     });
 
+    await logAudit('USERS', req.user?.id || null, 'UPDATE', 'USER', updatedUser, req.ip);
     res.json(updatedUser);
   } catch (error) {
     console.error('Erro ao atualizar usuário:', error);
@@ -160,6 +163,8 @@ exports.deleteUser = async (req, res) => {
     await prisma.user.delete({
       where: { id: parseInt(id) },
     });
+    
+    await logAudit('USERS', req.user?.id || null, 'DELETE', 'USER', { id: targetUser.id, username: targetUser.username }, req.ip);
     res.json({ message: 'Usuário excluído permanentemente.' });
   } catch (error) {
     console.error('Erro ao excluir usuário:', error);

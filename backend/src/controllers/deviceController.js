@@ -1,6 +1,7 @@
 //const { PrismaClient } = require('@prisma/client');
 //const prisma = new PrismaClient();
 const prisma = require('../../prisma/prismaClient');
+const { logAudit } = require('../services/auditService');
 
 async function getDevices(req, res) {
   const loggedInUserId = req.user.id; // Usuário logado
@@ -58,6 +59,7 @@ async function addDevice(req, res) {
         status: 'approved'  // Dispositivos manuais já entram como aprovados
       }
     });
+    await logAudit('DEVICES', req.user.id, 'CREATE', 'DEVICE', device, req.ip);
     res.status(201).json(device);
   } catch (err) {
     console.error(err);
@@ -83,6 +85,7 @@ async function updateDevice(req, res) {
       where: { id: deviceId },
       data: { name, type, location, patrimony }
     });
+    await logAudit('DEVICES', req.user.id, 'UPDATE', 'DEVICE', updatedDevice, req.ip);
     res.json(updatedDevice);
   } catch (err) {
     console.error(err);
@@ -101,6 +104,7 @@ async function deleteDevice(req, res) {
     if (device.userId !== userId && device.source === 'manual') return res.status(403).json({ error: 'Não autorizado' });
 
     await prisma.device.delete({ where: { id: deviceId } });
+    await logAudit('DEVICES', req.user.id, 'DELETE', 'DEVICE', { id: deviceId, name: device.name }, req.ip);
     res.json({ message: 'Equipamento deletado com sucesso' });
   } catch (err) {
     console.error(err);
@@ -154,6 +158,7 @@ async function approveDevice(req, res) {
       message: `Dispositivo '${updatedDevice.name}' (Agent ID: ${updatedDevice.agentId || 'N/A'}) aprovado com sucesso.`,
       device: updatedDevice,
     });
+    await logAudit('DEVICES', req.user.id, 'UPDATE', 'DEVICE_APPROVAL', updatedDevice, req.ip);
   } catch (error) {
     console.error('Erro ao aprovar dispositivo:', error);
     res.status(500).json({ error: 'Falha ao aprovar dispositivo.' });
@@ -196,6 +201,7 @@ async function rejectDevice(req, res) {
       message: `Dispositivo '${updatedDevice.name}' (Agent ID: ${updatedDevice.agentId || 'N/A'}) rejeitado com sucesso.`,
       device: updatedDevice,
     });
+    await logAudit('DEVICES', req.user?.id || null, 'UPDATE', 'DEVICE_REJECTION', updatedDevice, req.ip);
   } catch (error) {
     console.error('Erro ao rejeitar dispositivo:', error);
     res.status(500).json({ error: 'Falha ao rejeitar dispositivo.' });

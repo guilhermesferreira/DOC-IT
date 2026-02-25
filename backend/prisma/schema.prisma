@@ -36,6 +36,11 @@ model UserGroup {
   canViewSettings  Boolean @default(false)
   canEditSettings  Boolean @default(false)
 
+  // Permissões: Módulo de Auditoria
+  canViewAuditLogs     Boolean @default(false)
+  canViewAuditSettings Boolean @default(false)
+  canEditAuditSettings Boolean @default(false)
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -53,6 +58,7 @@ model User {
   authProvider   String     @default("local")
   domainUsername String?    @unique
   devices        Device[]
+  auditLogs      AuditLog[] // Relacionamento com os logs gerados pelo usuário
   group          UserGroup? @relation(fields: [groupId], references: [id])
 }
 
@@ -91,4 +97,31 @@ model GlobalSettings {
   inventoryIntervalMinutes   Int      @default(60)
   updateCheckIntervalMinutes Int      @default(120)
   updatedAt                  DateTime @updatedAt
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  action    String   // ex: CREATE, UPDATE, DELETE, ACCESS, COMMAND
+  resource  String   // ex: DEVICE, USER, GROUP, TERMINAL, SETTINGS
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+}
+
+model AuditConfig {
+  id                  Int      @id @default(1)
+  logUserActions      Boolean  @default(true)
+  logDeviceActions    Boolean  @default(true)
+  logTerminalAccess   Boolean  @default(true)
+  logTerminalCommands Boolean  @default(false) // Desligado por padrão por segurança/volume
+  logSettingsChanges  Boolean  @default(true)
+  retentionDays       Int      @default(30)
+  updatedAt           DateTime @updatedAt
 }

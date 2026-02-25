@@ -2,6 +2,23 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/api';
 import { Users, Trash2, Plus, Info, X, Lock } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import './UserGroupsView.css';
+
+// Componente de Toggle Switch reutilizável
+const ToggleSwitch = ({ checked, onChange, label }) => (
+    <label className="toggle-switch-label">
+        <span className="toggle-switch-container">
+            <input
+                type="checkbox"
+                className="toggle-switch-input"
+                checked={checked}
+                onChange={onChange}
+            />
+            <span className="toggle-switch-slider"></span>
+        </span>
+        <span className="toggle-switch-text">{label}</span>
+    </label>
+);
 
 const UserGroupsView = () => {
     const [groups, setGroups] = useState([]);
@@ -14,18 +31,19 @@ const UserGroupsView = () => {
         canViewUsers: false, canCreateUsers: false, canEditUsers: false, canDeleteUsers: false,
         canViewGroups: false, canCreateGroups: false, canEditGroups: false, canDeleteGroups: false,
         canViewDevices: false, canManageDevices: false, canAccessRemote: false,
-        canViewSettings: false, canEditSettings: false
+        canViewSettings: false, canEditSettings: false,
+        canViewAuditLogs: false, canViewAuditSettings: false, canEditAuditSettings: false
     };
 
     const [newGroup, setNewGroup] = useState(defaultGroupState);
-    const [editingGroupId, setEditingGroupId] = useState(null); // NULL=Inclusão, ID=Edição
-    const { user } = useAuth(); // Importamos os privilégios descriptografados do JWT!
+    const [editingGroupId, setEditingGroupId] = useState(null);
+    const { user } = useAuth();
 
     useEffect(() => {
         if (user && user.group?.canViewGroups) {
             fetchGroups();
         } else {
-            setLoading(false); // Mata a requisição proxima caso não tenha a flag View
+            setLoading(false);
         }
     }, [user]);
 
@@ -49,13 +67,10 @@ const UserGroupsView = () => {
             setMessage('');
 
             if (editingGroupId) {
-                // Modo Edição
                 const res = await api.put(`/user-groups/${editingGroupId}`, newGroup);
-                // Atualiza o array local com o modificado
                 setGroups(groups.map(g => g.id === editingGroupId ? { ...res.data, _count: g._count } : g));
                 setMessage("Permissões de Grupo alteradas com sucesso!");
             } else {
-                // Modo Criação
                 const res = await api.post('/user-groups', newGroup);
                 setGroups([...groups, { ...res.data, _count: { users: 0 } }]);
                 setMessage("Novo Grupo criado com sucesso!");
@@ -77,13 +92,17 @@ const UserGroupsView = () => {
     };
 
     const handleOpenEdit = (group) => {
-        // Carrega o Objeto exato mapeando as checkboxes (Ignorando propriedades extras como _count na Inclusão)
         setNewGroup({
             name: group.name, description: group.description || '',
-            canViewUsers: group.canViewUsers, canCreateUsers: group.canCreateUsers, canEditUsers: group.canEditUsers, canDeleteUsers: group.canDeleteUsers,
-            canViewGroups: group.canViewGroups, canCreateGroups: group.canCreateGroups, canEditGroups: group.canEditGroups, canDeleteGroups: group.canDeleteGroups,
-            canViewDevices: group.canViewDevices, canManageDevices: group.canManageDevices, canAccessRemote: group.canAccessRemote,
-            canViewSettings: group.canViewSettings, canEditSettings: group.canEditSettings
+            canViewUsers: group.canViewUsers, canCreateUsers: group.canCreateUsers,
+            canEditUsers: group.canEditUsers, canDeleteUsers: group.canDeleteUsers,
+            canViewGroups: group.canViewGroups, canCreateGroups: group.canCreateGroups,
+            canEditGroups: group.canEditGroups, canDeleteGroups: group.canDeleteGroups,
+            canViewDevices: group.canViewDevices, canManageDevices: group.canManageDevices,
+            canAccessRemote: group.canAccessRemote,
+            canViewSettings: group.canViewSettings, canEditSettings: group.canEditSettings,
+            canViewAuditLogs: group.canViewAuditLogs, canViewAuditSettings: group.canViewAuditSettings,
+            canEditAuditSettings: group.canEditAuditSettings
         });
         setEditingGroupId(group.id);
         setIsModalOpen(true);
@@ -98,6 +117,8 @@ const UserGroupsView = () => {
             setMessage(error.response?.data?.message || "Erro ao deletar o grupo. Remova os usuários atrelados primeiro.");
         }
     };
+
+    const toggle = (field) => setNewGroup(prev => ({ ...prev, [field]: !prev[field] }));
 
     if (loading) return <div className="loading-state">Buscando definições de grupo...</div>;
 
@@ -185,16 +206,17 @@ const UserGroupsView = () => {
                 </table>
             </div>
 
-            {/* Modal de Criação (Premium UI) */}
+            {/* Modal de Criação / Edição */}
             {isModalOpen && (
                 <div className="modal-backdrop" onClick={() => setIsModalOpen(false)}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h4>Criar Novo Grupo</h4>
+                            <h4>{editingGroupId ? 'Editar Grupo' : 'Criar Novo Grupo'}</h4>
                             <button className="button-ghost" onClick={() => setIsModalOpen(false)} style={{ padding: '4px', height: 'auto', color: 'var(--text-color-light)' }}>
                                 <X size={20} />
                             </button>
                         </div>
+
                         <form onSubmit={handleSubmit}>
                             <div className="form-group">
                                 <label>Nome do Grupo</label>
@@ -205,70 +227,52 @@ const UserGroupsView = () => {
                                 <input type="text" placeholder="Permite leitura de relatórios" value={newGroup.description} onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })} />
                             </div>
 
-                            {/* Matriz RBAC */}
-                            <div className="rbac-matrix-container" style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '15px' }}>
-                                <h5 style={{ marginBottom: '15px', color: 'var(--text-color)' }}>Permissões do Grupo</h5>
+                            <div className="rbac-matrix-container">
+                                <h5>Permissões do Grupo</h5>
 
-                                <div className="rbac-module-section" style={{ marginBottom: '15px' }}>
-                                    <strong style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-color-light)', marginBottom: '8px' }}>Módulo de Usuários</strong>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={newGroup.canViewUsers} onChange={(e) => setNewGroup({ ...newGroup, canViewUsers: e.target.checked })} style={{ marginRight: '8px' }} /> Ver Usuários
-                                        </label>
-                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={newGroup.canCreateUsers} onChange={(e) => setNewGroup({ ...newGroup, canCreateUsers: e.target.checked })} style={{ marginRight: '8px' }} /> Criar Usuários
-                                        </label>
-                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={newGroup.canEditUsers} onChange={(e) => setNewGroup({ ...newGroup, canEditUsers: e.target.checked })} style={{ marginRight: '8px' }} /> Editar Usuários
-                                        </label>
-                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={newGroup.canDeleteUsers} onChange={(e) => setNewGroup({ ...newGroup, canDeleteUsers: e.target.checked })} style={{ marginRight: '8px' }} /> Excluir Usuários
-                                        </label>
+                                <div className="rbac-module-section">
+                                    <strong className="rbac-module-title">Módulo de Usuários</strong>
+                                    <div className="rbac-toggles-grid">
+                                        <ToggleSwitch checked={newGroup.canViewUsers} onChange={() => toggle('canViewUsers')} label="Ver Usuários" />
+                                        <ToggleSwitch checked={newGroup.canCreateUsers} onChange={() => toggle('canCreateUsers')} label="Criar Usuários" />
+                                        <ToggleSwitch checked={newGroup.canEditUsers} onChange={() => toggle('canEditUsers')} label="Editar Usuários" />
+                                        <ToggleSwitch checked={newGroup.canDeleteUsers} onChange={() => toggle('canDeleteUsers')} label="Excluir Usuários" />
                                     </div>
                                 </div>
 
-                                <div className="rbac-module-section" style={{ marginBottom: '15px' }}>
-                                    <strong style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-color-light)', marginBottom: '8px' }}>Módulo RBAC (Identidades)</strong>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={newGroup.canViewGroups} onChange={(e) => setNewGroup({ ...newGroup, canViewGroups: e.target.checked })} style={{ marginRight: '8px' }} /> Ver Grupos
-                                        </label>
-                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={newGroup.canCreateGroups} onChange={(e) => setNewGroup({ ...newGroup, canCreateGroups: e.target.checked })} style={{ marginRight: '8px' }} /> Criar Grupos
-                                        </label>
-                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={newGroup.canEditGroups} onChange={(e) => setNewGroup({ ...newGroup, canEditGroups: e.target.checked })} style={{ marginRight: '8px' }} /> Editar Grupos
-                                        </label>
-                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={newGroup.canDeleteGroups} onChange={(e) => setNewGroup({ ...newGroup, canDeleteGroups: e.target.checked })} style={{ marginRight: '8px' }} /> Excluir Grupos
-                                        </label>
+                                <div className="rbac-module-section">
+                                    <strong className="rbac-module-title">Módulo RBAC (Identidades)</strong>
+                                    <div className="rbac-toggles-grid">
+                                        <ToggleSwitch checked={newGroup.canViewGroups} onChange={() => toggle('canViewGroups')} label="Ver Grupos" />
+                                        <ToggleSwitch checked={newGroup.canCreateGroups} onChange={() => toggle('canCreateGroups')} label="Criar Grupos" />
+                                        <ToggleSwitch checked={newGroup.canEditGroups} onChange={() => toggle('canEditGroups')} label="Editar Grupos" />
+                                        <ToggleSwitch checked={newGroup.canDeleteGroups} onChange={() => toggle('canDeleteGroups')} label="Excluir Grupos" />
                                     </div>
                                 </div>
 
-                                <div className="rbac-module-section" style={{ marginBottom: '15px' }}>
-                                    <strong style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-color-light)', marginBottom: '8px' }}>Agentes & Dispositivos</strong>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={newGroup.canViewDevices} onChange={(e) => setNewGroup({ ...newGroup, canViewDevices: e.target.checked })} style={{ marginRight: '8px' }} /> Ver Inventário
-                                        </label>
-                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={newGroup.canManageDevices} onChange={(e) => setNewGroup({ ...newGroup, canManageDevices: e.target.checked })} style={{ marginRight: '8px' }} /> Aprovar/Rejeitar
-                                        </label>
-                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={newGroup.canAccessRemote} onChange={(e) => setNewGroup({ ...newGroup, canAccessRemote: e.target.checked })} style={{ marginRight: '8px' }} /> Acesso Remoto
-                                        </label>
+                                <div className="rbac-module-section">
+                                    <strong className="rbac-module-title">Agentes & Dispositivos</strong>
+                                    <div className="rbac-toggles-grid">
+                                        <ToggleSwitch checked={newGroup.canViewDevices} onChange={() => toggle('canViewDevices')} label="Ver Inventário" />
+                                        <ToggleSwitch checked={newGroup.canManageDevices} onChange={() => toggle('canManageDevices')} label="Aprovar / Rejeitar" />
+                                        <ToggleSwitch checked={newGroup.canAccessRemote} onChange={() => toggle('canAccessRemote')} label="Acesso Remoto" />
                                     </div>
                                 </div>
 
-                                <div className="rbac-module-section" style={{ marginBottom: '25px' }}>
-                                    <strong style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-color-light)', marginBottom: '8px' }}>Sistema e Motor</strong>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={newGroup.canViewSettings} onChange={(e) => setNewGroup({ ...newGroup, canViewSettings: e.target.checked })} style={{ marginRight: '8px' }} /> Ver Configs
-                                        </label>
-                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={newGroup.canEditSettings} onChange={(e) => setNewGroup({ ...newGroup, canEditSettings: e.target.checked })} style={{ marginRight: '8px' }} /> Editar Agendamentos
-                                        </label>
+                                <div className="rbac-module-section">
+                                    <strong className="rbac-module-title">Sistema e Motor</strong>
+                                    <div className="rbac-toggles-grid">
+                                        <ToggleSwitch checked={newGroup.canViewSettings} onChange={() => toggle('canViewSettings')} label="Ver Configs" />
+                                        <ToggleSwitch checked={newGroup.canEditSettings} onChange={() => toggle('canEditSettings')} label="Editar Agendamentos" />
+                                    </div>
+                                </div>
+
+                                <div className="rbac-module-section rbac-module-audit">
+                                    <strong className="rbac-module-title">Auditoria e Relatórios</strong>
+                                    <div className="rbac-toggles-grid">
+                                        <ToggleSwitch checked={newGroup.canViewAuditLogs} onChange={() => toggle('canViewAuditLogs')} label="Ver Logs (Tabela)" />
+                                        <ToggleSwitch checked={newGroup.canViewAuditSettings} onChange={() => toggle('canViewAuditSettings')} label="Ver Regras (Políticas)" />
+                                        <ToggleSwitch checked={newGroup.canEditAuditSettings} onChange={() => toggle('canEditAuditSettings')} label="Editar Regras e Retenção" />
                                     </div>
                                 </div>
                             </div>

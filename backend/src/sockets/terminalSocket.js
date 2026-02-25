@@ -1,4 +1,6 @@
 const socketIo = require('socket.io');
+const jwt = require('jsonwebtoken');
+const { logAudit } = require('../services/auditService');
 
 module.exports = function configureSockets(server) {
   // Inicialização do Socket.IO permitindo requisições do frontend
@@ -10,24 +12,63 @@ module.exports = function configureSockets(server) {
     }
   });
 
+  // Middleware de Autenticação do Socket via Cookie JWT
+  // Agentes Python se identificam pelo header "x-agent-id" e não precisam de JWT
+  io.use((socket, next) => {
+    const agentId = socket.handshake.headers['x-agent-id'];
+    if (agentId) {
+      // É um agente Python — libera a conexão sem JWT
+      socket.isAgent = true;
+      socket.agentId = agentId;
+      return next();
+    }
+
+    // É um cliente humano (browser) — exige cookie JWT
+    const cookieHeader = socket.handshake.headers.cookie;
+    if (!cookieHeader) {
+      return next(new Error('Autenticação necessária (Sem cookies)'));
+    }
+
+    const tokenMatch = cookieHeader.match(/token=([^;]+)/);
+    if (!tokenMatch) {
+      return next(new Error('Token não encontrado nos cookies'));
+    }
+
+    const token = tokenMatch[1];
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      socket.user = decoded;
+      socket.isAgent = false;
+      next();
+    } catch (err) {
+      return next(new Error('Token inválido ou expirado'));
+    }
+  });
+
   io.on('connection', (socket) => {
-    console.log(`[Socket] Nova conexão recebida: ${socket.id}`);
+    console.log(`[Socket] Nova conexão segura recebida: ${socket.id} (Usuário: ${socket.user?.username})`);
 
     // Cliente (React) emitindo para o Agente (Python)
-    socket.on('terminal:start', ({ agentId }) => {
+    socket.on('terminal:start', async ({ agentId }) => {
       console.log(`[Socket] Frontend solicitou iniciar terminal para o Agente: ${agentId}`);
-      // No futuro podemos associar agentId -> socketId do Python, por hora usamos broadcast
       io.emit('terminal:start', { agentId });
+      await logAudit('TERMINAL', socket.user?.id, 'ACCESS', 'TERMINAL', { agentId, event: 'START' }, socket.handshake.address);
     });
 
-    socket.on('terminal:data', ({ agentId, data }) => {
-      // Repassa as teclas do Frontend para o Python
+    socket.on('terminal:data', async ({ agentId, data }) => {
+      // Repassa as teclas/comando do Frontend para o Python
       io.emit('terminal:data', { agentId, data });
+      
+      // Se tiver dados e for o comando completo (como configurado no React)
+      if (data && data.trim().length > 0) {
+        await logAudit('TERMINAL_CMD', socket.user?.id, 'COMMAND', 'TERMINAL_SESSION', { agentId, command: data.trim() }, socket.handshake.address);
+      }
     });
 
-    socket.on('terminal:stop', ({ agentId }) => {
+    socket.on('terminal:stop', async ({ agentId }) => {
       console.log(`[Socket] Frontend solicitou parar terminal para o Agente: ${agentId}`);
       io.emit('terminal:stop', { agentId });
+      await logAudit('TERMINAL', socket.user?.id, 'ACCESS', 'TERMINAL', { agentId, event: 'STOP' }, socket.handshake.address);
     });
 
 

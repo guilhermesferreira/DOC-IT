@@ -1,4 +1,5 @@
 const prisma = require('../../prisma/prismaClient');
+const { logAudit } = require('../services/auditService');
 
 // --- PARA OS AGENTES (Leitura) ---
 // Rota utilitária que os agentes chamam para saber o ritmo deles
@@ -74,6 +75,7 @@ exports.updateSettings = async (req, res) => {
       });
     }
 
+    await logAudit('SETTINGS', req.user?.id || null, 'UPDATE', 'GLOBAL_SETTINGS', settings, req.ip);
     res.json(settings);
   } catch (error) {
     console.error("Erro ao atualizar configurações:", error);

@@ -43,7 +43,7 @@ const Sidebar = ({ setActiveView, logout, isExpanded, setIsExpanded }) => {
               <span className="button-text">Gestão de Dispositivos</span>
             </button>
           </li>
-          {user?.group?.name === 'SuperAdministrator' && (
+          {(user?.group?.name === 'SuperAdministrator' || user?.group?.canViewAuditLogs || user?.group?.canViewAuditSettings || user?.group?.canViewSettings) && (
             <li>
               <button onClick={() => setActiveView('settings')}>
                 <span className="icon"><FaSettingsIcon /></span>

@@ -12,6 +12,7 @@ const agentRoutes = require('./routes/agentRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const userRoutes = require('./routes/userRoutes');
 const userGroupRoutes = require('./routes/userGroupRoutes');
+const auditRoutes = require('./routes/auditRoutes'); // <-- Novas rotas de Auditoria
 
 const https = require('https');
 const fs = require('fs');
@@ -41,6 +42,7 @@ app.use('/agent', agentRoutes);
 app.use('/settings', settingsRoutes);
 app.use('/users', userRoutes);
 app.use('/user-groups', userGroupRoutes);
+app.use('/audit', auditRoutes); // <-- Registrar endpoint principal de auditoria
 
 app.get('/', (req, res) => {
   res.json({ message: 'API doc-it Backend funcionando!' });
@@ -65,4 +67,7 @@ const io = configureSockets(server);
 server.listen(PORT, () => {
   console.log(`Backend HTTPS rodando na porta ${PORT}`);
   console.log("Swagger disponível em /api-docs");
+
+  // Inicia processos agendados após o servidor subir
+  require('./cronJobs');
 });
