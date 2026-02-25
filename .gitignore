@@ -55,3 +55,4 @@ client/dist/config.json
 build/agent/*
 /build/*
 frontend/.env
+.agents/*
