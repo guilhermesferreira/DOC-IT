@@ -80,6 +80,23 @@ def copy_to_backend():
     shutil.copy2(agent_dist, os.path.join(BACKEND_UPDATES_DIR, AGENT_EXE_NAME))
     shutil.copy2(updater_dist, os.path.join(BACKEND_UPDATES_DIR, UPDATER_EXE_NAME))
 
+    # Também atualiza client/dist/ com tudo pronto para deploy
+    print("Atualizando client/dist/ com executaveis, certs e config...")
+    dist_dir = os.path.join("dist")
+    dist_certs = os.path.join(dist_dir, "certs")
+    os.makedirs(dist_certs, exist_ok=True)
+    
+    # Copia certs do backend/certs para dist/certs
+    backend_certs = os.path.join("..", "backend", "certs")
+    for cert_file in ["ca.crt", "agent.crt", "agent.key"]:
+        src = os.path.join(backend_certs, cert_file)
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(dist_certs, cert_file))
+    
+    # Copia config.json se existir
+    if os.path.exists("config.json"):
+        shutil.copy2("config.json", os.path.join(dist_dir, "config.json"))
+
 def calculate_sha256(filepath):
     sha256_hash = hashlib.sha256()
     with open(filepath, "rb") as f:

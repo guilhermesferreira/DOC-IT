@@ -27,7 +27,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
-AGENT_VERSION = "1.2.9" # Versão do Agente
+AGENT_VERSION = "1.2.15" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
@@ -535,6 +535,123 @@ def get_additional_inventory_data():
     data["collection_timestamp"] = datetime.now().isoformat()
     return data
 
+# --- PKI: Verificação e Renovação de Certificado do Agente ---
+CERT_RENEWAL_THRESHOLD_DAYS = 30  # Renova se faltar menos de 30 dias
+
+def check_and_renew_agent_cert(config):
+    """
+    Verifica o certificado do agente e:
+    - Se faltam > 30 dias: sem ação
+    - Se faltam < 30 dias (mas ainda válido): gera CSR e renova via mTLS
+    - Se expirado: solicita cert de emergência (sem mTLS)
+    """
+    cert_path = config.get("cert_path", DEFAULT_CONFIG["cert_path"])
+    key_path  = config.get("key_path", DEFAULT_CONFIG["key_path"])
+    ca_path   = config.get("ca_path", DEFAULT_CONFIG["ca_path"])
+    
+    if not os.path.exists(cert_path):
+        log_event(f"Certificado do agente não encontrado em {cert_path}. Pulando verificação.", "WARNING")
+        return
+    
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.x509.oid import NameOID
+        
+        # Lê o certificado atual
+        with open(cert_path, "rb") as f:
+            cert = x509.load_pem_x509_certificate(f.read())
+        
+        # Calcula dias restantes (usa _utc para evitar DeprecationWarning)
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        try:
+            expiry = cert.not_valid_after_utc
+        except AttributeError:
+            expiry = cert.not_valid_after.replace(tzinfo=timezone.utc)
+        days_left = (expiry - now).days
+        
+        log_event(f"Certificado do agente expira em {days_left} dias ({expiry.strftime('%Y-%m-%d')})", "INFO")
+        
+        if days_left > CERT_RENEWAL_THRESHOLD_DAYS:
+            # Cert OK, sem ação necessária
+            return
+        
+        server_url = config.get("server_base_url", DEFAULT_CONFIG["server_base_url"])
+        agent_id = config.get("agent_id")
+        
+        if days_left > 0:
+            # ─── Cenário: Cert prestes a expirar (< 30 dias, mas ainda válido) ───
+            log_event(f"Cert expira em {days_left} dias. Solicitando renovação via mTLS...", "WARNING")
+            
+            # 1. Gera nova keypair
+            new_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            
+            # 2. Gera CSR usando os dados do cert atual
+            csr = (
+                x509.CertificateSigningRequestBuilder()
+                .subject_name(cert.subject)
+                .sign(new_key, hashes.SHA256())
+            )
+            csr_pem = csr.public_bytes(serialization.Encoding.PEM).decode("utf-8")
+            
+            # 3. Envia para o backend via mTLS (cert atual ainda funciona)
+            renew_url = f"{server_url}/agent/renew-cert"
+            try:
+                response = requests.post(
+                    renew_url,
+                    json={"agentId": agent_id, "csr": csr_pem},
+                    cert=(cert_path, key_path),
+                    verify=ca_path,
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    new_cert_pem = response.json().get("cert")
+                    if new_cert_pem:
+                        # Salva novo cert e nova key
+                        with open(cert_path, "w", encoding="utf-8") as f:
+                            f.write(new_cert_pem)
+                        with open(key_path, "wb") as f:
+                            f.write(new_key.private_bytes(
+                                serialization.Encoding.PEM,
+                                serialization.PrivateFormat.TraditionalOpenSSL,
+                                serialization.NoEncryption()
+                            ))
+                        log_event("Certificado do agente renovado com sucesso!", "INFO")
+                    else:
+                        log_event("Resposta do servidor sem cert. Renovação falhou.", "ERROR")
+                else:
+                    log_event(f"Renovação falhou. HTTP {response.status_code}: {response.text}", "ERROR")
+            except Exception as e:
+                log_event(f"Erro ao solicitar renovação de cert: {e}", "ERROR")
+        
+        else:
+            # ─── Cenário: Cert já expirou ────────────────────────────────────
+            log_event(f"ALERTA: Certificado EXPIRADO há {abs(days_left)} dias!", "CRITICAL")
+            log_event("Solicitando cert de emergência (sem mTLS)...", "WARNING")
+            
+            emergency_url = f"{server_url}/agent/emergency-cert"
+            try:
+                response = requests.post(
+                    emergency_url,
+                    json={"agentId": agent_id},
+                    verify=False,  # Sem mTLS (cert inválido)
+                    timeout=15
+                )
+                if response.status_code == 200:
+                    log_event("Solicitação de emergência registrada. Aguardando aprovação do administrador no painel.", "WARNING")
+                else:
+                    log_event(f"Solicitação de emergência falhou. HTTP {response.status_code}: {response.text}", "ERROR")
+            except Exception as e:
+                log_event(f"Erro ao solicitar cert de emergência: {e}", "ERROR")
+    
+    except ImportError:
+        log_event("Lib 'cryptography' não disponível. Pulando verificação de cert.", "WARNING")
+    except Exception as e:
+        log_event(f"Erro inesperado na verificação de cert: {e}", "ERROR")
+
 # --- Backend Communication ---
 def perform_check_in(config):
     """Envia dados básicos do agente para o endpoint de check-in do backend com mTLS."""
@@ -795,9 +912,11 @@ def check_and_apply_updates(config):
                         log_event(f"Baixados todos os binarios da atualizacao com sucesso. Passando controle para o {updater_filename} de forma separada...", "INFO")
                         
                         try:
-                            # Start Updater and exit IMMEDIATELY to free the file lock
+                            # Determina o nome correto do executável
+                            # Se o exe atual é o genérico "agent.exe", usa o nome definido no servidor
                             current_executable = os.path.basename(sys.executable) if getattr(sys, 'frozen', False) else "agent.exe"
-                            subprocess.Popen([updater_filename, current_executable, "agent_new.exe"], creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NO_WINDOW)
+                            target_executable = agent_filename  # Nome definido pelo projeto (ex: Doc-IT-agent.exe)
+                            subprocess.Popen([updater_filename, current_executable, "agent_new.exe", target_executable], creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NO_WINDOW)
                             os._exit(0)
                         except Exception as e:
                             log_event(f"Falha ao lancar o {updater_filename} subprocess: {e}", "CRITICAL")
@@ -839,6 +958,9 @@ if __name__ == "__main__":
             exit(1) # Sai se nenhum ID puder ser estabelecido
     else:
         log_event(f"Usando ID do Agente do config: {config['agent_id']}", "INFO")
+
+    # Verifica e renova o certificado do agente antes de qualquer comunicação
+    check_and_renew_agent_cert(config)
 
     import socketio
     import threading
@@ -995,15 +1117,29 @@ if __name__ == "__main__":
 
     socket_url = config.get('server_base_url', DEFAULT_CONFIG['server_base_url'])
     agent_id = config.get('agent_id', 'unknown')
-    try:
-        log_event(f"Conectando ao WebSocket na URL: {socket_url}", "INFO")
-        sio.connect(
-            socket_url,
-            headers={'x-agent-id': agent_id}  # Identifica o agente para o middleware de auth do servidor
-        )
-        # Mantém o script python vivo escutando os eventos
-        sio.wait()
-    except Exception as e:
-        log_event(f"Erro ao conectar ao WebSocket: {e}", "CRITICAL")
+    
+    WEBSOCKET_RETRY_INTERVAL = 60  # segundos entre tentativas
+    
+    while True:
+        try:
+            log_event(f"Conectando ao WebSocket na URL: {socket_url}", "INFO")
+            sio.connect(
+                socket_url,
+                headers={'x-agent-id': agent_id}  # Identifica o agente para o middleware de auth do servidor
+            )
+            # Mantém o script python vivo escutando os eventos
+            sio.wait()
+            # Se sio.wait() retornar (desconexão limpa), aguarda e tenta reconectar
+            log_event(f"WebSocket desconectado. Tentando reconectar em {WEBSOCKET_RETRY_INTERVAL}s...", "WARNING")
+        except Exception as e:
+            log_event(f"Erro ao conectar ao WebSocket: {e}. Tentando novamente em {WEBSOCKET_RETRY_INTERVAL}s...", "ERROR")
         
+        # Garante que o socket está desconectado antes de tentar novamente
+        try:
+            sio.disconnect()
+        except Exception:
+            pass
+        
+        time.sleep(WEBSOCKET_RETRY_INTERVAL)
+
     log_event("Script do agente finalizado.", "INFO")
