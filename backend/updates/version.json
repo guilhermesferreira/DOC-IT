@@ -1,7 +1,7 @@
 {
-    "version": "1.2.9",
-    "agentHash": "5ffb78266effa93a2ea42f73780e6f53f312660cd49e382951a6eef3d5a88d5e",
-    "updaterHash": "6dba57e6e0be79e2c03aa0160f45af65bbaf0d1c678bb5a786294cbc05d7ae71",
+    "version": "1.2.15",
+    "agentHash": "d4f08e71dbebc60593332f6f8d6cca496b0f4d66db1b57d31544b7aeae4d64da",
+    "updaterHash": "11c4f7da24aac835ddb630cf451b723b132f9c310a3a8157932d72cb708b1c96",
     "agentFileName": "Doc-IT-agent.exe",
     "updaterFileName": "Doc-IT-updater.exe"
 }
