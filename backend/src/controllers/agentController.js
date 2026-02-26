@@ -120,14 +120,26 @@ async function getVersion(req, res) {
 async function downloadUpdate(req, res) {
   try {
     const { file } = req.params;
-    
-    // Segurança: Previne Path Traversal garantindo que a requisição não saia da pasta updates
-    if (file !== 'agent.exe' && file !== 'updater.exe') {
+    const path = require('path');
+    const fs = require('fs');
+
+    // Segurança: Previne Path Traversal
+    // O nome do arquivo não pode conter diretórios (ex: '../server.key') e deve ser .exe
+    if (!file || path.basename(file) !== file || !file.endsWith('.exe')) {
       return res.status(403).json({ error: 'Arquivo não autorizado.' });
     }
 
-    const path = require('path');
-    const filePath = path.join(__dirname, '..', '..', 'updates', file);
+    const updatesDir = path.join(__dirname, '..', '..', 'updates');
+    const filePath = path.join(updatesDir, file);
+
+    // Verificação extra: caminho resolvido deve estar dentro da pasta updates
+    if (!filePath.startsWith(updatesDir + path.sep) && filePath !== updatesDir) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Arquivo não encontrado.' });
+    }
 
     res.download(filePath);
   } catch (error) {
@@ -136,6 +148,88 @@ async function downloadUpdate(req, res) {
   }
 }
 
+const certService = require('../services/certService');
+
+// ─── Renovação de Certificado (mTLS obrigatório — cert ainda válido) ────────
+
+async function renewCert(req, res) {
+  const { agentId, csr } = req.body;
+
+  // Exige mTLS (igual ao check-in)
+  const isDirectMTLS = req.socket.authorized;
+  const internalIps = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+  const isProxyMTLS = req.headers['x-ssl-client-verify'] === 'SUCCESS' && internalIps.includes(req.socket.remoteAddress || req.ip);
+
+  if (!isDirectMTLS && !isProxyMTLS) {
+    return res.status(401).json({ error: 'Certificado de cliente válido é obrigatório para renovação.' });
+  }
+
+  if (!agentId || !csr) {
+    return res.status(400).json({ error: 'agentId e csr são obrigatórios.' });
+  }
+
+  try {
+    // Verifica que o agente existe e está aprovado
+    const device = await prisma.device.findUnique({ where: { agentId } });
+    if (!device || device.status !== 'approved') {
+      return res.status(403).json({ error: 'Agente não encontrado ou não aprovado.' });
+    }
+
+    const newCertPem = certService.signAgentCsr(csr);
+    console.log(`[Agent] Cert renovado para agente ${agentId}`);
+    res.json({ cert: newCertPem });
+  } catch (error) {
+    console.error('Erro ao renovar cert do agente:', error);
+    res.status(500).json({ error: 'Falha ao assinar o CSR.' });
+  }
+}
+
+// ─── Solicitação de Emergência (sem mTLS — cert expirado) ───────────────────
+
+async function emergencyCertRequest(req, res) {
+  const { agentId } = req.body;
+
+  if (!agentId) {
+    return res.status(400).json({ error: 'agentId é obrigatório.' });
+  }
+
+  try {
+    const device = await prisma.device.findUnique({ where: { agentId } });
+
+    if (!device) {
+      return res.status(404).json({ error: 'Agente não cadastrado no sistema.' });
+    }
+
+    if (device.status !== 'approved') {
+      return res.status(403).json({ error: 'Agente não está aprovado. Contate o administrador.' });
+    }
+
+    // Marca o dispositivo como pendente de renovação de cert
+    await prisma.device.update({
+      where: { agentId },
+      data: { certRenewalPending: true },
+    });
+
+    console.log(`[Agent] Solicitação de emergência de cert recebida para agente ${agentId}`);
+    res.json({ message: 'Solicitação de renovação registrada. Aguarde aprovação do administrador.' });
+  } catch (error) {
+    console.error('Erro na solicitação de emergência de cert:', error);
+    res.status(500).json({ error: 'Erro interno.' });
+  }
+}
+
+// ─── Endpoint público para o ca.crt ────────────────────────────────────────
+
+function getCaCert(req, res) {
+  try {
+    const caPem = certService.getCaCertPem();
+    res.type('application/x-pem-file').send(caPem);
+  } catch (error) {
+    console.error('Erro ao servir ca.crt:', error);
+    res.status(500).json({ error: 'Erro ao ler o certificado CA.' });
+  }
+}
+
 // As funções getAgentHosts, approveAgentHost, rejectAgentHost, deleteAgentHost
 // foram movidas e adaptadas para o deviceController.js
-module.exports = { checkIn, getVersion, downloadUpdate };
+module.exports = { checkIn, getVersion, downloadUpdate, renewCert, emergencyCertRequest, getCaCert };

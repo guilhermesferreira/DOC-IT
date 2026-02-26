@@ -169,4 +169,14 @@ router.post('/check-in', agentController.checkIn);
 router.get('/version', agentController.getVersion);
 router.get('/update/:file', agentController.downloadUpdate);
 
+// ─── PKI / Certificados ────────────────────────────────────────────────────
+// Renovação normal (mTLS obrigatório — cert ainda válido)
+router.post('/renew-cert', agentController.renewCert);
+
+// Renovação de emergência (sem mTLS — cert expirado, precisa aprovação do admin)
+router.post('/emergency-cert', agentController.emergencyCertRequest);
+
+// Endpoint público para baixar o ca.crt (sem autenticação)
+router.get('/ca-cert', agentController.getCaCert);
+
 module.exports = router;

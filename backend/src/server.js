@@ -68,6 +68,6 @@ server.listen(PORT, () => {
   console.log(`Backend HTTPS rodando na porta ${PORT}`);
   console.log("Swagger disponível em /api-docs");
 
-  // Inicia processos agendados após o servidor subir
-  require('./cronJobs');
+  // Inicia processos agendados após o servidor subir (passa o server para hot-reload de certs)
+  require('./cronJobs')(server);
 });

@@ -83,6 +83,7 @@ model Device {
   firstSeenAt    DateTime?
   lastSeenAt     DateTime?
   approvedAt     DateTime?
+  certRenewalPending Boolean @default(false)
   user           User?     @relation(fields: [userId], references: [id])
 
   @@index([status])
