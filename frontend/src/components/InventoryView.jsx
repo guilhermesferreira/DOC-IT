@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import API from '../api/api';
 import './InventoryView.css'; // Usaremos este para a lista e o layout geral
+import { useOnlineAgents } from '../hooks/useOnlineAgents';
 
 // O novo componente que mostrará os detalhes completos
 import DeviceDetailsView from './DeviceDetailsView';
@@ -9,6 +10,7 @@ import ConfirmationModal from './ConfirmationModal'; // Importar o modal
 
 const InventoryView = () => {
   const [devices, setDevices] = useState([]);
+  const { isAgentOnline } = useOnlineAgents();
   const [manualDeviceForm, setManualDeviceForm] = useState({ name: '', type: '', location: '', patrimony: '' });
   const [editingDevice, setEditingDevice] = useState(null);
   const [showRegistrationForm, setShowRegistrationForm] = useState(false);
@@ -135,7 +137,7 @@ const InventoryView = () => {
     setIsConfirmModalOpen(false);
     setDeviceToDelete(null);
   };
-  
+
   // Abre o modal para aprovar/rejeitar
   const requestAgentAction = (device, action) => {
     setDeviceForAction(device);
@@ -206,8 +208,8 @@ const InventoryView = () => {
   return (
     <div className="inventory-view-container card-dashboard">
       {selectedDevice ? (
-        <DeviceDetailsView 
-          device={selectedDevice} 
+        <DeviceDetailsView
+          device={selectedDevice}
           onBack={() => setSelectedDevice(null)}
           onDeleteRequest={() => requestDeleteDevice(selectedDevice, false)}
         />
@@ -268,7 +270,7 @@ const InventoryView = () => {
                   {devices.length > 0 ? devices.map((device) => (
                     <div key={device.id} className="device-summary-card" onClick={() => setSelectedDevice(device)}>
                       <div className="device-card-header">
-                        <div className={`status-indicator status-${device.status?.toLowerCase() || 'unknown'}`}></div>
+                        <div className={`status-indicator ${device.agentId && isAgentOnline(device.agentId) ? 'status-online' : 'status-offline'}`} title={device.agentId && isAgentOnline(device.agentId) ? 'Online' : 'Offline'}></div>
                         <strong className="device-name">{device.name}</strong>
                       </div>
                       <div className="device-card-body">

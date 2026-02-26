@@ -25,11 +25,13 @@
   border-radius: 8px;
   margin-bottom: 25px;
 }
+
 .form-section-compact h4 {
   margin-top: 0;
   margin-bottom: 15px;
   color: #333;
 }
+
 .form-actions {
   margin-top: 15px;
   display: flex;
@@ -47,7 +49,7 @@
   background-color: #fff;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   display: flex;
@@ -56,7 +58,7 @@
 
 .device-summary-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .device-card-header {
@@ -73,10 +75,46 @@
   border-radius: 50%;
   flex-shrink: 0;
 }
-.status-indicator.status-onboarded, .status-indicator.status-approved { background-color: #28a745; /* Verde */ }
-.status-indicator.status-pending_onboarding { background-color: #ffc107; /* Amarelo */ }
-.status-indicator.status-rejected { background-color: #dc3545; /* Vermelho */ }
-.status-indicator.status-unknown, .status-indicator.status-offline { background-color: #6c757d; /* Cinza */ }
+
+.status-indicator.status-onboarded,
+.status-indicator.status-approved {
+  background-color: #28a745;
+  /* Verde */
+}
+
+.status-indicator.status-pending_onboarding {
+  background-color: #ffc107;
+  /* Amarelo */
+}
+
+.status-indicator.status-rejected {
+  background-color: #dc3545;
+  /* Vermelho */
+}
+
+.status-indicator.status-unknown,
+.status-indicator.status-offline {
+  background-color: #6c757d;
+  /* Cinza */
+}
+
+.status-indicator.status-online {
+  background-color: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  animation: pulse-online 2s infinite;
+}
+
+@keyframes pulse-online {
+
+  0%,
+  100% {
+    box-shadow: 0 0 4px rgba(16, 185, 129, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+  }
+}
 
 
 .device-name {
@@ -100,12 +138,14 @@
   padding: 15px;
   font-size: 0.9em;
   color: #555;
-  flex-grow: 1; /* Faz esta área crescer */
+  flex-grow: 1;
+  /* Faz esta área crescer */
 }
 
 .device-card-body p {
   margin: 0 0 5px 0;
 }
+
 .device-card-body p strong {
   color: #444;
 }
@@ -119,12 +159,14 @@
   text-align: right;
   border-radius: 0 0 7px 7px;
 }
+
 /* Navegação de Sub-abas */
 .inventory-sub-nav {
   display: flex;
   border-bottom: 2px solid #e0e0e0;
   margin-bottom: 25px;
 }
+
 .inventory-sub-nav .sub-tab-link {
   padding: 12px 20px;
   cursor: pointer;
@@ -133,12 +175,15 @@
   font-size: 1em;
   color: #555;
   border-bottom: 3px solid transparent;
-  margin-bottom: -2px; /* Alinha com a borda principal */
+  margin-bottom: -2px;
+  /* Alinha com a borda principal */
   transition: color 0.2s ease, border-bottom-color 0.2s ease;
 }
+
 .inventory-sub-nav .sub-tab-link:hover {
   color: var(--primary-color, #007bff);
 }
+
 .inventory-sub-nav .sub-tab-link.active {
   color: var(--primary-color, #007bff);
   font-weight: 600;
@@ -187,13 +232,15 @@
 }
 
 .agent-onboarding-table tr:hover {
-  background-color: #f0f8ff; /* Um azul bem claro no hover */
+  background-color: #f0f8ff;
+  /* Um azul bem claro no hover */
 }
 
 /* Botões de Ação na Tabela */
 .agent-onboarding-table .button-approve,
 .agent-onboarding-table .button-reject,
-.agent-onboarding-table .button-delete { /* Reutiliza .button-delete se já definido globalmente */
+.agent-onboarding-table .button-delete {
+  /* Reutiliza .button-delete se já definido globalmente */
   padding: 5px 10px;
   font-size: 0.85em;
   margin-right: 5px;
@@ -202,6 +249,7 @@
   border: none;
   color: white;
 }
+
 .agent-onboarding-table .button-approve:last-child,
 .agent-onboarding-table .button-reject:last-child,
 .agent-onboarding-table .button-delete:last-child {
@@ -212,6 +260,7 @@
 .agent-onboarding-table .button-approve {
   background-color: var(--success-color, #28a745);
 }
+
 .agent-onboarding-table .button-approve:hover {
   background-color: #218838;
 }
@@ -220,6 +269,7 @@
   background-color: var(--warning-color, #ffc107);
   color: #212529;
 }
+
 .agent-onboarding-table .button-reject:hover {
   background-color: #e0a800;
 }
@@ -227,10 +277,13 @@
 /* Se .button-delete já tem estilos globais, eles serão aplicados.
    Caso contrário, adicione-os aqui ou no seu CSS global: */
 .agent-onboarding-table .button-delete {
-   background-color: var(--error-color, #dc3545); /* Exemplo */
+  background-color: var(--error-color, #dc3545);
+  /* Exemplo */
 }
+
 .agent-onboarding-table .button-delete:hover {
-   background-color: #c82333; /* Exemplo */
+  background-color: #c82333;
+  /* Exemplo */
 }
 
 
@@ -244,10 +297,23 @@
   color: white;
   display: inline-block;
 }
-.status-badge.status-approved { background-color: #28a745; }
-.status-badge.status-pending { background-color: #ffc107; color: #333; }
-.status-badge.status-rejected { background-color: #dc3545; }
-.status-badge.status-unknown { background-color: #6c757d; }
+
+.status-badge.status-approved {
+  background-color: #28a745;
+}
+
+.status-badge.status-pending {
+  background-color: #ffc107;
+  color: #333;
+}
+
+.status-badge.status-rejected {
+  background-color: #dc3545;
+}
+
+.status-badge.status-unknown {
+  background-color: #6c757d;
+}
 
 
 .error-message {

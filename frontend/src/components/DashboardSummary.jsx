@@ -1,10 +1,12 @@
 import React from 'react';
 import './DashboardSummary.css';
 import { useAuth } from '../auth/AuthContext';
+import { useOnlineAgents } from '../hooks/useOnlineAgents';
 import {
   MonitorSmartphone,
   Activity,
-  Wrench,
+  Wifi,
+  WifiOff,
   Plus,
   Settings,
   FileDown,
@@ -13,13 +15,11 @@ import {
 
 const DashboardSummary = ({ devices = [], setActiveView }) => {
   const { user } = useAuth();
+  const { onlineAgentIds, onlineCount } = useOnlineAgents();
 
   // Calcular métricas derivadas
   const totalDevices = devices.length;
-  // Suposição: considerando 'active' ou qualquer outro status se houver no futuro. Por ora, se estão no array de aprovados, consideramos ativos na rede como demonstração, ou verificamos propriedades.
-  // Ajuste básico visual para caso de uso atual
-  const activeDevices = devices.filter(d => !d.status || d.status !== 'inactive').length;
-  const maintenanceDevices = 0; // Exemplo de placeholder para lógica futura
+  const offlineCount = totalDevices - onlineCount;
 
   // Pegar os últimos 5 dispositivos baseados no ID (assumindo IDs incrementais como mais recentes) ou data
   const recentDevices = [...devices]
@@ -44,11 +44,21 @@ const DashboardSummary = ({ devices = [], setActiveView }) => {
 
         <div className="kpi-card" style={{ flexGrow: 1 }}>
           <div className="kpi-icon-wrapper" style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)' }}>
-            <Activity size={24} color="#10b981" />
+            <Wifi size={24} color="#10b981" />
           </div>
           <div className="kpi-content">
-            <h3 className="kpi-title">Equipamentos Ativos</h3>
-            <p className="kpi-value">{activeDevices}</p>
+            <h3 className="kpi-title">Máquinas Online</h3>
+            <p className="kpi-value" style={{ color: '#10b981' }}>{onlineCount}</p>
+          </div>
+        </div>
+
+        <div className="kpi-card" style={{ flexGrow: 1 }}>
+          <div className="kpi-icon-wrapper" style={{ backgroundColor: 'rgba(107, 114, 128, 0.1)' }}>
+            <WifiOff size={24} color="#6b7280" />
+          </div>
+          <div className="kpi-content">
+            <h3 className="kpi-title">Máquinas Offline</h3>
+            <p className="kpi-value" style={{ color: '#6b7280' }}>{offlineCount < 0 ? 0 : offlineCount}</p>
           </div>
         </div>
       </div>

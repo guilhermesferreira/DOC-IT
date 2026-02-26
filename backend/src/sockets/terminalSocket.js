@@ -2,11 +2,17 @@ const socketIo = require('socket.io');
 const jwt = require('jsonwebtoken');
 const { logAudit } = require('../services/auditService');
 
+// Map global de agentes online: agentId -> socketId
+const onlineAgents = new Map();
+
 module.exports = function configureSockets(server) {
   // Inicialização do Socket.IO permitindo requisições do frontend
   const io = socketIo(server, {
     cors: {
-      origin: ['http://localhost:5173', 'https://localhost:5173'],
+      // Permite o frontend e também agentes Python (que não enviam Origin de browser)
+      origin: function (origin, callback) {
+        return callback(null, true);
+      },
       methods: ["GET", "POST"],
       credentials: true
     }
@@ -46,7 +52,21 @@ module.exports = function configureSockets(server) {
   });
 
   io.on('connection', (socket) => {
-    console.log(`[Socket] Nova conexão segura recebida: ${socket.id} (Usuário: ${socket.user?.username})`);
+    const identity = socket.isAgent ? `Agente: ${socket.agentId}` : `Usuário: ${socket.user?.username}`;
+    console.log(`[Socket] Nova conexão segura recebida: ${socket.id} (${identity})`);
+
+    // ─── Tracking de agentes online ─────────────────────────────────
+    if (socket.isAgent) {
+      onlineAgents.set(socket.agentId, socket.id);
+      // Notifica todos os clientes (browsers) que este agente ficou online
+      io.emit('agent:online', { agentId: socket.agentId });
+      console.log(`[Socket] Agente ${socket.agentId} ONLINE. Total online: ${onlineAgents.size}`);
+    }
+
+    // Quando um browser conecta, manda a lista de todos os agentes online
+    if (!socket.isAgent) {
+      socket.emit('agent:online-list', Array.from(onlineAgents.keys()));
+    }
 
     // Cliente (React) emitindo para o Agente (Python)
     socket.on('terminal:start', async ({ agentId }) => {
@@ -80,6 +100,12 @@ module.exports = function configureSockets(server) {
 
     socket.on('disconnect', () => {
       console.log(`[Socket] Conexão encerrada: ${socket.id}`);
+      // Se era um agente, remove do Map e notifica os browsers
+      if (socket.isAgent && socket.agentId) {
+        onlineAgents.delete(socket.agentId);
+        io.emit('agent:offline', { agentId: socket.agentId });
+        console.log(`[Socket] Agente ${socket.agentId} OFFLINE. Total online: ${onlineAgents.size}`);
+      }
     });
   });
 
