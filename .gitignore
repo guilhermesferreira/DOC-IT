@@ -56,3 +56,5 @@ build/agent/*
 /build/*
 frontend/.env
 .agents/*
+backend/certs/server_ext.cnf
+backend/certs/server.crt.bak
