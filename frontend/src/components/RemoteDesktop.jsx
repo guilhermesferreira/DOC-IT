@@ -214,17 +214,19 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
                         {loading ? 'Conectando...' : streamActive ? `Conectado - ${frameStats.fps} FPS` : 'Desconectado'}
                     </span>
                     {monitors.length > 0 && (
-                        <select
-                            value={selectedMonitor}
-                            onChange={handleMonitorChange}
-                            className="bg-[#1A1B1E] text-gray-300 border border-gray-700 rounded px-2 py-1 text-sm outline-none ml-2"
-                        >
-                            {monitors.map(m => (
-                                <option key={m.index} value={m.index}>
-                                    {m.name} ({m.width}x{m.height})
-                                </option>
-                            ))}
-                        </select>
+                        <div className="monitor-select-container">
+                            <select
+                                value={selectedMonitor}
+                                onChange={handleMonitorChange}
+                                className="monitor-select"
+                            >
+                                {monitors.map(m => (
+                                    <option key={m.index} value={m.index}>
+                                        {m.name} ({m.width}x{m.height})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     )}
                 </div>
                 <div className="toolbar-right">
