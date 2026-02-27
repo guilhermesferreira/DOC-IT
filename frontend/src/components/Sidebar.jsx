@@ -47,8 +47,8 @@ const Sidebar = ({ setActiveView, logout, isExpanded, setIsExpanded }) => {
             </button>
           </li>
 
-          {/* Logs de Auditoria de volta ao Sidebar */}
-          {user?.group?.canViewAuditLogs && (
+          {/* Logs de Auditoria - visível para SuperAdmin ou quem tem permissão explicita */}
+          {(user?.group?.name === 'SuperAdministrator' || user?.group?.canViewAuditLogs) && (
             <li>
               <button onClick={() => setActiveView('audit-logs')}>
                 <span className="icon"><ShieldAlert size={18} /></span>

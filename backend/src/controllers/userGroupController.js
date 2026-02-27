@@ -35,7 +35,10 @@ const buildGroupDataMatrix = (body) => {
         canManageDevices: Boolean(body.canManageDevices),
         canAccessRemote: Boolean(body.canAccessRemote),
         canViewSettings: Boolean(body.canViewSettings),
-        canEditSettings: Boolean(body.canEditSettings)
+        canEditSettings: Boolean(body.canEditSettings),
+        canViewAuditLogs: Boolean(body.canViewAuditLogs),
+        canViewAuditSettings: Boolean(body.canViewAuditSettings),
+        canEditAuditSettings: Boolean(body.canEditAuditSettings),
     };
 };
 

@@ -8,7 +8,10 @@ async function seedGroups() {
     // 1. SuperAdministrator (Controle 100% Absoluto)
     const superAdmin = await prisma.userGroup.upsert({
       where: { name: 'SuperAdministrator' },
-      update: {}, // Não atualiza se já existe para preservar alterações manuais de id
+      update: {
+        canViewAuditLogs: true,
+        canViewAuditSettings: true,
+      },
       create: {
         name: 'SuperAdministrator',
         description: 'Acesso total e irrestrito (God-Mode) a Módulos, RBAC e Motor.',
@@ -25,6 +28,8 @@ async function seedGroups() {
         canAccessRemote: true,
         canViewSettings: true,
         canEditSettings: true,
+        canViewAuditLogs: true,
+        canViewAuditSettings: true,
       }
     });
     console.log(`[Seed] Grupo '${superAdmin.name}' verificado/criado.`);
@@ -49,6 +54,8 @@ async function seedGroups() {
         canAccessRemote: true,  // Pode acessar maquinas ativamente
         canViewSettings: true,
         canEditSettings: false, // Proteção: Nao pode mudar o motor
+        canViewAuditLogs: true,
+        canViewAuditSettings: false,
       }
     });
     console.log(`[Seed] Grupo '${admin.name}' verificado/criado.`);
