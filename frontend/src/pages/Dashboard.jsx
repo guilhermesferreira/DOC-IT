@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import API from '../api/api';
 import { useAuth } from "../auth/AuthContext";
+import { SocketProvider } from '../context/SocketContext';
 import './Dashboard.css'; // Vamos usar este CSS para o layout geral do dashboard
 // Vamos criar esses componentes em breve:
 import Sidebar from '../components/Sidebar'; // Menu lateral
@@ -52,17 +53,19 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="dashboard-layout">
-      <Sidebar
-        setActiveView={setActiveView}
-        logout={logout}
-        isExpanded={isSidebarExpanded}
-        setIsExpanded={setIsSidebarExpanded}
-      />
-      <main className={`dashboard-main-content ${isSidebarExpanded ? 'expanded' : 'collapsed'}`}>
-        {renderView()}
-      </main>
-    </div>
+    <SocketProvider>
+      <div className="dashboard-layout">
+        <Sidebar
+          setActiveView={setActiveView}
+          logout={logout}
+          isExpanded={isSidebarExpanded}
+          setIsExpanded={setIsSidebarExpanded}
+        />
+        <main className={`dashboard-main-content ${isSidebarExpanded ? 'expanded' : 'collapsed'}`}>
+          {renderView()}
+        </main>
+      </div>
+    </SocketProvider>
   );
 };
 

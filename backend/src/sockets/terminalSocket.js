@@ -68,6 +68,14 @@ module.exports = function configureSockets(server) {
       socket.emit('agent:online-list', Array.from(onlineAgents.keys()));
     }
 
+    // Permite que o frontend solicite a lista de agentes online a qualquer momento
+    // (útil para singleton socket — componentes que montam depois da conexão inicial)
+    socket.on('request:online-list', () => {
+      if (!socket.isAgent) {
+        socket.emit('agent:online-list', Array.from(onlineAgents.keys()));
+      }
+    });
+
     // Cliente (React) emitindo para o Agente (Python)
     socket.on('terminal:start', async ({ agentId }) => {
       console.log(`[Socket] Frontend solicitou iniciar terminal para o Agente: ${agentId}`);

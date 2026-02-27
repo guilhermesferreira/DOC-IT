@@ -1,54 +1,58 @@
 // src/hooks/useOnlineAgents.js
-// Hook para rastrear agentes online em tempo real via WebSocket
-import { useState, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
-
-// Mesma lógica do RemoteTerminal.jsx — conecta ao backend, não ao Vite
-const BACKEND_URL = import.meta.env.VITE_API_URL || `https://${window.location.hostname}:3000`;
+// Hook para rastrear agentes online em tempo real via WebSocket (usa singleton)
+import { useState, useEffect } from 'react';
+import { useSocket } from '../context/SocketContext';
 
 /**
  * Hook que mantém um Set de agentIds online, atualizado em tempo real via WebSocket.
- * @returns {{ onlineAgentIds: Set<string>, onlineCount: number }}
+ * Usa o socket singleton do SocketProvider — não cria conexões próprias.
+ * @returns {{ onlineAgentIds: Set<string>, onlineCount: number, isAgentOnline: (id: string) => boolean }}
  */
 export function useOnlineAgents() {
+  const { socket } = useSocket();
   const [onlineAgentIds, setOnlineAgentIds] = useState(new Set());
-  const socketRef = useRef(null);
 
   useEffect(() => {
-    // Conecta ao mesmo servidor Socket.IO (com cookies de auth)
-    const socket = io(BACKEND_URL, {
-      withCredentials: true,
-      transports: ['websocket', 'polling'],
-    });
-    socketRef.current = socket;
+    if (!socket) return;
 
-    // Recebe a lista completa ao conectar
-    socket.on('agent:online-list', (agentIds) => {
+    const handleOnlineList = (agentIds) => {
       setOnlineAgentIds(new Set(agentIds));
-    });
+    };
 
-    // Agente ficou online
-    socket.on('agent:online', ({ agentId }) => {
+    const handleOnline = ({ agentId }) => {
       setOnlineAgentIds(prev => {
         const next = new Set(prev);
         next.add(agentId);
         return next;
       });
-    });
+    };
 
-    // Agente ficou offline
-    socket.on('agent:offline', ({ agentId }) => {
+    const handleOffline = ({ agentId }) => {
       setOnlineAgentIds(prev => {
         const next = new Set(prev);
         next.delete(agentId);
         return next;
       });
-    });
-
-    return () => {
-      socket.disconnect();
     };
-  }, []);
+
+    // Registra listeners
+    socket.on('agent:online-list', handleOnlineList);
+    socket.on('agent:online', handleOnline);
+    socket.on('agent:offline', handleOffline);
+
+    // Se já estiver conectado, solicita a lista atualizada ao servidor
+    // (o servidor só envia automaticamente no 'connection', mas o socket singleton já pode estar conectado)
+    if (socket.connected) {
+      socket.emit('request:online-list');
+    }
+
+    // Cleanup: remove apenas os listeners, NÃO desconecta o socket
+    return () => {
+      socket.off('agent:online-list', handleOnlineList);
+      socket.off('agent:online', handleOnline);
+      socket.off('agent:offline', handleOffline);
+    };
+  }, [socket]);
 
   return {
     onlineAgentIds,

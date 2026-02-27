@@ -1,17 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
-import { io } from 'socket.io-client';
+import { useSocket } from '../context/SocketContext';
 import 'xterm/css/xterm.css';
 
 const RemoteTerminal = ({ agentId }) => {
     const terminalRef = useRef(null);
-    const socketRef = useRef(null);
     const xtermRef = useRef(null);
     const fitAddonRef = useRef(null);
-    const [isConnected, setIsConnected] = useState(false);
+    const { socket, isConnected } = useSocket();
 
     useEffect(() => {
+        if (!socket) return;
+
         // 1. Inicializa o Xterm.js
         const term = new Terminal({
             cursorBlink: true,
@@ -43,35 +44,33 @@ const RemoteTerminal = ({ agentId }) => {
 
         term.writeln(`Iniciando conexão segura com a API do ${import.meta.env.VITE_PROJECT_NAME || 'Doc-IT'}...`);
 
-        // 2. Conecta no WebSocket do Backend (com withCredentials para o HTTPOnly cookie)
-        const BACKEND_URL = import.meta.env.VITE_API_URL || `https://${window.location.hostname}:3000`;
-        const socket = io(BACKEND_URL, {
-            withCredentials: true,
-            transports: ['websocket', 'polling']
-        });
-        socketRef.current = socket;
-
-        socket.on('connect', () => {
-            setIsConnected(true);
+        // 2. Se já estiver conectado, inicia o terminal imediatamente
+        if (socket.connected) {
             term.writeln(`\x1b[32m[+] Conectado ao Servidor WebSocket (${import.meta.env.VITE_PROJECT_NAME || 'Doc-IT'} API)\x1b[0m`);
             term.writeln('\x1b[33m[*] Solicitando handshake com o Agente Python...\x1b[0m');
-
-            // Quando conecta, pede para iniciar o terminal remoto
             socket.emit('terminal:start', { agentId });
-        });
+        }
 
-        socket.on('disconnect', () => {
-            setIsConnected(false);
+        const handleConnect = () => {
+            term.writeln(`\x1b[32m[+] Conectado ao Servidor WebSocket (${import.meta.env.VITE_PROJECT_NAME || 'Doc-IT'} API)\x1b[0m`);
+            term.writeln('\x1b[33m[*] Solicitando handshake com o Agente Python...\x1b[0m');
+            socket.emit('terminal:start', { agentId });
+        };
+
+        const handleDisconnect = () => {
             term.writeln('\r\n\x1b[31m[-] Conexão com o servidor encerrada.\x1b[0m');
-        });
+        };
 
         // 3. Recebe output do Agente Python e joga na tela preta
-        socket.on('terminal:output', (payload) => {
+        const handleOutput = (payload) => {
             if (payload.agentId === agentId) {
-                // payload.data é a string crua vinda do stdout do CMD
                 term.write(payload.data);
             }
-        });
+        };
+
+        socket.on('connect', handleConnect);
+        socket.on('disconnect', handleDisconnect);
+        socket.on('terminal:output', handleOutput);
 
         // 4. Captura teclas do usuário no modo 'Line Buffer'
         let internalBuffer = '';
@@ -106,14 +105,16 @@ const RemoteTerminal = ({ agentId }) => {
         };
         window.addEventListener('resize', handleResize);
 
-        // Limpeza na desmontagem do componente
+        // Limpeza na desmontagem: remove listeners e para o terminal, mas NÃO desconecta o socket
         return () => {
             window.removeEventListener('resize', handleResize);
             socket.emit('terminal:stop', { agentId });
-            socket.disconnect();
+            socket.off('connect', handleConnect);
+            socket.off('disconnect', handleDisconnect);
+            socket.off('terminal:output', handleOutput);
             term.dispose();
         };
-    }, [agentId]);
+    }, [socket, agentId]);
 
     return (
         <div style={{ width: '100%', height: '500px', backgroundColor: '#1e1e1e', borderRadius: '8px', padding: '10px', overflow: 'hidden', position: 'relative' }}>
