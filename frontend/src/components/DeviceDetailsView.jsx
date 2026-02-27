@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import './DeviceDetailsView.css'; // Criaremos este CSS
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { ArrowLeft, Monitor, Cpu, HardDrive, Wifi, Shield, Clock, Server, Network, Trash2, Users, FileText, TerminalSquare } from 'lucide-react'; // Adicionado Trash2, Users e TerminalSquare
+import { ArrowLeft, Monitor, Cpu, HardDrive, Wifi, Shield, Clock, Server, Network, Trash2, Users, FileText, TerminalSquare, WifiOff } from 'lucide-react'; // Adicionado Trash2, Users e TerminalSquare e WifiOff
 import RemoteTerminal from './RemoteTerminal';
 import RemoteDesktop from './RemoteDesktop';
 
@@ -423,17 +423,35 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest, isOnline }) => { /
         {activeTab === 'cmd' && (
           <div className="card-dashboard" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
             <h2><TerminalSquare size={16} /> Linha de Comando</h2>
-            <p className="device-subtitle" style={{ marginBottom: '15px' }}>
-              Conexão reversa via WebSocket direto no Host. Todas as interações estão sendo auditadas.
-            </p>
-            <RemoteTerminal agentId={device.agentId} />
+            {isOnline ? (
+              <>
+                <p className="device-subtitle" style={{ marginBottom: '15px' }}>
+                  Conexão reversa via WebSocket direto no Host. Todas as interações estão sendo auditadas.
+                </p>
+                <RemoteTerminal agentId={device.agentId} />
+              </>
+            ) : (
+              <div className="offline-placeholder">
+                <WifiOff size={48} className="offline-icon" />
+                <h3>Host Inacessível</h3>
+                <p>O agente encontra-se offline no momento. O terminal interativo requer uma conexão WebSocket ativa com a máquina remota.</p>
+              </div>
+            )}
           </div>
         )}
 
         {/* Aba: Remoto Gráfico (WebSockets) */}
         {activeTab === 'desktop' && (
-          <div className="card-dashboard" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
-            <RemoteDesktop agentId={device.agentId} deviceName={device.name} />
+          <div className="card-dashboard" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: isOnline ? 0 : '25px' }}>
+            {isOnline ? (
+              <RemoteDesktop agentId={device.agentId} deviceName={device.name} />
+            ) : (
+              <div className="offline-placeholder" style={{ height: '100%', display: 'flex', justifyContent: 'center' }}>
+                <WifiOff size={48} className="offline-icon" />
+                <h3>Área de Trabalho Indisponível</h3>
+                <p>O agente encontra-se offline. Aguarde o computador restabelecer o link com o servidor para iniciar o streaming de vídeo.</p>
+              </div>
+            )}
           </div>
         )}
 

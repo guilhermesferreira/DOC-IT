@@ -6,8 +6,10 @@
 
 .details-header {
   margin-bottom: 20px;
-  display: flex; /* Para alinhar botões lado a lado */
-  justify-content: space-between; /* Espaça o botão de voltar e o de excluir */
+  display: flex;
+  /* Para alinhar botões lado a lado */
+  justify-content: space-between;
+  /* Espaça o botão de voltar e o de excluir */
 }
 
 .back-button {
@@ -22,6 +24,7 @@
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
+
 .back-button:hover {
   background-color: #f0f0f0;
 }
@@ -47,11 +50,14 @@
 
 .info-icon-wrapper {
   padding: 15px;
-  background-color: #e7f3ff; /* Azul claro */
+  background-color: #e7f3ff;
+  /* Azul claro */
   border-radius: 8px;
 }
+
 .info-icon {
-  color: #007bff; /* Azul primário */
+  color: #007bff;
+  /* Azul primário */
 }
 
 .device-title {
@@ -85,6 +91,7 @@
   border-bottom: 2px solid #e0e0e0;
   margin-bottom: 25px;
 }
+
 .details-tabs-nav button {
   padding: 12px 20px;
   cursor: pointer;
@@ -93,12 +100,15 @@
   font-size: 1em;
   color: #555;
   border-bottom: 3px solid transparent;
-  margin-bottom: -2px; /* Alinha com a borda principal */
+  margin-bottom: -2px;
+  /* Alinha com a borda principal */
   transition: color 0.2s ease, border-bottom-color 0.2s ease;
 }
+
 .details-tabs-nav button:hover {
   color: #007bff;
 }
+
 .details-tabs-nav button.active {
   color: #007bff;
   font-weight: 600;
@@ -117,15 +127,18 @@
 }
 
 /* Se .card-dashboard já tem um estilo full-width ou se você quer um modificador específico */
-.card-dashboard.full-width { /* Exemplo se você usar .card-dashboard */
-  grid-column: 1 / -1; /* Faz o card ocupar a largura toda do grid */
+.card-dashboard.full-width {
+  /* Exemplo se você usar .card-dashboard */
+  grid-column: 1 / -1;
+  /* Faz o card ocupar a largura toda do grid */
 }
 
 /* Estilos para listas dentro dos cards de detalhes.
    Pode ser necessário ajustar seletores se você mudar a estrutura dos títulos para h2. */
 /* Ex: .card-dashboard ul ... */
 /* Ou criar classes mais genéricas como .detail-list */
-.card-dashboard ul { /* Assumindo que os cards agora são .card-dashboard */
+.card-dashboard ul {
+  /* Assumindo que os cards agora são .card-dashboard */
   list-style: none;
   padding: 0;
   margin: 0;
@@ -138,12 +151,15 @@
   padding: 8px 0;
   border-bottom: 1px solid #f5f5f5;
 }
+
 .card-dashboard li:last-child {
   border-bottom: none;
 }
+
 .card-dashboard li span {
   color: #666;
 }
+
 .card-dashboard li strong {
   color: #333;
   text-align: right;
@@ -161,6 +177,7 @@
   justify-content: flex-start;
   gap: 10px;
 }
+
 .tab-pane-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -172,7 +189,8 @@
   /* .card-dashboard já é aplicado */
 }
 
-.chart-card h2 { /* Seus títulos h2 já devem estar estilizados por .card-dashboard h2 */
+.chart-card h2 {
+  /* Seus títulos h2 já devem estar estilizados por .card-dashboard h2 */
   display: flex;
   align-items: center;
   gap: 8px;
@@ -190,11 +208,64 @@
   background-color: rgba(255, 255, 255, 0.9) !important;
   border: 1px solid #ccc !important;
   border-radius: 4px !important;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
   padding: 8px !important;
 }
+
 .recharts-tooltip-label {
   font-weight: bold;
   margin-bottom: 5px !important;
   color: #333 !important;
+}
+
+/* Offline Placeholder Fallback */
+.offline-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
+  background: rgba(240, 240, 245, 0.5);
+  border: 1px dashed #ccc;
+  border-radius: 12px;
+  margin-top: 20px;
+  color: #666;
+  flex-grow: 1;
+}
+
+.offline-icon {
+  color: #ff4d4f;
+  margin-bottom: 15px;
+  opacity: 0.8;
+  animation: pulse-offline 2s infinite ease-in-out;
+}
+
+.offline-placeholder h3 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 1.2rem;
+}
+
+.offline-placeholder p {
+  margin: 0;
+  font-size: 0.95rem;
+  max-width: 400px;
+}
+
+@keyframes pulse-offline {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: scale(1.1);
+    opacity: 0.4;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
 }

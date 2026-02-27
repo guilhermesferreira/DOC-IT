@@ -135,24 +135,28 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
         const newMonitor = parseInt(e.target.value, 10);
         setSelectedMonitor(newMonitor);
 
-        // Se a stream já estiver ativa, reinicia automaticamente no novo monitor
-        if (streamActive) {
-            setLoading(true);
-            socket.emit('desktop:start', { agentId, monitorIndex: newMonitor, quality: selectedQuality });
-            setTimeout(() => setLoading(false), 1000);
-        }
+        // Dispara o inicio/mudança automaticamente, mesmo se estiver parado
+        setLoading(true);
+        isViewingRef.current = true;
+        socket.emit('desktop:start', { agentId, monitorIndex: newMonitor, quality: selectedQuality });
+        setTimeout(() => {
+            setStreamActive(true);
+            setLoading(false);
+        }, 1000);
     };
 
     const handleQualityChange = (e) => {
         const newQuality = e.target.value;
         setSelectedQuality(newQuality);
 
-        // Se a stream já estiver ativa, reinicia imediatamente com a nova qualidade
-        if (streamActive) {
-            setLoading(true);
-            socket.emit('desktop:start', { agentId, monitorIndex: selectedMonitor, quality: newQuality });
-            setTimeout(() => setLoading(false), 1000);
-        }
+        // Dispara o inicio/mudança automaticamente, mesmo se estiver parado
+        setLoading(true);
+        isViewingRef.current = true;
+        socket.emit('desktop:start', { agentId, monitorIndex: selectedMonitor, quality: newQuality });
+        setTimeout(() => {
+            setStreamActive(true);
+            setLoading(false);
+        }, 1000);
     };
 
     const stopStream = () => {
