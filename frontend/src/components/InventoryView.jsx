@@ -212,6 +212,7 @@ const InventoryView = () => {
           device={selectedDevice}
           onBack={() => setSelectedDevice(null)}
           onDeleteRequest={() => requestDeleteDevice(selectedDevice, false)}
+          isOnline={selectedDevice.agentId && isAgentOnline(selectedDevice.agentId)}
         />
       ) : (
         <> {/* Fragmento para agrupar a visualização da lista */}

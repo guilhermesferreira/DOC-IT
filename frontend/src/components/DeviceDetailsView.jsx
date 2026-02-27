@@ -6,7 +6,7 @@ import { ArrowLeft, Monitor, Cpu, HardDrive, Wifi, Shield, Clock, Server, Networ
 import RemoteTerminal from './RemoteTerminal';
 import RemoteDesktop from './RemoteDesktop';
 
-const DeviceDetailsView = ({ device, onBack, onDeleteRequest }) => { // Adicionada prop onDeleteRequest
+const DeviceDetailsView = ({ device, onBack, onDeleteRequest, isOnline }) => { // Adicionada prop onDeleteRequest e isOnline
   const [activeTab, setActiveTab] = useState("overview");
   const [activeSecurityTab, setActiveSecurityTab] = useState("firewall");
 
@@ -104,10 +104,16 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest }) => { // Adiciona
           <Monitor size={32} className="info-icon" />
         </div>
         <div className="info-text-wrapper">
-          <h1 className="device-title">{device.name}</h1>
+          <h1 className="device-title">
+            {device.name}
+            {isOnline ? (
+              <span className="status-badge status-approved" style={{ marginLeft: '12px', fontSize: '0.55em', verticalAlign: 'middle' }}>Online</span>
+            ) : (
+              <span className="status-badge status-rejected" style={{ marginLeft: '12px', fontSize: '0.55em', verticalAlign: 'middle' }}>Offline</span>
+            )}
+          </h1>
           <p className="device-subtitle">{device.osInfo || 'Sistema Operacional não informado'}</p>
           <div className="status-line">
-            <span className={`status-badge status-${device.status?.toLowerCase()}`}>{device.status}</span>
             <span className="last-seen">Última atividade: {formatDate(device.lastSeenAt)}</span>
           </div>
         </div>
