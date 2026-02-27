@@ -90,6 +90,42 @@
     }
 }
 
+/* Custom Select Dropdown for Monitors */
+.monitor-select {
+    background-color: #1a1b1e;
+    color: #c1c2c5;
+    border: 1px solid #373A40;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+    margin-left: 12px;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+    appearance: none;
+    /* Basic arrow drawn with SVG inline for neatness */
+    background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23c1c2c5%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E');
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 30px;
+}
+
+.monitor-select:hover {
+    border-color: #5C5F66;
+}
+
+.monitor-select:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.monitor-select option {
+    background-color: #1a1b1e;
+    color: #c1c2c5;
+    padding: 8px;
+}
+
 /* Fullscreen handling */
 .remote-desktop-wrapper:fullscreen {
     width: 100vw;
