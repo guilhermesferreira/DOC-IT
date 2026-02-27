@@ -27,7 +27,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
-AGENT_VERSION = "1.2.15" # Versão do Agente
+AGENT_VERSION = "1.2.17" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
@@ -1114,6 +1114,145 @@ if __name__ == "__main__":
             terminal_process.terminate()
             terminal_process = None
             log_event("Processo de terminal encerrado pelo servidor.", "INFO")
+
+    # --- Controle de Desktop Remoto ---
+    desktop_streaming = False
+    
+    @sio.on('desktop:start')
+    def on_desktop_start(data):
+        if data.get('agentId') != config['agent_id']:
+            return
+        global desktop_streaming
+        if desktop_streaming: return # Já esta rondando
+        
+        log_event("Iniciando Streaming de Tela (MJPEG) via WebSocket...", "INFO")
+        desktop_streaming = True
+        
+        def stream_screen():
+            import mss
+            import base64
+            # Compressao rapida para economizar banda (usa Pillow por baixo dos panos no agent/build)
+            try:
+                from PIL import Image
+                import io
+            except ImportError:
+                log_event("Biblioteca Pillow nao encontrada. Instalando ou abortando stream.", "ERROR")
+                global desktop_streaming
+                desktop_streaming = False
+                return
+
+            with mss.mss() as sct:
+                monitor = sct.monitors[1] # Monitor principal
+                while desktop_streaming:
+                    if not sio.connected:
+                        break
+                    
+                    try:
+                        # 1. Captura a imagem pura
+                        sct_img = sct.grab(monitor)
+                        
+                        # 2. Converte pra Pillow Image pra poder dar resize/compress (opcional mas bom pra perf)
+                        img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+                        
+                        # (Opcional) Dimensoes maximas para nao destruir a banda (ex 1280x720)
+                        max_w, max_h = 1280, 720
+                        if img.width > max_w:
+                            img.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
+                        
+                        # 3. Comprime como JPEG
+                        buffer = io.BytesIO()
+                        img.save(buffer, format="JPEG", quality=40) # Qualidade 40 pra alta velocidade
+                        b64_img = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                        
+                        # 4. Envia pro backend relay
+                        sio.emit('desktop:frame', {
+                            'agentId': config['agent_id'],
+                            'imageB64': b64_img,
+                            'width': img.width, # Envia dimensoes processadas
+                            'height': img.height
+                        })
+                        
+                        time.sleep(0.06) # ~15 FPS max target (reduz carga CPU)
+                    except Exception as e:
+                         log_event(f"Erro no loop de streaming de desktop: {e}", "ERROR")
+                         time.sleep(1) # Espera pra nao truncar o log
+
+            log_event("Streaming de Tela encerrado do laco.", "INFO")
+            sio.emit('desktop:stopped', {'agentId': config['agent_id']})
+            
+        threading.Thread(target=stream_screen, daemon=True).start()
+
+    @sio.on('desktop:stop')
+    def on_desktop_stop(data):
+        if data.get('agentId') != config['agent_id']:
+            return
+        global desktop_streaming
+        log_event("Parando Streaming de Tela a pedido do Frontend.", "INFO")
+        desktop_streaming = False
+
+    @sio.on('desktop:mouse_move')
+    def on_desktop_mouse_move(data):
+        if data.get('agentId') != config['agent_id'] or not desktop_streaming:
+            return
+        import pyautogui
+        # Recebemos as proporções relativas do Canvas para mapear pro tamanho real da tela
+        try:
+            # Desativa o 'fail-safe' do pyautogui temporariamente se mover pros cantos der ruim
+            pyautogui.FAILSAFE = False 
+            screen_w, screen_h = pyautogui.size()
+            
+            # x_recebido e y_recebido em cima do "width/height" recebido do frame
+            frame_x = data.get('x', 0)
+            frame_y = data.get('y', 0)
+            frame_w = data.get('width', screen_w)
+            frame_h = data.get('height', screen_h)
+            
+            # Mapeamento do x e y pro tamanho real resolucao do Agente
+            target_x = (frame_x / frame_w) * screen_w
+            target_y = (frame_y / frame_h) * screen_h
+            
+            pyautogui.moveTo(target_x, target_y)
+        except Exception as e:
+            pass
+
+    @sio.on('desktop:mouse_click')
+    def on_desktop_mouse_click(data):
+        if data.get('agentId') != config['agent_id'] or not desktop_streaming:
+            return
+        import pyautogui
+        try:
+            button = data.get('button', 'left') # left, right, middle
+            
+            screen_w, screen_h = pyautogui.size()
+            frame_x = data.get('x', 0)
+            frame_y = data.get('y', 0)
+            frame_w = data.get('width', screen_w)
+            frame_h = data.get('height', screen_h)
+            
+            target_x = (frame_x / frame_w) * screen_w
+            target_y = (frame_y / frame_h) * screen_h
+            pyautogui.click(x=target_x, y=target_y, button=button)
+        except Exception:
+            pass
+            
+    @sio.on('desktop:key_down')
+    def on_desktop_key_down(data):
+        if data.get('agentId') != config['agent_id'] or not desktop_streaming:
+            return
+        import pyautogui
+        try:
+            key = data.get('key', '')
+            # Mapeia teclas especiais do JS pro PyAutoGUI ("ArrowDown" -> "down", "Enter" -> "enter")
+            key_map = {
+               'ArrowDown': 'down', 'ArrowUp': 'up', 'ArrowLeft': 'left', 'ArrowRight': 'right',
+               'Enter': 'enter', 'Escape': 'esc', 'Backspace': 'backspace', 'Tab': 'tab',
+               'Delete':'delete', ' ': 'space'
+            }
+            py_key = key_map.get(key, key.lower())
+            pyautogui.press(py_key)
+        except Exception:
+            pass
+
 
     socket_url = config.get('server_base_url', DEFAULT_CONFIG['server_base_url'])
     agent_id = config.get('agent_id', 'unknown')

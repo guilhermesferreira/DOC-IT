@@ -100,10 +100,45 @@ module.exports = function configureSockets(server) {
     });
 
 
-    // Agente (Python) emitindo de volta para o Cliente (React)
     socket.on('terminal:output', ({ agentId, data }) => {
       // Repassa o texto puro pra tela do xterm no React
       io.emit('terminal:output', { agentId, data });
+    });
+
+    // --- Eventos de Remote Desktop (MJPEG/Canvas) ---
+    // Start/Stop requests
+    socket.on('desktop:start', ({ agentId }) => {
+      console.log(`[Socket] Frontend solicitou iniciar Remote Desktop para Agente: ${agentId}`);
+      io.emit('desktop:start', { agentId });
+    });
+
+    socket.on('desktop:stop', ({ agentId }) => {
+      console.log(`[Socket] Frontend solicitou parar Remote Desktop para Agente: ${agentId}`);
+      io.emit('desktop:stop', { agentId });
+    });
+
+    // Frame de video recebido do Agente (Python) -> Frontend (React)
+    socket.on('desktop:frame', ({ agentId, imageB64, width, height }) => {
+      // Broadcast para todos (ou apenas clientes frontend filtrados)
+      io.emit('desktop:frame', { agentId, imageB64, width, height });
+    });
+
+    // Confirmação de parada vindo do Agente
+    socket.on('desktop:stopped', ({ agentId }) => {
+      io.emit('desktop:stopped', { agentId });
+    });
+
+    // Eventos de I/O (Frontend -> Agente)
+    socket.on('desktop:mouse_move', ({ agentId, x, y, width, height }) => {
+      io.emit('desktop:mouse_move', { agentId, x, y, width, height });
+    });
+
+    socket.on('desktop:mouse_click', ({ agentId, button, x, y, width, height }) => {
+      io.emit('desktop:mouse_click', { agentId, button, x, y, width, height });
+    });
+
+    socket.on('desktop:key_down', ({ agentId, key }) => {
+      io.emit('desktop:key_down', { agentId, key });
     });
 
     socket.on('disconnect', () => {

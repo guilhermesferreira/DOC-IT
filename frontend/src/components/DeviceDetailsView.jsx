@@ -4,6 +4,7 @@ import './DeviceDetailsView.css'; // Criaremos este CSS
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { ArrowLeft, Monitor, Cpu, HardDrive, Wifi, Shield, Clock, Server, Network, Trash2, Users, FileText, TerminalSquare } from 'lucide-react'; // Adicionado Trash2, Users e TerminalSquare
 import RemoteTerminal from './RemoteTerminal';
+import RemoteDesktop from './RemoteDesktop';
 
 const DeviceDetailsView = ({ device, onBack, onDeleteRequest }) => { // Adicionada prop onDeleteRequest
   const [activeTab, setActiveTab] = useState("overview");
@@ -119,7 +120,8 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest }) => { // Adiciona
         <button onClick={() => setActiveTab('network')} className={activeTab === 'network' ? 'active' : ''}>Rede</button>
         <button onClick={() => setActiveTab('software')} className={activeTab === 'software' ? 'active' : ''}>Software</button>
         <button onClick={() => setActiveTab('security')} className={activeTab === 'security' ? 'active' : ''}>Segurança</button>
-        <button onClick={() => setActiveTab('terminal')} className={activeTab === 'terminal' ? 'active' : ''}>Remoto</button>
+        <button onClick={() => setActiveTab('cmd')} className={activeTab === 'cmd' ? 'active' : ''}>CMD</button>
+        <button onClick={() => setActiveTab('desktop')} className={activeTab === 'desktop' ? 'active' : ''}>Remoto</button>
       </nav>
 
       <div className="details-tab-content">
@@ -411,14 +413,21 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest }) => { // Adiciona
           </div>
         )}
 
-        {/* Aba: Remoto (Terminal Web) */}
-        {activeTab === 'terminal' && (
+        {/* Aba: CMD (Terminal Web Antigo) */}
+        {activeTab === 'cmd' && (
           <div className="card-dashboard" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-            <h2><TerminalSquare size={16} /> Console Remoto</h2>
+            <h2><TerminalSquare size={16} /> Linha de Comando</h2>
             <p className="device-subtitle" style={{ marginBottom: '15px' }}>
               Conexão reversa via WebSocket direto no Host. Todas as interações estão sendo auditadas.
             </p>
             <RemoteTerminal agentId={device.agentId} />
+          </div>
+        )}
+
+        {/* Aba: Remoto Gráfico (WebSockets) */}
+        {activeTab === 'desktop' && (
+          <div className="card-dashboard" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+            <RemoteDesktop agentId={device.agentId} deviceName={device.name} />
           </div>
         )}
 
