@@ -10,13 +10,22 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
     const [streamActive, setStreamActive] = useState(false);
     const [loading, setLoading] = useState(false);
     const [frameStats, setFrameStats] = useState({ fps: 0, lastFrameTime: Date.now(), framesThisSecond: 0 });
+    const [monitors, setMonitors] = useState([]);
+    const [selectedMonitor, setSelectedMonitor] = useState(1); // Default to 1 (Primary)
 
     useEffect(() => {
         if (!socket || !isConnected) return;
 
+        // Solicita a lista de monitores quando monta o componente
+        socket.emit('desktop:get_monitors', { agentId });
+
         const handleDesktopFrame = (data) => {
             // data: { agentId, imageB64, width, height }
             if (data.agentId !== agentId) return;
+
+            // Auto-Recupera a interface caso o stream mude de monitor e o backend tenha enviado stopped para a thread anterior
+            setStreamActive(true);
+            setLoading(false);
 
             const canvas = canvasRef.current;
             if (!canvas) return;
@@ -52,12 +61,24 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
             }
         };
 
+        const handleMonitorList = (data) => {
+            if (data.agentId === agentId && data.monitors) {
+                setMonitors(data.monitors);
+                // Se o monitor atual selecionado não existir na lista nova, reseta pro default
+                if (!data.monitors.find(m => m.index === selectedMonitor)) {
+                    setSelectedMonitor(1);
+                }
+            }
+        };
+
         socket.on('desktop:frame', handleDesktopFrame);
         socket.on('desktop:stopped', handleStreamStopped);
+        socket.on('desktop:monitor_list', handleMonitorList);
 
         return () => {
             socket.off('desktop:frame', handleDesktopFrame);
             socket.off('desktop:stopped', handleStreamStopped);
+            socket.off('desktop:monitor_list', handleMonitorList);
             // Garantir que a stream pare ao sair da aba
             if (streamActive) {
                 stopStream();
@@ -77,12 +98,24 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
     const startStream = () => {
         if (!socket || !isConnected) return;
         setLoading(true);
-        socket.emit('desktop:start', { agentId });
+        socket.emit('desktop:start', { agentId, monitorIndex: selectedMonitor });
         // Simulamos que iniciou após 1 segundo se não houver confirmação específica
         setTimeout(() => {
             setStreamActive(true);
             setLoading(false);
         }, 1000);
+    };
+
+    const handleMonitorChange = (e) => {
+        const newMonitor = parseInt(e.target.value, 10);
+        setSelectedMonitor(newMonitor);
+
+        // Se a stream já estiver ativa, reinicia automaticamente no novo monitor
+        if (streamActive) {
+            setLoading(true);
+            socket.emit('desktop:start', { agentId, monitorIndex: newMonitor });
+            setTimeout(() => setLoading(false), 1000);
+        }
     };
 
     const stopStream = () => {
@@ -169,6 +202,19 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
                     <span className="rd-status">
                         {loading ? 'Conectando...' : streamActive ? `Conectado - ${frameStats.fps} FPS` : 'Desconectado'}
                     </span>
+                    {monitors.length > 0 && (
+                        <select
+                            value={selectedMonitor}
+                            onChange={handleMonitorChange}
+                            className="bg-[#1A1B1E] text-gray-300 border border-gray-700 rounded px-2 py-1 text-sm outline-none ml-2"
+                        >
+                            {monitors.map(m => (
+                                <option key={m.index} value={m.index}>
+                                    {m.name} ({m.width}x{m.height})
+                                </option>
+                            ))}
+                        </select>
+                    )}
                 </div>
                 <div className="toolbar-right">
                     {!streamActive ? (

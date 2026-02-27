@@ -27,7 +27,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
-AGENT_VERSION = "1.2.17" # Versão do Agente
+AGENT_VERSION = "1.2.18" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
@@ -1117,18 +1117,54 @@ if __name__ == "__main__":
 
     # --- Controle de Desktop Remoto ---
     desktop_streaming = False
+    current_monitor_index = 1
     
+    @sio.on('desktop:get_monitors')
+    def on_desktop_get_monitors(data):
+        if data.get('agentId') != config['agent_id']:
+            return
+        
+        try:
+            import mss
+            with mss.mss() as sct:
+                # sct.monitors[0] é o all in one, [1] é o primário, [2] o secundário, etc.
+                monitors_info = []
+                for i, monitor in enumerate(sct.monitors):
+                    if i == 0:
+                        monitors_info.append({"index": i, "name": "Todas as Telas", "width": monitor["width"], "height": monitor["height"]})
+                    else:
+                        monitors_info.append({"index": i, "name": f"Monitor {i}", "width": monitor["width"], "height": monitor["height"]})
+                
+                sio.emit('desktop:monitor_list', {
+                    'agentId': config['agent_id'],
+                    'monitors': monitors_info
+                })
+        except Exception as e:
+            log_event(f"Erro ao listar monitores: {e}", "ERROR")
+
     @sio.on('desktop:start')
     def on_desktop_start(data):
         if data.get('agentId') != config['agent_id']:
             return
         global desktop_streaming
-        if desktop_streaming: return # Já esta rondando
+        global current_monitor_index
         
-        log_event("Iniciando Streaming de Tela (MJPEG) via WebSocket...", "INFO")
+        requested_monitor = data.get('monitorIndex', 1) # Default monitor 1
+        
+        # Se já estiver rodando e pedirem o MESMO monitor, ignora
+        if desktop_streaming and current_monitor_index == requested_monitor:
+            return 
+            
+        # Se estiver rodando para OUTRO monitor, para o atual
+        if desktop_streaming:
+            desktop_streaming = False
+            time.sleep(0.5) # Dá um tempinho pra thread atual morrer
+            
+        log_event(f"Iniciando Streaming de Tela (Monitor {requested_monitor}) via WebSocket...", "INFO")
         desktop_streaming = True
+        current_monitor_index = requested_monitor
         
-        def stream_screen():
+        def stream_screen(monitor_idx):
             import mss
             import base64
             # Compressao rapida para economizar banda (usa Pillow por baixo dos panos no agent/build)
@@ -1142,7 +1178,12 @@ if __name__ == "__main__":
                 return
 
             with mss.mss() as sct:
-                monitor = sct.monitors[1] # Monitor principal
+                # Garante que o indice existe, senao fallback pro 1
+                if monitor_idx >= len(sct.monitors):
+                    monitor_idx = 1
+                    
+                monitor = sct.monitors[monitor_idx]
+                
                 while desktop_streaming:
                     if not sio.connected:
                         break
@@ -1151,36 +1192,36 @@ if __name__ == "__main__":
                         # 1. Captura a imagem pura
                         sct_img = sct.grab(monitor)
                         
-                        # 2. Converte pra Pillow Image pra poder dar resize/compress (opcional mas bom pra perf)
+                        # 2. Converte pra Pillow Image pra poder dar resize/compress
                         img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
                         
-                        # (Opcional) Dimensoes maximas para nao destruir a banda (ex 1280x720)
-                        max_w, max_h = 1280, 720
+                        # (Opcional) Dimensoes maximas para nao destruir a banda
+                        max_w, max_h = 1366, 768 # Aumentei um pouquinho pro monitor principal ficar melhor
                         if img.width > max_w:
                             img.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
                         
                         # 3. Comprime como JPEG
                         buffer = io.BytesIO()
-                        img.save(buffer, format="JPEG", quality=40) # Qualidade 40 pra alta velocidade
+                        img.save(buffer, format="JPEG", quality=40)
                         b64_img = base64.b64encode(buffer.getvalue()).decode('utf-8')
                         
                         # 4. Envia pro backend relay
                         sio.emit('desktop:frame', {
                             'agentId': config['agent_id'],
                             'imageB64': b64_img,
-                            'width': img.width, # Envia dimensoes processadas
+                            'width': img.width, 
                             'height': img.height
                         })
                         
-                        time.sleep(0.06) # ~15 FPS max target (reduz carga CPU)
+                        time.sleep(0.06) # ~15 FPS max target
                     except Exception as e:
                          log_event(f"Erro no loop de streaming de desktop: {e}", "ERROR")
-                         time.sleep(1) # Espera pra nao truncar o log
+                         time.sleep(1) 
 
             log_event("Streaming de Tela encerrado do laco.", "INFO")
             sio.emit('desktop:stopped', {'agentId': config['agent_id']})
             
-        threading.Thread(target=stream_screen, daemon=True).start()
+        threading.Thread(target=stream_screen, args=(current_monitor_index,), daemon=True).start()
 
     @sio.on('desktop:stop')
     def on_desktop_stop(data):

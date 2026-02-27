@@ -107,14 +107,23 @@ module.exports = function configureSockets(server) {
 
     // --- Eventos de Remote Desktop (MJPEG/Canvas) ---
     // Start/Stop requests
-    socket.on('desktop:start', ({ agentId }) => {
-      console.log(`[Socket] Frontend solicitou iniciar Remote Desktop para Agente: ${agentId}`);
-      io.emit('desktop:start', { agentId });
+    socket.on('desktop:start', ({ agentId, monitorIndex }) => {
+      console.log(`[Socket] Frontend solicitou iniciar Remote Desktop para Agente: ${agentId} no monitor ${monitorIndex || 1}`);
+      io.emit('desktop:start', { agentId, monitorIndex });
     });
 
     socket.on('desktop:stop', ({ agentId }) => {
       console.log(`[Socket] Frontend solicitou parar Remote Desktop para Agente: ${agentId}`);
       io.emit('desktop:stop', { agentId });
+    });
+
+    // Multi-Monitor Support
+    socket.on('desktop:get_monitors', ({ agentId }) => {
+      io.emit('desktop:get_monitors', { agentId });
+    });
+
+    socket.on('desktop:monitor_list', ({ agentId, monitors }) => {
+      io.emit('desktop:monitor_list', { agentId, monitors });
     });
 
     // Frame de video recebido do Agente (Python) -> Frontend (React)
