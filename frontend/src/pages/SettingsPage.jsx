@@ -5,7 +5,6 @@ import SettingsView from '../components/SettingsView'; // Painel Global de Setti
 import UsersView from '../components/UsersView'; // Gestão de Usuários
 import UserGroupsView from '../components/UserGroupsView'; // Gestão de Grupos de Usuários
 import AuditSettingsView from '../components/AuditSettingsView';
-import AuditLogsView from '../components/AuditLogsView';
 import { useAuth } from '../auth/AuthContext';
 import './SettingsPage.css'; // Criaremos este arquivo CSS para estilizar as abas e o conteúdo
 
@@ -14,7 +13,7 @@ const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState('userProfile'); // Aba principal ativa por padrão
   const [activeUserSecuritySubView, setActiveUserSecuritySubView] = useState('profile'); // Sub-visão ativa dentro de 'userProfile'
   const [activeAgentsSubView, setActiveAgentsSubView] = useState('scheduling'); // Sub-visão ativa dentro de 'applicationSettings' (Agentes)
-  const [activeAuditSubView, setActiveAuditSubView] = useState('logs'); // Sub-visão ativa para Auditoria
+  const [activeAuditSubView, setActiveAuditSubView] = useState('settings'); // Sub-visão ativa para Auditoria
 
   // Permissões
   const canViewAuditLogs = user?.group?.canViewAuditLogs;
@@ -103,14 +102,6 @@ const SettingsPage = () => {
         return (
           <div className="tab-pane active">
             <nav className="user-security-sub-nav">
-              {canViewAuditLogs && (
-                <button
-                  className={`sub-tab-link ${activeAuditSubView === 'logs' ? 'active' : ''}`}
-                  onClick={() => setActiveAuditSubView('logs')}
-                >
-                  Trilha de Auditoria
-                </button>
-              )}
               {canViewAuditSettings && (
                 <button
                   className={`sub-tab-link ${activeAuditSubView === 'settings' ? 'active' : ''}`}
@@ -122,11 +113,6 @@ const SettingsPage = () => {
             </nav>
 
             <div className="user-security-sub-content">
-              {activeAuditSubView === 'logs' && canViewAuditLogs && (
-                <div className="settings-section" style={{ padding: 0 }}>
-                  <AuditLogsView />
-                </div>
-              )}
               {activeAuditSubView === 'settings' && canViewAuditSettings && (
                 <div className="settings-section" style={{ padding: 0 }}>
                   <AuditSettingsView />
@@ -174,8 +160,7 @@ const SettingsPage = () => {
             className={`tab-link ${activeTab === 'auditSettings' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('auditSettings');
-              if (canViewAuditLogs) setActiveAuditSubView('logs');
-              else if (canViewAuditSettings) setActiveAuditSubView('settings');
+              if (canViewAuditSettings) setActiveAuditSubView('settings');
             }}
           >
             Auditoria

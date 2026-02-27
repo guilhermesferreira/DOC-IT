@@ -9,9 +9,10 @@ import Sidebar from '../components/Sidebar'; // Menu lateral
 import InventoryView from '../components/InventoryView'; // A antiga lógica de inventário
 import DashboardSummary from '../components/DashboardSummary'; // Para o resumo
 import SettingsPage from './SettingsPage'; // Página de Configurações Geral
+import AuditLogsView from '../components/AuditLogsView';
 
 const Dashboard = () => {
-  const { logout } = useAuth(); //
+  const { logout, user } = useAuth(); // Precisa do user para ver permissões
   const [activeView, setActiveView] = useState('summary'); // Controla a visão atual: 'summary' ou 'inventory'
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false); // Estado para controlar a sidebar
   const [devices, setDevices] = useState([]); // <-- Adicione este estado para os dispositivos
@@ -45,7 +46,13 @@ const Dashboard = () => {
       case 'inventory':
         return <InventoryView />;
       case 'settings':
+        // A aba de configurações lida internamente com suas próprias permissões
         return <SettingsPage />;
+      case 'audit-logs':
+        // Verificação de segurança no componente pai também
+        if (!user?.group?.canViewAuditLogs) return <div style={{ padding: '2rem' }}>Acesso Negado.</div>;
+        // Reutilizamos a classe de padding principal do settings ou dashboard
+        return <div className="dashboard-main-padding" style={{ padding: '24px' }}><AuditLogsView /></div>;
       case 'summary':
       default:
         return <DashboardSummary devices={devices} setActiveView={setActiveView} />;

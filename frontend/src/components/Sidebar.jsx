@@ -38,16 +38,30 @@ const Sidebar = ({ setActiveView, logout, isExpanded, setIsExpanded }) => {
             </button>
           </li>
           <li>
-            <button onClick={() => setActiveView('inventory')}>
+            <button
+              onClick={() => setActiveView('inventory')}
+              aria-label="Gestão de Dispositivos"
+            >
               <span className="icon"><FaBox /></span>
               <span className="button-text">Gestão de Dispositivos</span>
             </button>
           </li>
-          {(user?.group?.name === 'SuperAdministrator' || user?.group?.canViewAuditLogs || user?.group?.canViewAuditSettings || user?.group?.canViewSettings) && (
+
+          {/* Logs de Auditoria de volta ao Sidebar */}
+          {user?.group?.canViewAuditLogs && (
+            <li>
+              <button onClick={() => setActiveView('audit-logs')}>
+                <span className="icon"><ShieldAlert size={18} /></span>
+                <span className="button-text">Logs de Auditoria</span>
+              </button>
+            </li>
+          )}
+
+          {(user?.group?.name === 'SuperAdministrator' || user?.group?.canViewAuditSettings || user?.group?.canViewSettings) && (
             <li>
               <button onClick={() => setActiveView('settings')}>
                 <span className="icon"><FaSettingsIcon /></span>
-                <span className="button-text">Configurações Base</span>
+                <span className="button-text">Configurações</span>
               </button>
             </li>
           )}
