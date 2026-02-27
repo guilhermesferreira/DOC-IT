@@ -49,10 +49,9 @@ const Dashboard = () => {
         // A aba de configurações lida internamente com suas próprias permissões
         return <SettingsPage />;
       case 'audit-logs':
-        // Verificação de segurança no componente pai também
-        if (!user?.group?.canViewAuditLogs) return <div style={{ padding: '2rem' }}>Acesso Negado.</div>;
-        // Reutilizamos a classe de padding principal do settings ou dashboard
-        return <div className="dashboard-main-padding" style={{ padding: '24px' }}><AuditLogsView /></div>;
+        if (!user?.group?.canViewAuditLogs && user?.group?.name !== 'SuperAdministrator')
+          return <div style={{ padding: '2rem' }}>Acesso Negado.</div>;
+        return <div style={{ padding: '24px' }}><AuditLogsView /></div>;
       case 'summary':
       default:
         return <DashboardSummary devices={devices} setActiveView={setActiveView} />;

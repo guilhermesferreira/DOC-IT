@@ -15,9 +15,11 @@ const SettingsPage = () => {
   const [activeAgentsSubView, setActiveAgentsSubView] = useState('scheduling'); // Sub-visão ativa dentro de 'applicationSettings' (Agentes)
   const [activeAuditSubView, setActiveAuditSubView] = useState('settings'); // Sub-visão ativa para Auditoria
 
+  const isSuperAdmin = user?.group?.name === 'SuperAdministrator';
+
   // Permissões
-  const canViewAuditLogs = user?.group?.canViewAuditLogs;
-  const canViewAuditSettings = user?.group?.canViewAuditSettings;
+  const canViewAuditLogs = isSuperAdmin || user?.group?.canViewAuditLogs;
+  const canViewAuditSettings = isSuperAdmin || user?.group?.canViewAuditSettings;
   const hasAnyAuditPermission = canViewAuditLogs || canViewAuditSettings;
 
   // Conteúdo para diferentes abas
