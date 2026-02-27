@@ -13,6 +13,9 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
     const [monitors, setMonitors] = useState([]);
     const [selectedMonitor, setSelectedMonitor] = useState(1); // Default to 1 (Primary)
 
+    // Trava lógica para Sessão Colaborativa (ignora frames de outros usuários conectados neste agentId se eu não iniciei)
+    const isViewingRef = useRef(false);
+
     useEffect(() => {
         if (!socket || !isConnected) return;
 
@@ -22,6 +25,10 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
         const handleDesktopFrame = (data) => {
             // data: { agentId, imageB64, width, height }
             if (data.agentId !== agentId) return;
+
+            // Isolamento Básico Colaborativo:
+            // Apenas reage ao Broadcast do Proxy Node se VOCÊ tiver ativado a visualização.
+            if (!isViewingRef.current) return;
 
             // Auto-Recupera a interface caso o stream mude de monitor e o backend tenha enviado stopped para a thread anterior
             setStreamActive(true);
@@ -55,6 +62,8 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
 
         const handleStreamStopped = (data) => {
             if (data.agentId === agentId) {
+                // Se fomos avisados do stop reativo pelo Agent -> Todo mundo desliga
+                isViewingRef.current = false;
                 setStreamActive(false);
                 setLoading(false);
                 clearCanvas();
@@ -98,6 +107,7 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
     const startStream = () => {
         if (!socket || !isConnected) return;
         setLoading(true);
+        isViewingRef.current = true;
         socket.emit('desktop:start', { agentId, monitorIndex: selectedMonitor });
         // Simulamos que iniciou após 1 segundo se não houver confirmação específica
         setTimeout(() => {
@@ -121,6 +131,7 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
     const stopStream = () => {
         if (!socket || !isConnected) return;
         socket.emit('desktop:stop', { agentId });
+        isViewingRef.current = false;
         setStreamActive(false);
         clearCanvas();
     };
