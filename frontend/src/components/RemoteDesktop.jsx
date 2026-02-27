@@ -12,6 +12,7 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
     const [frameStats, setFrameStats] = useState({ fps: 0, lastFrameTime: Date.now(), framesThisSecond: 0 });
     const [monitors, setMonitors] = useState([]);
     const [selectedMonitor, setSelectedMonitor] = useState(1); // Default to 1 (Primary)
+    const [selectedQuality, setSelectedQuality] = useState('medium'); // low, medium, high, ultra
 
     // Trava lógica para Sessão Colaborativa (ignora frames de outros usuários conectados neste agentId se eu não iniciei)
     const isViewingRef = useRef(false);
@@ -22,7 +23,7 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
         // Solicita a lista de monitores quando monta o componente
         socket.emit('desktop:get_monitors', { agentId });
 
-        const handleDesktopFrame = (data) => {
+        const handleDesktopFrame = async (data) => {
             // data: { agentId, imageB64, width, height }
             if (data.agentId !== agentId) return;
 
@@ -38,14 +39,28 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
 
-            const img = new Image();
-            img.onload = () => {
+            try {
+                // Decodifica o Base64 manualmente para Blobs nativos. 
+                // Isso EVITA o spam monstruoso de "data:image" na aba Network do DevTools
+                // e é mais gentil com o Garbage Collector do DOM.
+                const byteCharacters = atob(data.imageB64);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: 'image/jpeg' });
+
+                // createImageBitmap processa a imagem em background (off-main-thread)
+                const bitmap = await createImageBitmap(blob);
+
                 // Redimensiona o canvas para bater com a proporção nativa vinda do Python
                 if (canvas.width !== data.width || canvas.height !== data.height) {
                     canvas.width = data.width;
                     canvas.height = data.height;
                 }
-                ctx.drawImage(img, 0, 0, data.width, data.height);
+                ctx.drawImage(bitmap, 0, 0, data.width, data.height);
+                bitmap.close(); // Libera IMEDIATAMENTE a memoria bitmap pro GC
 
                 // Calcular FPS
                 setFrameStats(prev => {
@@ -55,9 +70,9 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
                     }
                     return { ...prev, framesThisSecond: prev.framesThisSecond + 1 };
                 });
-            };
-            // A imagem vem pura do Python, concatenamos o prefixo DataURI
-            img.src = `data:image/jpeg;base64,${data.imageB64}`;
+            } catch (err) {
+                console.error("Erro ao desenhar frame remoto:", err);
+            }
         };
 
         const handleStreamStopped = (data) => {
@@ -93,7 +108,7 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
                 stopStream();
             }
         };
-    }, [socket, isConnected, agentId, streamActive]);
+    }, [socket, isConnected, agentId, streamActive, selectedMonitor, selectedQuality]);
 
     const clearCanvas = () => {
         const canvas = canvasRef.current;
@@ -108,7 +123,7 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
         if (!socket || !isConnected) return;
         setLoading(true);
         isViewingRef.current = true;
-        socket.emit('desktop:start', { agentId, monitorIndex: selectedMonitor });
+        socket.emit('desktop:start', { agentId, monitorIndex: selectedMonitor, quality: selectedQuality });
         // Simulamos que iniciou após 1 segundo se não houver confirmação específica
         setTimeout(() => {
             setStreamActive(true);
@@ -123,7 +138,19 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
         // Se a stream já estiver ativa, reinicia automaticamente no novo monitor
         if (streamActive) {
             setLoading(true);
-            socket.emit('desktop:start', { agentId, monitorIndex: newMonitor });
+            socket.emit('desktop:start', { agentId, monitorIndex: newMonitor, quality: selectedQuality });
+            setTimeout(() => setLoading(false), 1000);
+        }
+    };
+
+    const handleQualityChange = (e) => {
+        const newQuality = e.target.value;
+        setSelectedQuality(newQuality);
+
+        // Se a stream já estiver ativa, reinicia imediatamente com a nova qualidade
+        if (streamActive) {
+            setLoading(true);
+            socket.emit('desktop:start', { agentId, monitorIndex: selectedMonitor, quality: newQuality });
             setTimeout(() => setLoading(false), 1000);
         }
     };
@@ -228,6 +255,18 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
                             </select>
                         </div>
                     )}
+                    <div className="monitor-select-container" style={{ marginLeft: 0 }}>
+                        <select
+                            value={selectedQuality}
+                            onChange={handleQualityChange}
+                            className="monitor-select"
+                        >
+                            <option value="low">Baixa (Econômica)</option>
+                            <option value="medium">Média (Padrão)</option>
+                            <option value="high">Alta (20 FPS)</option>
+                            <option value="ultra">Mais Alta (30 FPS)</option>
+                        </select>
+                    </div>
                 </div>
                 <div className="toolbar-right">
                     {!streamActive ? (

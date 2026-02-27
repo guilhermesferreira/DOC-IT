@@ -27,7 +27,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
-AGENT_VERSION = "1.2.18" # Versão do Agente
+AGENT_VERSION = "1.2.21" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
@@ -1118,6 +1118,7 @@ if __name__ == "__main__":
     # --- Controle de Desktop Remoto ---
     desktop_streaming = False
     current_monitor_index = 1
+    current_quality = 'medium'
     
     @sio.on('desktop:get_monitors')
     def on_desktop_get_monitors(data):
@@ -1148,26 +1149,29 @@ if __name__ == "__main__":
             return
         global desktop_streaming
         global current_monitor_index
+        global current_quality
         
         requested_monitor = data.get('monitorIndex', 1) # Default monitor 1
+        requested_quality = data.get('quality', 'medium')
         
-        # Se já estiver rodando e pedirem o MESMO monitor, ignora
-        if desktop_streaming and current_monitor_index == requested_monitor:
+        # Se já estiver rodando e pedirem o MESMO monitor E a MESMA qualidade, ignora
+        if desktop_streaming and current_monitor_index == requested_monitor and current_quality == requested_quality:
             return 
             
-        # Se estiver rodando para OUTRO monitor, para o atual
+        # Se estiver rodando para OUTRO monitor ou OUTRA qualidade, para o atual
         if desktop_streaming:
             desktop_streaming = False
             time.sleep(0.5) # Dá um tempinho pra thread atual morrer
             
-        log_event(f"Iniciando Streaming de Tela (Monitor {requested_monitor}) via WebSocket...", "INFO")
+        log_event(f"Iniciando Streaming de Tela (Monitor {requested_monitor} | Quality {requested_quality}) via WebSocket...", "INFO")
         desktop_streaming = True
         current_monitor_index = requested_monitor
+        current_quality = requested_quality
         
-        def stream_screen(monitor_idx):
+        def stream_screen(monitor_idx, quality_profile):
             import mss
             import base64
-            # Compressao rapida para economizar banda (usa Pillow por baixo dos panos no agent/build)
+            # Compressao rapida para economizar banda
             try:
                 from PIL import Image
                 import io
@@ -1176,6 +1180,24 @@ if __name__ == "__main__":
                 global desktop_streaming
                 desktop_streaming = False
                 return
+
+            # Apply Quality Limits
+            if quality_profile == 'low':
+                max_w, max_h = 854, 480
+                jpeg_quality = 30
+                sleep_time = 0.1 # ~10 FPS
+            elif quality_profile == 'high':
+                max_w, max_h = 1920, 1080
+                jpeg_quality = 60
+                sleep_time = 0.05 # ~20 FPS
+            elif quality_profile == 'ultra':
+                max_w, max_h = 3840, 2160 # basically native cap bounds
+                jpeg_quality = 80
+                sleep_time = 0.033 # ~30 FPS
+            else: # medium defaults
+                max_w, max_h = 1280, 720
+                jpeg_quality = 40
+                sleep_time = 0.066 # ~15 FPS
 
             with mss.mss() as sct:
                 # Garante que o indice existe, senao fallback pro 1
@@ -1196,13 +1218,12 @@ if __name__ == "__main__":
                         img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
                         
                         # (Opcional) Dimensoes maximas para nao destruir a banda
-                        max_w, max_h = 1366, 768 # Aumentei um pouquinho pro monitor principal ficar melhor
-                        if img.width > max_w:
+                        if img.width > max_w or img.height > max_h:
                             img.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
                         
                         # 3. Comprime como JPEG
                         buffer = io.BytesIO()
-                        img.save(buffer, format="JPEG", quality=40)
+                        img.save(buffer, format="JPEG", quality=jpeg_quality)
                         b64_img = base64.b64encode(buffer.getvalue()).decode('utf-8')
                         
                         # 4. Envia pro backend relay
@@ -1213,15 +1234,19 @@ if __name__ == "__main__":
                             'height': img.height
                         })
                         
-                        time.sleep(0.06) # ~15 FPS max target
+                        time.sleep(sleep_time) # FPS Limiter baseado no profile de Qualidade
                     except Exception as e:
                          log_event(f"Erro no loop de streaming de desktop: {e}", "ERROR")
                          time.sleep(1) 
 
             log_event("Streaming de Tela encerrado do laco.", "INFO")
-            sio.emit('desktop:stopped', {'agentId': config['agent_id']})
+            if sio.connected:
+                try:
+                    sio.emit('desktop:stopped', {'agentId': config['agent_id']})
+                except Exception:
+                    pass
             
-        threading.Thread(target=stream_screen, args=(current_monitor_index,), daemon=True).start()
+        threading.Thread(target=stream_screen, args=(current_monitor_index, current_quality), daemon=True).start()
 
     @sio.on('desktop:stop')
     def on_desktop_stop(data):

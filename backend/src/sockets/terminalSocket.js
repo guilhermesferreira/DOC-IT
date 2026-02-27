@@ -109,8 +109,8 @@ const { logAudit } = require('../services/auditService');
     
         // --- Eventos de Remote Desktop (MJPEG/Canvas) ---
         // Start/Stop requests
-        socket.on('desktop:start', ({ agentId, monitorIndex }) => {
-          console.log(`[Socket] Frontend (${socket.user?.username}) solicitou iniciar Remote Desktop para Agente: ${agentId} no monitor ${monitorIndex || 1}`);
+        socket.on('desktop:start', ({ agentId, monitorIndex, quality }) => {
+          console.log(`[Socket] Frontend (${socket.user?.username}) solicitou iniciar Remote Desktop para Agente: ${agentId} no monitor ${monitorIndex || 1} com qualidade: ${quality || 'medium'}`);
           
           // Adiciona o socket à lista de visualizadores deste agente
           if (!desktopViewers.has(agentId)) {
@@ -118,8 +118,8 @@ const { logAudit } = require('../services/auditService');
           }
           desktopViewers.get(agentId).add(socket.id);
           
-          // Sempre repassa o start pro agente (pode ser uma mudança de monitor)
-          io.emit('desktop:start', { agentId, monitorIndex });
+          // Sempre repassa o start pro agente (pode ser uma mudança de monitor ou qualidade)
+          io.emit('desktop:start', { agentId, monitorIndex, quality });
         });
     
         socket.on('desktop:stop', ({ agentId }) => {
