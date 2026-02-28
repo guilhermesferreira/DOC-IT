@@ -27,7 +27,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
-AGENT_VERSION = "1.2.27" # Versão do Agente
+AGENT_VERSION = "1.2.31" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
@@ -1214,16 +1214,49 @@ if __name__ == "__main__":
         global desktop_streaming
         global current_monitor_index
         global current_quality
+        global osd_process
         
+        if 'osd_process' not in globals():
+            osd_process = None
+            
         requested_monitor = data.get('monitorIndex', 1) # Default monitor 1
         requested_quality = data.get('quality', 'medium')
         invisible_mode = data.get('invisible_mode', False)
         viewer_name = data.get('viewer', 'Administrador')
         
-        # Se já estiver rodando e pedirem o MESMO monitor E a MESMA qualidade, ignora
+        # ATENÇÃO: Se as configurações (monitor, qualidade E modo invisível) forem idênticas, ignora.
+        # Caso contrário, precisamos reiniciar a stream (ou o processo do OSD) para aplicar a nova config.
         if desktop_streaming and current_monitor_index == requested_monitor and current_quality == requested_quality:
-            return 
+            # Puxa o estado atual do processo OSD para ver se de fato precisamos mudar a visibilidade
+            currently_invisible = (osd_process is None)
+            if currently_invisible == invisible_mode:
+                return 
             
+            # Se apenas o modo invisível mudou (a stream em si continua 100% igual)
+            if invisible_mode:
+                # Precisa ocultar agora
+                try:
+                    if osd_process and osd_process.poll() is None:
+                        osd_process.terminate()
+                        osd_process = None
+                except Exception:
+                    pass
+                log_event("Sessão Remota alternada para Invisível.", "INFO")
+                return # Só mata o OSD, não reinicia a stream de vídeo inteira
+            else:
+                # Precisa exibir agora
+                try:
+                    if getattr(sys, 'frozen', False):
+                        cmd = [sys.executable, "--osd", viewer_name]
+                    else:
+                        cmd = [sys.executable, sys.argv[0], "--osd", viewer_name]
+                    osd_process = subprocess.Popen(cmd)
+                except Exception as e:
+                    log_event(f"Erro ao instanciar subprocesso OSD: {e}", "ERROR")
+                log_event("Sessão Remota alternada para Visível.", "INFO")
+                return # Só inicia o OSD, não reinicia a stream de vídeo
+            
+        # Se chegou aqui, mudou o Monitor ou a Qualidade, então mata a stream inteira 
         # Se estiver rodando para OUTRO monitor ou OUTRA qualidade, para o atual
         if desktop_streaming:
             desktop_streaming = False
@@ -1234,15 +1267,15 @@ if __name__ == "__main__":
         current_monitor_index = requested_monitor
         current_quality = requested_quality
         
+        try:
+            # If already running an OSD process, kill it unconditionally first
+            if osd_process and osd_process.poll() is None:
+                osd_process.terminate()
+                osd_process = None
+        except Exception:
+            pass
+
         if not invisible_mode:
-            global osd_process
-            try:
-                # If already running an OSD process, kill it first
-                if osd_process and osd_process.poll() is None:
-                    osd_process.terminate()
-            except Exception:
-                pass
-            
             # Spawn the agent again with --osd argument to show the overlay in a separate main-thread process
             try:
                 if getattr(sys, 'frozen', False):
@@ -1344,6 +1377,15 @@ if __name__ == "__main__":
         global desktop_streaming
         log_event("Parando Streaming de Tela a pedido do Frontend.", "INFO")
         desktop_streaming = False
+        
+        global osd_process
+        try:
+            # Drop the Tkinter UI when stop is requested
+            if osd_process and osd_process.poll() is None:
+                osd_process.terminate()
+                osd_process = None
+        except Exception:
+            pass
 
     @sio.on('desktop:mouse_move')
     def on_desktop_mouse_move(data):
