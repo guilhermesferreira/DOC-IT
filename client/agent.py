@@ -27,7 +27,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
-AGENT_VERSION = "1.2.23" # Versão do Agente
+AGENT_VERSION = "1.2.24" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
@@ -57,6 +57,62 @@ def log_event(message, level="INFO"):
     Adiciona uma mensagem de log ao arquivo de log, respeitando o log_level da configuração.
     """
     global config # Usa a config global que será carregada no início
+    
+    # Nível mínimo configurado
+    min_level_str = config.get("log_level", "INFO").upper()
+    min_level = LOG_LEVELS.get(min_level_str, 20)
+    
+    # Nível da mensagem atual
+    msg_level = LOG_LEVELS.get(level.upper(), 20)
+    
+    if msg_level >= min_level:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_entry = f"{timestamp} [{level.upper()}] - {message}\n"
+        try:
+            with open(LOG_FILE, "a", encoding='utf-8') as f:
+                f.write(log_entry)
+        except Exception as e:
+            # Se não conseguir escrever no log, printa no console silenciosamente
+            print(f"Falha ao escrever no arquivo de log: {e}")
+
+# Global Exception Hook para capturar crashes do Agente (Thread Principal)
+def handle_exception(exc_type, exc_value, exc_traceback):
+    import traceback
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    log_event(f"CRASH NÂO TRATADO (Fatal):\n" + "".join(traceback.format_exception(exc_type, exc_value, exc_traceback)), "CRITICAL")
+    sys.exit(1)
+
+sys.excepthook = handle_exception
+
+# --- OSD Subprocess Hijack ---
+# Se o script for iniciado com a flag --osd, ele NÃO vai virar agente socket, 
+# só vai desenhar a tela do OSD e escutar pra morrer (Ctrl+C ou kill)
+if len(sys.argv) >= 3 and sys.argv[1] == "--osd":
+    viewer_name = sys.argv[2]
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+        root.overrideredirect(True)
+        root.attributes("-alpha", 0.9)
+        root.attributes("-topmost", True)
+        
+        root.config(bg='#d32f2f')
+        label = tk.Label(root, text=f"Doc-IT: Sessão Remota Ativa por {viewer_name}", 
+                         fg="white", bg="#d32f2f", font=("Segoe UI", 11, "bold"), padx=20, pady=5)
+        label.pack()
+        
+        root.update_idletasks()
+        screen_width = root.winfo_screenwidth()
+        w = root.winfo_width()
+        x = (screen_width // 2) - (w // 2)
+        root.geometry(f"+{x}+0")
+        
+        root.mainloop()
+    except Exception as e:
+        log_event(f"Erro ao instanciar Tkinter no Subprocesso OSD: {e}", "ERROR")
+    sys.exit(0)
 
     # Obtém o nível de log configurado do objeto 'config'. Usa 'INFO' como padrão.
     configured_level_str = config.get("log_level", "INFO").upper()
@@ -1143,70 +1199,21 @@ if __name__ == "__main__":
         except Exception as e:
             log_event(f"Erro ao listar monitores: {e}", "ERROR")
 
-    def _run_osd_overlay(viewer_name):
-        try:
-            import tkinter as tk
-            root = tk.Tk()
-            root.overrideredirect(True)
-            root.attributes("-alpha", 0.9)
-            root.attributes("-topmost", True)
-            
-            # Fundo vermelho e texto branco
-            root.config(bg='#d32f2f')
-            
-            label = tk.Label(root, text=f"Doc-IT: Sessão Remota Ativa por {viewer_name}", 
-                             fg="white", bg="#d32f2f", font=("Segoe UI", 11, "bold"), padx=20, pady=5)
-            label.pack()
-            
-            # Centralizar no topo da tela primária
-            root.update_idletasks()
-            screen_width = root.winfo_screenwidth()
-            w = root.winfo_width()
-            x = (screen_width // 2) - (w // 2)
-            root.geometry(f"+{x}+0")
-            
-            # Loop de checagem para se auto-destruir quando a stream parar
-            def check_status():
-                global desktop_streaming
-                if not desktop_streaming:
-                    root.destroy()
-                else:
-                    root.after(1000, check_status)
-                    
-            root.after(1000, check_status)
-            root.mainloop()
-        except Exception as e:
-            log_event(f"Erro ao instanciar OSD Tkinter: {e}", "ERROR")
-
-    @sio.on('desktop:start')
-    def on_desktop_start(data):
-        if data.get('agentId') != config['agent_id']:
-            return
-        global desktop_streaming
-        global current_monitor_index
-        global current_quality
-        
-        requested_monitor = data.get('monitorIndex', 1) # Default monitor 1
-        requested_quality = data.get('quality', 'medium')
-        invisible_mode = data.get('invisible_mode', False)
-        viewer_name = data.get('viewer', 'Administrador')
-        
-        # Se já estiver rodando e pedirem o MESMO monitor E a MESMA qualidade, ignora
-        if desktop_streaming and current_monitor_index == requested_monitor and current_quality == requested_quality:
-            return 
-            
-        # Se estiver rodando para OUTRO monitor ou OUTRA qualidade, para o atual
-        if desktop_streaming:
-            desktop_streaming = False
-            time.sleep(0.5) # Dá um tempinho pra thread atual morrer
-            
-        log_event(f"Iniciando Streaming de Tela (Monitor {requested_monitor} | Quality {requested_quality} | Stealth: {invisible_mode}) via WebSocket...", "INFO")
-        desktop_streaming = True
-        current_monitor_index = requested_monitor
-        current_quality = requested_quality
-        
         if not invisible_mode:
-            threading.Thread(target=_run_osd_overlay, args=(viewer_name,), daemon=True).start()
+            global osd_process
+            try:
+                # If already running an OSD process, kill it first
+                if osd_process and osd_process.poll() is None:
+                    osd_process.terminate()
+            except Exception:
+                pass
+            
+            # Spawn the agent again with --osd argument to show the overlay in a separate main-thread process
+            try:
+                # sys.executable points to agent.exe if bundled, or python.exe if running from source
+                osd_process = subprocess.Popen([sys.executable, sys.argv[0] if not getattr(sys, 'frozen', False) else "", "--osd", viewer_name])
+            except Exception as e:
+                log_event(f"Erro ao instanciar subprocesso OSD: {e}", "ERROR")
         
         
         def stream_screen(monitor_idx, quality_profile):
