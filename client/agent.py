@@ -27,7 +27,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
-AGENT_VERSION = "1.2.25" # Versão do Agente
+AGENT_VERSION = "1.2.26" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
@@ -81,10 +81,18 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, KeyboardInterrupt):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
-    log_event(f"CRASH NÂO TRATADO (Fatal):\n" + "".join(traceback.format_exception(exc_type, exc_value, exc_traceback)), "CRITICAL")
+    log_event(f"CRASH NÂO TRATADO (Main Thread):\n" + "".join(traceback.format_exception(exc_type, exc_value, exc_traceback)), "CRITICAL")
     sys.exit(1)
 
 sys.excepthook = handle_exception
+
+# Hook para capturar crashes em Threads secundárias (SocketIO daemon, etc)
+import threading
+def handle_thread_exception(args):
+    import traceback
+    log_event(f"CRASH NÂO TRATADO (Thread - {args.thread.name}):\n" + "".join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback)), "CRITICAL")
+
+threading.excepthook = handle_thread_exception
 
 # --- OSD Subprocess Hijack ---
 # Se o script for iniciado com a flag --osd, ele NÃO vai virar agente socket, 
