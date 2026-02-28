@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSocket } from '../context/SocketContext';
-import { Play, Square, Loader, Maximize2, Monitor } from 'lucide-react';
+import { Play, Square, Loader, Maximize2, Monitor, Eye, EyeOff, MouseOff, Mouse } from 'lucide-react';
 import './RemoteDesktop.css';
 
 const RemoteDesktop = ({ agentId, deviceName }) => {
@@ -13,6 +13,8 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
     const [monitors, setMonitors] = useState([]);
     const [selectedMonitor, setSelectedMonitor] = useState(1); // Default to 1 (Primary)
     const [selectedQuality, setSelectedQuality] = useState('medium'); // low, medium, high, ultra
+    const [isInvisibleMode, setIsInvisibleMode] = useState(false); // Modo furtivo sem OSD no Agent
+    const [viewOnly, setViewOnly] = useState(false); // Somente visualizar, bloqueia input
 
     // Trava lógica para Sessão Colaborativa (ignora frames de outros usuários conectados neste agentId se eu não iniciei)
     const isViewingRef = useRef(false);
@@ -123,7 +125,7 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
         if (!socket || !isConnected) return;
         setLoading(true);
         isViewingRef.current = true;
-        socket.emit('desktop:start', { agentId, monitorIndex: selectedMonitor, quality: selectedQuality });
+        socket.emit('desktop:start', { agentId, monitorIndex: selectedMonitor, quality: selectedQuality, invisible_mode: isInvisibleMode });
         // Simulamos que iniciou após 1 segundo se não houver confirmação específica
         setTimeout(() => {
             setStreamActive(true);
@@ -138,7 +140,7 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
         // Dispara o inicio/mudança automaticamente, mesmo se estiver parado
         setLoading(true);
         isViewingRef.current = true;
-        socket.emit('desktop:start', { agentId, monitorIndex: newMonitor, quality: selectedQuality });
+        socket.emit('desktop:start', { agentId, monitorIndex: newMonitor, quality: selectedQuality, invisible_mode: isInvisibleMode });
         setTimeout(() => {
             setStreamActive(true);
             setLoading(false);
@@ -152,11 +154,22 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
         // Dispara o inicio/mudança automaticamente, mesmo se estiver parado
         setLoading(true);
         isViewingRef.current = true;
-        socket.emit('desktop:start', { agentId, monitorIndex: selectedMonitor, quality: newQuality });
+        socket.emit('desktop:start', { agentId, monitorIndex: selectedMonitor, quality: newQuality, invisible_mode: isInvisibleMode });
         setTimeout(() => {
             setStreamActive(true);
             setLoading(false);
         }, 1000);
+    };
+
+    // Alternar o modo invisível (se a stream tiver ativa, reinicia para aplicar a OSD no host)
+    const toggleInvisibleMode = () => {
+        const novoInvisivel = !isInvisibleMode;
+        setIsInvisibleMode(novoInvisivel);
+        if (streamActive) {
+            setLoading(true);
+            socket.emit('desktop:start', { agentId, monitorIndex: selectedMonitor, quality: selectedQuality, invisible_mode: novoInvisivel });
+            setTimeout(() => setLoading(false), 1000);
+        }
     };
 
     const stopStream = () => {
@@ -205,7 +218,7 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
     };
 
     const handleMouseMove = (e) => {
-        if (!streamActive || !socket) return;
+        if (!streamActive || !socket || viewOnly) return; // Bloqueado se viewOnly
         // Opcional: Reduzir a taxa de envio usando debounce/throttle se sobrecarregar a rede
         const pos = getRelativeMousePosition(e);
         if (pos) {
@@ -214,7 +227,7 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
     };
 
     const handleMouseClick = (e) => {
-        if (!streamActive || !socket) return;
+        if (!streamActive || !socket || viewOnly) return; // Bloqueado se viewOnly
         const pos = getRelativeMousePosition(e);
         if (pos) {
             const button = e.button === 0 ? 'left' : e.button === 2 ? 'right' : 'middle';
@@ -228,7 +241,7 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
     };
 
     const handleKeyDown = (e) => {
-        if (!streamActive || !socket) return;
+        if (!streamActive || !socket || viewOnly) return; // Bloqueado se viewOnly
         // Evitar scroll de tela quando apertar seta pra baixo/cima
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
             e.preventDefault();
@@ -270,6 +283,26 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
                             <option value="high">Alta (20 FPS)</option>
                             <option value="ultra">Mais Alta (30 FPS)</option>
                         </select>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', marginLeft: '10px' }}>
+                        <button
+                            className={`tool-icon-btn ${viewOnly ? 'active' : ''}`}
+                            onClick={() => setViewOnly(!viewOnly)}
+                            title={viewOnly ? "Modo Somente Visualização Ativado (Entradas Bloqueadas)" : "Modo Interativo Ativado (Enviando Entradas)"}
+                            style={{ background: viewOnly ? '#ffe8e8' : 'transparent', color: viewOnly ? '#d32f2f' : '#555', border: '1px solid #ddd', padding: '6px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            {viewOnly ? <MouseOff size={16} /> : <Mouse size={16} />}
+                        </button>
+
+                        <button
+                            className={`tool-icon-btn ${isInvisibleMode ? 'active' : ''}`}
+                            onClick={toggleInvisibleMode}
+                            title={isInvisibleMode ? "Modo Invisível (Sem aviso no monitor host)" : "Modo Transparente (Aviso no monitor host)"}
+                            style={{ background: isInvisibleMode ? '#ebf5ff' : 'transparent', color: isInvisibleMode ? '#007bff' : '#555', border: '1px solid #ddd', padding: '6px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            {isInvisibleMode ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
                     </div>
                 </div>
                 <div className="toolbar-right">

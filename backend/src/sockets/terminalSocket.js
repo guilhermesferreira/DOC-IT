@@ -109,8 +109,9 @@ const { logAudit } = require('../services/auditService');
     
         // --- Eventos de Remote Desktop (MJPEG/Canvas) ---
         // Start/Stop requests
-        socket.on('desktop:start', ({ agentId, monitorIndex, quality }) => {
-          console.log(`[Socket] Frontend (${socket.user?.username}) solicitou iniciar Remote Desktop para Agente: ${agentId} no monitor ${monitorIndex || 1} com qualidade: ${quality || 'medium'}`);
+        socket.on('desktop:start', ({ agentId, monitorIndex, quality, invisible_mode }) => {
+          const viewerName = socket.user?.username || 'Administrador';
+          console.log(`[Socket] Frontend (${viewerName}) solicitou iniciar Remote Desktop para Agente: ${agentId} no monitor ${monitorIndex || 1} com qualidade: ${quality || 'medium'} (Stealth: ${invisible_mode})`);
           
           // Adiciona o socket à lista de visualizadores deste agente
           if (!desktopViewers.has(agentId)) {
@@ -118,8 +119,8 @@ const { logAudit } = require('../services/auditService');
           }
           desktopViewers.get(agentId).add(socket.id);
           
-          // Sempre repassa o start pro agente (pode ser uma mudança de monitor ou qualidade)
-          io.emit('desktop:start', { agentId, monitorIndex, quality });
+          // Sempre repassa o start pro agente (anexando quem é o visualizador e a flag stealth)
+          io.emit('desktop:start', { agentId, monitorIndex, quality, invisible_mode, viewer: viewerName });
         });
     
         socket.on('desktop:stop', ({ agentId }) => {

@@ -27,7 +27,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
-AGENT_VERSION = "1.2.21" # Versão do Agente
+AGENT_VERSION = "1.2.23" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
@@ -1143,6 +1143,41 @@ if __name__ == "__main__":
         except Exception as e:
             log_event(f"Erro ao listar monitores: {e}", "ERROR")
 
+    def _run_osd_overlay(viewer_name):
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+            root.overrideredirect(True)
+            root.attributes("-alpha", 0.9)
+            root.attributes("-topmost", True)
+            
+            # Fundo vermelho e texto branco
+            root.config(bg='#d32f2f')
+            
+            label = tk.Label(root, text=f"Doc-IT: Sessão Remota Ativa por {viewer_name}", 
+                             fg="white", bg="#d32f2f", font=("Segoe UI", 11, "bold"), padx=20, pady=5)
+            label.pack()
+            
+            # Centralizar no topo da tela primária
+            root.update_idletasks()
+            screen_width = root.winfo_screenwidth()
+            w = root.winfo_width()
+            x = (screen_width // 2) - (w // 2)
+            root.geometry(f"+{x}+0")
+            
+            # Loop de checagem para se auto-destruir quando a stream parar
+            def check_status():
+                global desktop_streaming
+                if not desktop_streaming:
+                    root.destroy()
+                else:
+                    root.after(1000, check_status)
+                    
+            root.after(1000, check_status)
+            root.mainloop()
+        except Exception as e:
+            log_event(f"Erro ao instanciar OSD Tkinter: {e}", "ERROR")
+
     @sio.on('desktop:start')
     def on_desktop_start(data):
         if data.get('agentId') != config['agent_id']:
@@ -1153,6 +1188,8 @@ if __name__ == "__main__":
         
         requested_monitor = data.get('monitorIndex', 1) # Default monitor 1
         requested_quality = data.get('quality', 'medium')
+        invisible_mode = data.get('invisible_mode', False)
+        viewer_name = data.get('viewer', 'Administrador')
         
         # Se já estiver rodando e pedirem o MESMO monitor E a MESMA qualidade, ignora
         if desktop_streaming and current_monitor_index == requested_monitor and current_quality == requested_quality:
@@ -1163,10 +1200,14 @@ if __name__ == "__main__":
             desktop_streaming = False
             time.sleep(0.5) # Dá um tempinho pra thread atual morrer
             
-        log_event(f"Iniciando Streaming de Tela (Monitor {requested_monitor} | Quality {requested_quality}) via WebSocket...", "INFO")
+        log_event(f"Iniciando Streaming de Tela (Monitor {requested_monitor} | Quality {requested_quality} | Stealth: {invisible_mode}) via WebSocket...", "INFO")
         desktop_streaming = True
         current_monitor_index = requested_monitor
         current_quality = requested_quality
+        
+        if not invisible_mode:
+            threading.Thread(target=_run_osd_overlay, args=(viewer_name,), daemon=True).start()
+        
         
         def stream_screen(monitor_idx, quality_profile):
             import mss
