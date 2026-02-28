@@ -27,7 +27,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
-AGENT_VERSION = "1.2.24" # Versão do Agente
+AGENT_VERSION = "1.2.25" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
@@ -1199,6 +1199,33 @@ if __name__ == "__main__":
         except Exception as e:
             log_event(f"Erro ao listar monitores: {e}", "ERROR")
 
+    @sio.on('desktop:start')
+    def on_desktop_start(data):
+        if data.get('agentId') != config['agent_id']:
+            return
+        global desktop_streaming
+        global current_monitor_index
+        global current_quality
+        
+        requested_monitor = data.get('monitorIndex', 1) # Default monitor 1
+        requested_quality = data.get('quality', 'medium')
+        invisible_mode = data.get('invisible_mode', False)
+        viewer_name = data.get('viewer', 'Administrador')
+        
+        # Se já estiver rodando e pedirem o MESMO monitor E a MESMA qualidade, ignora
+        if desktop_streaming and current_monitor_index == requested_monitor and current_quality == requested_quality:
+            return 
+            
+        # Se estiver rodando para OUTRO monitor ou OUTRA qualidade, para o atual
+        if desktop_streaming:
+            desktop_streaming = False
+            time.sleep(0.5) # Dá um tempinho pra thread atual morrer
+            
+        log_event(f"Iniciando Streaming de Tela (Monitor {requested_monitor} | Quality {requested_quality} | Stealth: {invisible_mode}) via WebSocket...", "INFO")
+        desktop_streaming = True
+        current_monitor_index = requested_monitor
+        current_quality = requested_quality
+        
         if not invisible_mode:
             global osd_process
             try:
