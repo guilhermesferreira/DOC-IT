@@ -27,7 +27,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
-AGENT_VERSION = "1.2.26" # Versão do Agente
+AGENT_VERSION = "1.2.27" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
@@ -1245,8 +1245,14 @@ if __name__ == "__main__":
             
             # Spawn the agent again with --osd argument to show the overlay in a separate main-thread process
             try:
-                # sys.executable points to agent.exe if bundled, or python.exe if running from source
-                osd_process = subprocess.Popen([sys.executable, sys.argv[0] if not getattr(sys, 'frozen', False) else "", "--osd", viewer_name])
+                if getattr(sys, 'frozen', False):
+                    # PyInstaller exe
+                    cmd = [sys.executable, "--osd", viewer_name]
+                else:
+                    # Rodando do script .py
+                    cmd = [sys.executable, sys.argv[0], "--osd", viewer_name]
+                
+                osd_process = subprocess.Popen(cmd)
             except Exception as e:
                 log_event(f"Erro ao instanciar subprocesso OSD: {e}", "ERROR")
         
