@@ -105,12 +105,18 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
             socket.off('desktop:frame', handleDesktopFrame);
             socket.off('desktop:stopped', handleStreamStopped);
             socket.off('desktop:monitor_list', handleMonitorList);
-            // Garantir que a stream pare ao sair da aba
-            if (streamActive) {
-                stopStream();
+        };
+    }, [socket, isConnected, agentId]); // Remoção de selectedMonitor e selectedQuality das dependências para evitar desconexão ao trocar
+
+    // Efeito dedicado apenas para parar a stream quando o componente é desmontado (sair da página)
+    useEffect(() => {
+        return () => {
+            if (isViewingRef.current && socket) {
+                socket.emit('desktop:stop', { agentId });
+                isViewingRef.current = false;
             }
         };
-    }, [socket, isConnected, agentId, streamActive, selectedMonitor, selectedQuality]);
+    }, [socket, agentId]);
 
     const clearCanvas = () => {
         const canvas = canvasRef.current;

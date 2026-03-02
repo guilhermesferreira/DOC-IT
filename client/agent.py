@@ -27,7 +27,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
-AGENT_VERSION = "1.2.31" # Versão do Agente
+AGENT_VERSION = "1.2.34" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
@@ -1183,6 +1183,7 @@ if __name__ == "__main__":
     desktop_streaming = False
     current_monitor_index = 1
     current_quality = 'medium'
+    current_stream_id = 0
     
     @sio.on('desktop:get_monitors')
     def on_desktop_get_monitors(data):
@@ -1215,6 +1216,7 @@ if __name__ == "__main__":
         global current_monitor_index
         global current_quality
         global osd_process
+        global current_stream_id
         
         if 'osd_process' not in globals():
             osd_process = None
@@ -1237,7 +1239,7 @@ if __name__ == "__main__":
                 # Precisa ocultar agora
                 try:
                     if osd_process and osd_process.poll() is None:
-                        osd_process.terminate()
+                        osd_process.kill()
                         osd_process = None
                 except Exception:
                     pass
@@ -1256,13 +1258,11 @@ if __name__ == "__main__":
                 log_event("Sessão Remota alternada para Visível.", "INFO")
                 return # Só inicia o OSD, não reinicia a stream de vídeo
             
-        # Se chegou aqui, mudou o Monitor ou a Qualidade, então mata a stream inteira 
-        # Se estiver rodando para OUTRO monitor ou OUTRA qualidade, para o atual
-        if desktop_streaming:
-            desktop_streaming = False
-            time.sleep(0.5) # Dá um tempinho pra thread atual morrer
+        # Mata a stream anterior instantaneamente alterando o ID da sessao ativa
+        current_stream_id += 1
+        my_stream_id = current_stream_id
             
-        log_event(f"Iniciando Streaming de Tela (Monitor {requested_monitor} | Quality {requested_quality} | Stealth: {invisible_mode}) via WebSocket...", "INFO")
+        log_event(f"Iniciando Streaming de Tela (Monitor {requested_monitor} | Quality {requested_quality} | Stealth: {invisible_mode} | StreamID: {my_stream_id}) via WebSocket...", "INFO")
         desktop_streaming = True
         current_monitor_index = requested_monitor
         current_quality = requested_quality
@@ -1270,7 +1270,7 @@ if __name__ == "__main__":
         try:
             # If already running an OSD process, kill it unconditionally first
             if osd_process and osd_process.poll() is None:
-                osd_process.terminate()
+                osd_process.kill()
                 osd_process = None
         except Exception:
             pass
@@ -1290,7 +1290,7 @@ if __name__ == "__main__":
                 log_event(f"Erro ao instanciar subprocesso OSD: {e}", "ERROR")
         
         
-        def stream_screen(monitor_idx, quality_profile):
+        def stream_screen(monitor_idx, quality_profile, stream_id):
             import mss
             import base64
             # Compressao rapida para economizar banda
@@ -1328,7 +1328,7 @@ if __name__ == "__main__":
                     
                 monitor = sct.monitors[monitor_idx]
                 
-                while desktop_streaming:
+                while desktop_streaming and current_stream_id == stream_id:
                     if not sio.connected:
                         break
                     
@@ -1362,27 +1362,25 @@ if __name__ == "__main__":
                          time.sleep(1) 
 
             log_event("Streaming de Tela encerrado do laco.", "INFO")
-            if sio.connected:
-                try:
-                    sio.emit('desktop:stopped', {'agentId': config['agent_id']})
-                except Exception:
-                    pass
-            
-        threading.Thread(target=stream_screen, args=(current_monitor_index, current_quality), daemon=True).start()
+            # Removemos a emissão de desktop:stopped daqui pois causava race condition com o frontend emitindo desktop:stop quando a gente estava apenas reiniciando a thread (ex. trocando de qualidade ou monitor)            
+        
+        threading.Thread(target=stream_screen, args=(current_monitor_index, current_quality, my_stream_id), daemon=True).start()
 
     @sio.on('desktop:stop')
     def on_desktop_stop(data):
         if data.get('agentId') != config['agent_id']:
             return
         global desktop_streaming
+        global current_stream_id
         log_event("Parando Streaming de Tela a pedido do Frontend.", "INFO")
         desktop_streaming = False
+        current_stream_id += 1
         
         global osd_process
         try:
             # Drop the Tkinter UI when stop is requested
             if osd_process and osd_process.poll() is None:
-                osd_process.terminate()
+                osd_process.kill()
                 osd_process = None
         except Exception:
             pass
@@ -1461,7 +1459,8 @@ if __name__ == "__main__":
             log_event(f"Conectando ao WebSocket na URL: {socket_url}", "INFO")
             sio.connect(
                 socket_url,
-                headers={'x-agent-id': agent_id}  # Identifica o agente para o middleware de auth do servidor
+                headers={'x-agent-id': agent_id},  # Identifica o agente para o middleware de auth do servidor
+                wait_timeout=10
             )
             # Mantém o script python vivo escutando os eventos
             sio.wait()
@@ -1470,9 +1469,13 @@ if __name__ == "__main__":
         except Exception as e:
             log_event(f"Erro ao conectar ao WebSocket: {e}. Tentando novamente em {WEBSOCKET_RETRY_INTERVAL}s...", "ERROR")
         
-        # Garante que o socket está desconectado antes de tentar novamente
+        # Garante que o socket está desconectado antes de tentar novamente, mas só se realmente não conectou
         try:
-            sio.disconnect()
+            if sio.connected:
+                log_event("Socket aparece como conectado após a exception, ignorando timeout/disconnect.", "WARNING")
+                sio.wait()
+            else:
+                sio.disconnect()
         except Exception:
             pass
         
