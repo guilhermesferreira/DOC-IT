@@ -19,7 +19,7 @@ MY_IPC_PORT = 49155
 
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.0.2"
+AGENT_VERSION = "2.0.5"
 
 config = {}
 
@@ -48,23 +48,19 @@ def load_config():
     except:
         return {}
 
-def read_local_module_version(filepath):
-    """Lê a AGENT_VERSION de um arquivo .py no disco para comparação dinâmica."""
+def read_local_module_version(mod_key):
+    """Lê a versão do módulo a partir do module_versions.json gerado no build no diretório atual."""
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            match = re.search(r'AGENT_VERSION\s*=\s*"([^"]+)"', f.read())
-            return match.group(1) if match else "0.0.0"
+        mv_path = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else '.', "module_versions.json")
+        if os.path.exists(mv_path):
+            with open(mv_path, 'r', encoding='utf-8') as f:
+                return json.load(f).get(mod_key, "0.0.0")
     except:
-        return "0.0.0"
+        pass
+    return "0.0.0"
 
-
-# Mapeamento dos módulos e seus fontes locais para leitura de versão
-MODULE_SOURCES = {
-    "core": "Doc-IT-Core.py",
-    "inventory": "Doc-IT-Inventory.py",
-    "remote": "Doc-IT-Remote.py",
-    "updater": "Doc-IT-Updater.py"
-}
+# Lista de módulos locais para varredura de updates
+MODULES_KEYS = ["core", "inventory", "remote", "updater"]
 
 
 # =========================================================
@@ -73,6 +69,7 @@ MODULE_SOURCES = {
 
 def push_restart_to_core():
     """Avisa o Core via IPC que atualizações foram baixadas e requerem Restart Geral"""
+    """Avisa o Core via IPC que atualizações foram baixadas e requerem Restart"""
     try:
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client.settimeout(2)
@@ -82,27 +79,6 @@ def push_restart_to_core():
         client.close()
     except Exception as e:
         log_event(f"Erro ao pedir restart ao Core: {e}", "CRITICAL")
-
-
-def push_self_update_to_core(target_file, expected_hash):
-    """Pede ao Core para atualizar o Updater, já que ele não pode substituir a si próprio no Windows."""
-    try:
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.settimeout(2)
-        client.connect(('127.0.0.1', CORE_IPC_PORT))
-        ipc_message = {
-            "action": "update_module",
-            "data": {
-                "module": "updater",
-                "file": target_file,
-                "hash": expected_hash
-            }
-        }
-        client.sendall(json.dumps(ipc_message).encode('utf-8'))
-        client.close()
-        log_event("Delegada atualização do próprio Updater ao Core via IPC.", "INFO")
-    except Exception as e:
-        log_event(f"Erro ao delegar self-update ao Core: {e}", "ERROR")
 
 
 def check_and_apply_updates():
@@ -128,22 +104,16 @@ def check_and_apply_updates():
             try:
                 server_modules = manifest.get("modules", {})
                 
-                for mod_key, src_file in MODULE_SOURCES.items():
+                for mod_key in MODULES_KEYS:
                     remote_info = server_modules.get(mod_key, {})
                     remote_ver = remote_info.get("version")
-                    local_ver = read_local_module_version(src_file)
+                    local_ver = read_local_module_version(mod_key)
                     
                     if remote_ver and remote_ver != local_ver:
                         log_event(f"Desvio de versão no módulo '{mod_key}': Local {local_ver} -> Server {remote_ver}", "WARNING")
                         
                         target_file = remote_info.get("file")
                         expected_hash = remote_info.get("hash")
-                        
-                        # O Updater NÃO PODE substituir a si próprio (Windows trava o .exe em uso)
-                        # Delega essa operação ao Core, que mata o Updater, troca o arquivo, e relança
-                        if mod_key == "updater":
-                            push_self_update_to_core(target_file, expected_hash)
-                            continue
                         
                         success = download_module_safe(mod_key, target_file, expected_hash)
                         if success:
@@ -153,7 +123,7 @@ def check_and_apply_updates():
                 log_event(f"Manifesto Incompativel ou Quebrado: {e}", "ERROR")
 
             if modules_updated:
-                 log_event("Baixadas substituições de módulos. Engatilhando IPC restart no Core...", "CRITICAL")
+                 log_event("Reposições aplicadas. Notificando Core para auto-restart...", "CRITICAL")
                  push_restart_to_core()
             else:
                  log_event("Todos os módulos estão atualizados.", "INFO")
@@ -172,6 +142,7 @@ def download_module_safe(mod_key, target_file, expected_hash):
     file_url = f"{base_update_url}/{target_file}"
     
     temp_save = f"{target_file}.tmp"
+    old_save = f"{target_file}.old"
     
     try:
         cert_path = config.get("cert_path", "./certs/agent.crt")
@@ -196,11 +167,20 @@ def download_module_safe(mod_key, target_file, expected_hash):
                 os.remove(temp_save)
                 return False
                 
+            # Substituição Eficiente sem BAT (Funciona no Windows)
+            # 1. Deleta o .old anterior se existir
+            if os.path.exists(old_save):
+                try: os.remove(old_save)
+                except Exception as e: log_event(f"Aviso: Não conseguiu deletar {old_save}: {e}", "WARNING")
+            
+            # 2. Renomeia o executável VIVO para .old (O Windows permite renomear arquivos em uso, mas não excluí-los)
             if os.path.exists(target_file):
-                os.remove(target_file)
+                os.rename(target_file, old_save)
+                
+            # 3. Coloca o arquivo novo no lugar
             os.rename(temp_save, target_file)
             
-            log_event(f"Módulo [{mod_key}] injetado e atualizado no disco.", "INFO")
+            log_event(f"Módulo [{mod_key}] substituído com sucesso através de rename (.old).", "INFO")
             return True
             
         else:
