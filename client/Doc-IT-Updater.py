@@ -19,7 +19,7 @@ MY_IPC_PORT = 49155
 
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.0.6"
+AGENT_VERSION = "2.0.8"
 
 config = {}
 
@@ -201,12 +201,30 @@ def download_module_safe(mod_key, target_file, expected_hash):
 if __name__ == "__main__":
     log_event("==== DOC-IT UPDATER INITIALIZED ====", "INFO")
     config = load_config()
-
-    POLLING_MINUTES = 60
     
     while True:
         try:
             check_and_apply_updates()
-        except:
-             pass
-        time.sleep(POLLING_MINUTES * 60)
+        except Exception as e:
+            pass
+            
+        polling_minutes = 60 # Fallback default
+        try:
+            settings_url = f"{config.get('server_base_url')}/settings/agent"
+            cert_path = config.get("cert_path", "./certs/client.crt")
+            key_path = config.get("key_path", "./certs/client.key")
+            ca_path = config.get("ca_path", "./certs/ca.crt")
+            
+            if os.path.exists(cert_path) and os.path.exists(key_path) and os.path.exists(ca_path):
+                r = requests.get(settings_url, cert=(cert_path, key_path), verify=ca_path, timeout=15)
+            else:
+                r = requests.get(settings_url, verify=False, timeout=15)
+                
+            if r.status_code == 200:
+                settings_data = r.json()
+                if "updateCheckIntervalMinutes" in settings_data:
+                    polling_minutes = int(settings_data["updateCheckIntervalMinutes"])
+        except Exception as e:
+            log_event(f"Aviso: Nao foi possivel buscar o intervalo de atualizacao do painel ({e}). Usando {polling_minutes} min.", "WARNING")
+            
+        time.sleep(polling_minutes * 60)

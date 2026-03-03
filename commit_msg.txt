@@ -1,6 +1,7 @@
-🐛 fix(remote): suprimir janela cmd durante execucao de shell remoto
+🐛 fix(updater): aplicar intervalo dinamico de polling do painel
 
-Adiciona a flag creationflags=subprocess.CREATE_NO_WINDOW na
-abertura do cmd.exe via Popen no módulo Doc-IT-Remote, garantindo
-que o shell remoto rode 100% em modo background (stealth) sem
-visibilidade para o usuário interagindo com a máquina.
+Altera o modulo Doc-IT-Updater para abandonar a constante fixa
+de polling em prol de uma consulta previa a `/settings/agent`.
+Com isso, o fluxo de atualizacao do agente e totalmente teleguiado 
+pelas definicoes estabelecidas no Frontend pelo admin (ex: 2 minutos),
+melhorando a sincronia.

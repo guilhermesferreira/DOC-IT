@@ -17,9 +17,9 @@
             "hash": "3a2c3db0723492986c539e1289f2c06497a5baf813efb8a60c89ebdeba7a874e"
         },
         "updater": {
-            "version": "2.0.6",
+            "version": "2.0.8",
             "file": "Doc-IT-Updater.exe",
-            "hash": "f28f4c365b484d1d71f95e849fb95e26e56920d11ddf30a46699a4e7adba7261"
+            "hash": "bb8f0d1a12fb92b65febfd0d5f14e7d8596da7fa94bb0432dee01ac091a2290f"
         }
     }
 }
