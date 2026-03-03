@@ -12,9 +12,9 @@
             "hash": "fb8a496200a8603681e2eb6ba9934b37c274a7782eca158f70dc28b48dfd0629"
         },
         "remote": {
-            "version": "2.0.2",
+            "version": "2.0.3",
             "file": "Doc-IT-Remote.exe",
-            "hash": "9dc8ed0858d56967309c3b6816d2a287a5e72560399cb6271ad5559cd86c17df"
+            "hash": "3a2c3db0723492986c539e1289f2c06497a5baf813efb8a60c89ebdeba7a874e"
         },
         "updater": {
             "version": "2.0.6",

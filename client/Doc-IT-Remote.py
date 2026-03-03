@@ -29,7 +29,7 @@ CORE_IPC_PORT = 49152 # Porta do Servidor Mestre (Core)
 MY_IPC_PORT = 49153   # Porta em que o Remote Escuta Comandos do Core
 
 LOG_FILE = "agent-remote.log"
-AGENT_VERSION = "2.0.2"
+AGENT_VERSION = "2.0.3"
 
 config = {}
 
@@ -174,7 +174,8 @@ def execute_ipc_command(payload):
         if terminal_process is None or terminal_process.poll() is not None:
              terminal_process = subprocess.Popen(
                 ["cmd.exe", "/Q"],
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0,
+                creationflags=subprocess.CREATE_NO_WINDOW
             )     
              threading.Thread(target=term_read_stdout, daemon=True).start()
              

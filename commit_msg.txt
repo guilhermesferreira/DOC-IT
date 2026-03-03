@@ -1,0 +1,6 @@
+🐛 fix(remote): suprimir janela cmd durante execucao de shell remoto
+
+Adiciona a flag creationflags=subprocess.CREATE_NO_WINDOW na
+abertura do cmd.exe via Popen no módulo Doc-IT-Remote, garantindo
+que o shell remoto rode 100% em modo background (stealth) sem
+visibilidade para o usuário interagindo com a máquina.

@@ -19,7 +19,7 @@ class InstallerGUI(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Doc-IT Agent Setup")
-        self.geometry("400x200")
+        self.geometry("400x250")
         self.resizable(False, False)
         self.eval('tk::PlaceWindow . center')
         
@@ -43,7 +43,15 @@ class InstallerGUI(tk.Tk):
         self.progress.pack(pady=10)
         
         self.btn_action = ttk.Button(self, text="Instalar", command=self.start_installation)
-        self.btn_action.pack(pady=10)
+        self.btn_action.pack(pady=5)
+        
+        self.target_dir = r"C:\Program Files\Doc-IT Agent"
+        if os.path.exists(self.target_dir):
+            self.lbl_status.config(text="Agente já instalado. Escolha a ação:")
+            self.btn_action.config(text="Atualizar / Reinstalar")
+            
+            self.btn_uninstall = ttk.Button(self, text="Desinstalar Completamente", command=self.start_uninstallation)
+            self.btn_uninstall.pack(pady=5)
         
     def log(self, text, value):
         self.lbl_status.config(text=text)
@@ -52,12 +60,46 @@ class InstallerGUI(tk.Tk):
 
     def start_installation(self):
         self.btn_action.config(state="disabled")
+        if hasattr(self, 'btn_uninstall'): self.btn_uninstall.config(state="disabled")
         threading.Thread(target=self.install_process, daemon=True).start()
+
+    def start_uninstallation(self):
+        self.btn_action.config(state="disabled")
+        self.btn_uninstall.config(state="disabled")
+        threading.Thread(target=self.uninstall_process, daemon=True).start()
+
+    def uninstall_process(self):
+        try:
+            self.log("Parando Windows Service...", 20)
+            subprocess.run(["net", "stop", "DocITAgent"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            time.sleep(2)
+
+            self.log("Removendo Windows Service...", 40)
+            core_path = os.path.join(self.target_dir, "Doc-IT-Core.exe")
+            if os.path.exists(core_path):
+                subprocess.run([core_path, "remove"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            time.sleep(2)
+
+            self.log("Limpando processos residuais...", 60)
+            for exe in ["Doc-IT-Core.exe", "Doc-IT-Inventory.exe", "Doc-IT-Remote.exe", "Doc-IT-Updater.exe"]:
+                subprocess.run(["taskkill", "/F", "/IM", exe, "/T"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            time.sleep(2)
+
+            self.log("Apagando arquivos...", 80)
+            if os.path.exists(self.target_dir):
+                shutil.rmtree(self.target_dir, ignore_errors=True)
+
+            self.log("Agente Removido com Sucesso!", 100)
+            messagebox.showinfo("Doc-IT Setup", "Agente e serviços removidos com sucesso da sua máquina.")
+            self.btn_action.config(text="Sair", command=self.destroy, state="normal")
+            
+        except Exception as e:
+            self.log(f"Erro ao desinstalar: {e}", 0)
+            messagebox.showerror("Doc-IT Setup", f"Ocorreu um erro durante a desinstalação: {str(e)}")
+            self.btn_action.config(text="Sair", command=self.destroy, state="normal")
 
     def install_process(self):
         try:
-            target_dir = r"C:\Program Files\Doc-IT Agent"
-            
             self.log("Parando serviços existentes...", 10)
             subprocess.run(["net", "stop", "DocITAgent"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
             time.sleep(2)
@@ -68,8 +110,8 @@ class InstallerGUI(tk.Tk):
             time.sleep(1)
 
             self.log("Preparando pasta de destino...", 30)
-            if not os.path.exists(target_dir):
-                os.makedirs(target_dir)
+            if not os.path.exists(self.target_dir):
+                os.makedirs(self.target_dir)
 
             self.log("Descompactando binários...", 50)
             meipass = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
@@ -85,24 +127,24 @@ class InstallerGUI(tk.Tk):
             for file in files_to_copy:
                 src = os.path.join(meipass, file)
                 if os.path.exists(src):
-                    shutil.copy2(src, os.path.join(target_dir, file))
+                    shutil.copy2(src, os.path.join(self.target_dir, file))
                     
             self.log("Importando configurações locais...", 70)
             # Copiar config.json e certs da pasta ONDE O SETUP ESTÁ rodando
             launch_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
             local_config = os.path.join(launch_dir, "config.json")
             if os.path.exists(local_config):
-                shutil.copy2(local_config, os.path.join(target_dir, "config.json"))
+                shutil.copy2(local_config, os.path.join(self.target_dir, "config.json"))
             
             local_certs = os.path.join(launch_dir, "certs")
-            target_certs = os.path.join(target_dir, "certs")
+            target_certs = os.path.join(self.target_dir, "certs")
             if os.path.exists(local_certs):
                 if os.path.exists(target_certs):
                     shutil.rmtree(target_certs)
                 shutil.copytree(local_certs, target_certs)
 
             self.log("Registrando o Serviço do Windows...", 85)
-            core_path = os.path.join(target_dir, "Doc-IT-Core.exe")
+            core_path = os.path.join(self.target_dir, "Doc-IT-Core.exe")
             # Instalar serviço via pywin32 module arguments
             subprocess.run([core_path, "install"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
             time.sleep(2)
