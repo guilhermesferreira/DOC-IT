@@ -152,13 +152,32 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest, isOnline }) => { /
                 <li><span>Gateway:</span> <strong>{agentData.gateway || 'N/A'}</strong></li>
               </ul>
             </div>
-            <div className="card-dashboard"> {/* Alterado de info-card */}
-              <h2><Shield size={16} /> Status de Segurança</h2> {/* Alterado */}
-              <ul>
-                <li><span>Antivírus:</span> <strong>{agentData.antivirus}</strong></li>
-                <li><span>Firewall:</span> <strong>{agentData.firewallStatus}</strong></li>
-                <li><span>Criptografia de Disco:</span> <strong>{agentData.encryptionStatus}</strong></li>
-              </ul>
+            <div className="card-dashboard"> {/* Card: Versões dos Módulos */}
+              <h2><Server size={16} /> Versões dos Módulos</h2>
+              {(() => {
+                const modVer = (device.additionalData || {}).module_versions;
+                if (modVer && typeof modVer === 'object' && Object.keys(modVer).length > 0) {
+                  const moduleLabels = { core: 'Core', inventory: 'Inventory', remote: 'Remote', updater: 'Updater' };
+                  return (
+                    <ul>
+                      {Object.entries(moduleLabels).map(([key, label]) => (
+                        <li key={key}>
+                          <span>{label}:</span>
+                          <strong style={{ color: modVer[key] ? '#28a745' : '#6c757d' }}>
+                            {modVer[key] ? `v${modVer[key]}` : 'N/A'}
+                          </strong>
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                }
+                return (
+                  <ul>
+                    <li><span>Agente (Legado):</span> <strong>v{device.agentVersion || '1.0.0'}</strong></li>
+                    <li style={{ color: '#888', fontSize: '0.85em', marginTop: '8px' }}>Dados modulares ainda não sincronizados.</li>
+                  </ul>
+                );
+              })()}
             </div>
           </div>
         )}
