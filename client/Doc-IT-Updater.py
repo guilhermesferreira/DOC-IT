@@ -19,7 +19,7 @@ MY_IPC_PORT = 49155
 
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.0.8"
+AGENT_VERSION = "2.0.10"
 
 config = {}
 
@@ -167,22 +167,49 @@ def download_module_safe(mod_key, target_file, expected_hash):
                 os.remove(temp_save)
                 return False
                 
-            # Substituição Eficiente sem BAT (Funciona no Windows)
-            # 1. Deleta o .old anterior se existir
+            # 1. Espera o antivírus liberar o arquivo .tmp
+            # Faz um loop de 15 segundos tentando abrir para append (gravação restrita), se funcionar o lock sumiu.
+            lock_cleared = False
+            for _ in range(15):
+                try:
+                    with open(temp_save, 'ab'):
+                        pass
+                    lock_cleared = True
+                    break
+                except OSError:
+                    time.sleep(1)
+                    
+            if not lock_cleared:
+                log_event(f"Antivirus bloqueou {temp_save} por muito tempo. Abortando reposicao.", "ERROR")
+                try: os.remove(temp_save)
+                except: pass
+                return False
+
+            # Substituição Eficiente sem BAT
+            # 2. Deleta o .old anterior se existir
             if os.path.exists(old_save):
                 try: os.remove(old_save)
-                except Exception as e: log_event(f"Aviso: Não conseguiu deletar {old_save}: {e}", "WARNING")
+                except Exception as e: log_event(f"Aviso: Nao conseguiu deletar {old_save}: {e}", "WARNING")
             
-            # 2. Renomeia o executável VIVO para .old (O Windows permite renomear arquivos em uso, mas não excluí-los)
+            # 3. Renomeia o executavel VIVO para .old (O Windows permite renomear arquivos em uso)
             if os.path.exists(target_file):
-                os.rename(target_file, old_save)
+                try:
+                    os.rename(target_file, old_save)
+                except Exception as e:
+                    log_event(f"Falha ao renomear {target_file} para .old: {e}. Abortando.", "ERROR")
+                    return False
                 
-            # 3. Coloca o arquivo novo no lugar
-            os.rename(temp_save, target_file)
-            
-            log_event(f"Módulo [{mod_key}] substituído com sucesso através de rename (.old).", "INFO")
-            return True
-            
+            # 4. Coloca o arquivo novo no lugar
+            try:
+                os.rename(temp_save, target_file)
+                log_event(f"Módulo [{mod_key}] substituído com sucesso através de rename (.old).", "INFO")
+                return True
+            except Exception as e:
+                log_event(f"Falha ao renomear novo binario {temp_save}: {e}. Rollback acionado.", "ERROR")
+                try: os.rename(old_save, target_file)
+                except: pass
+                return False
+                
         else:
              log_event(f"Falha HTTP ao baixar {target_file}: {r.status_code}", "ERROR")
              return False

@@ -1,6 +1,3 @@
-♻️ refactor(agent): substituir hook de taskkill por api nativa
+🐛 fix(updater): adicionar bypass para antivirus/defender lock
 
-Remove o anti-pattern do uso sistemático do comando `taskkill` dentro do 
-loop C++ (Windows) e substitui por uma rotina limpa de purgação de
-processos zumbis nativa via `psutil`. Garante extrema invisibilidade
-do orquestrador Core e do Setup.
+Reescreve o fluxo de `os.rename` do `Doc-IT-Updater` para criar um mecanismo de polling que aguarda o Windows Defender finalizar o scan recem-realizado no arquivo `.tmp` baixado. Isso impede que o Updater tome falhas de acesso violento (`WinError 32`) e tente prosseguir sem o pacote final, resultando em exclusão dos executaveis vigentes do agente. Adicionalmente, também resolve o crash do `Doc-IT-Core` (Excecao SystemExit na Thread assincrona) alterando o comando IPC de restart para `os._exit(0)` em vez do `sys.exit`.

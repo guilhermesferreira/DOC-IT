@@ -28,7 +28,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # --- Configurações Básicas ---
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.0.10"
+AGENT_VERSION = "2.0.11"
 
 DEFAULT_CONFIG = {
     "server_base_url": "https://localhost:3000",
@@ -344,7 +344,8 @@ def handle_ipc_client(client_socket):
                 if m["process"]:
                     try: m["process"].kill()
                     except: pass
-            sys.exit(0)
+            cleanup_ghost_processes()
+            os._exit(0)
             
         # ========================================================
         # Relays: Sub-Módulo Remote -> Core -> Node.js (WebSocket)
