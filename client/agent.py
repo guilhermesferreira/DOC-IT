@@ -27,7 +27,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent.log"
 INVENTORY_FILE = "inventario.txt"
-AGENT_VERSION = "1.2.34" # Versão do Agente
+AGENT_VERSION = "1.2.35" # Versão do Agente
 
 # --- Configuração Padrão ---
 DEFAULT_CONFIG = {
@@ -717,9 +717,9 @@ def check_and_renew_agent_cert(config):
         log_event(f"Erro inesperado na verificação de cert: {e}", "ERROR")
 
 # --- Backend Communication ---
-def perform_check_in(config):
+def perform_check_in(config, include_inventory=False):
     """Envia dados básicos do agente para o endpoint de check-in do backend com mTLS."""
-    log_event(f"iniciando perform_check_in()", "DEBUG")
+    log_event(f"iniciando perform_check_in(include_inventory={include_inventory})", "DEBUG")
     check_in_url = f"{config.get('server_base_url', DEFAULT_CONFIG['server_base_url'])}/agent/check-in"
     
     payload = {
@@ -728,13 +728,15 @@ def perform_check_in(config):
         "osUsername": get_os_username(),
         "ipAddress": get_primary_ip_address(),
         "agentVersion": AGENT_VERSION,
-        "osInfo": get_os_info_string(),
-        "additionalData": get_additional_inventory_data()
+        "osInfo": get_os_info_string()
     }
+
+    if include_inventory:
+        payload["additionalData"] = get_additional_inventory_data()
 
     if not payload["agentId"]:
         log_event("ID do Agente ausente. Não é possível realizar o check-in.", "ERROR")
-        return False
+        return False, None
 
     log_event(f"Tentando check-in para {check_in_url}", "INFO")
     
@@ -1026,20 +1028,28 @@ if __name__ == "__main__":
     # Verifica e renova o certificado do agente antes de qualquer comunicação
     check_and_renew_agent_cert(config)
 
+    # NOVO: Verifica atualizações antes de iniciar processos demorados ou registrar loops
+    # Evita que um agente se "trave" por erro na versão antiga em funções de carga (como WMI)
+    log_event("Verificando atualizações criticas (Pre-Boot)...", "INFO")
+    try:
+        check_and_apply_updates(config)
+    except Exception as e:
+        log_event(f"Falha na checagem inicial de updates: {e}", "WARNING")
+
     import socketio
     import threading
     import os
     import time
     
-    # Realiza o check-in e pega as configurações
-    check_in_successful, global_settings = perform_check_in(config)
+    # Realiza o check-in basal e pega as configurações globais
+    check_in_successful, global_settings = perform_check_in(config, include_inventory=False)
     
     # Valores fallback de segurança (Minutos)
     inventory_interval = 60
     update_interval = 120
     
     if check_in_successful:
-        log_event("Processo de check-in inicial concluído com sucesso.", "INFO")
+        log_event("Processo de check-in inicial rápido concluído com sucesso.", "INFO")
         if global_settings:
             inventory_interval = global_settings.get("inventoryIntervalMinutes", 60)
             update_interval = global_settings.get("updateCheckIntervalMinutes", 120)
@@ -1081,15 +1091,15 @@ if __name__ == "__main__":
 
         while True:
             try:
-                log_event("Coletando inventário completo do sistema para salvamento local...", "INFO")
+                log_event("Coletando inventário completo do sistema para envio e salvamento local...", "INFO")
                 full_inventory = get_system_inventory(config["agent_id"]) 
                 
                 with open(INVENTORY_FILE, "w", encoding="utf-8") as f:
                     json.dump(full_inventory, f, indent=4, ensure_ascii=False)
                 log_event(f"Inventário completo salvo localmente em: {INVENTORY_FILE}", "INFO")
                 
-                # Aproveita pra fazer Check-in de novo pra manter Online no painel
-                perform_check_in(config) 
+                # Check-in pesado enviando todo o pacote the hardware/software recém gerado
+                perform_check_in(config, include_inventory=True) 
             except Exception as e:
                 log_event(f"Erro no loop de Inventário: {e}", "ERROR")
 
