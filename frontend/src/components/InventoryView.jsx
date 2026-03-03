@@ -7,6 +7,7 @@ import { useOnlineAgents } from '../hooks/useOnlineAgents';
 // O novo componente que mostrará os detalhes completos
 import DeviceDetailsView from './DeviceDetailsView';
 import ConfirmationModal from './ConfirmationModal'; // Importar o modal
+import AgentDownloadView from './AgentDownloadView'; // Nova aba de Download
 
 const InventoryView = () => {
   const [devices, setDevices] = useState([]);
@@ -230,6 +231,12 @@ const InventoryView = () => {
             >
               Onboarding Agentes
             </button>
+            <button
+              className={`sub-tab-link ${activeInventorySubView === 'download' ? 'active' : ''}`}
+              onClick={() => setActiveInventorySubView('download')}
+            >
+              Instaladores (Download)
+            </button>
           </nav>
 
           {/* Conteúdo da Sub-aba Ativa */}
@@ -322,6 +329,10 @@ const InventoryView = () => {
                   </table>
                 )}
               </div>
+            )}
+
+            {activeInventorySubView === 'download' && (
+              <AgentDownloadView />
             )}
           </div>
         </>

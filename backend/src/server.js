@@ -13,6 +13,7 @@ const settingsRoutes = require('./routes/settingsRoutes');
 const userRoutes = require('./routes/userRoutes');
 const userGroupRoutes = require('./routes/userGroupRoutes');
 const auditRoutes = require('./routes/auditRoutes'); // <-- Novas rotas de Auditoria
+const downloadRoutes = require('./routes/downloadRoutes'); // <-- Nova rota de Downloads
 
 const https = require('https');
 const fs = require('fs');
@@ -43,6 +44,7 @@ app.use('/settings', settingsRoutes);
 app.use('/users', userRoutes);
 app.use('/user-groups', userGroupRoutes);
 app.use('/audit', auditRoutes); // <-- Registrar endpoint principal de auditoria
+app.use('/api/download', downloadRoutes); // <-- Registrar download de pacotes
 
 app.get('/', (req, res) => {
   res.json({ message: 'API doc-it Backend funcionando!' });
