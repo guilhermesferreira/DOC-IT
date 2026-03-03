@@ -20,6 +20,7 @@ import win32con
 import win32ts
 import win32profile
 import socketio
+import psutil
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -27,7 +28,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # --- Configurações Básicas ---
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.0.8"
+AGENT_VERSION = "2.0.10"
 
 DEFAULT_CONFIG = {
     "server_base_url": "https://localhost:3000",
@@ -188,6 +189,18 @@ def perform_core_check_in(config, inventory_payload=None):
 
 
 # --- Orquestração de Submódulos ---
+def cleanup_ghost_processes():
+    target_exes = ["Doc-IT-Inventory.exe", "Doc-IT-Remote.exe", "Doc-IT-Updater.exe"]
+    try:
+        for proc in psutil.process_iter(['name']):
+            try:
+                if proc.info['name'] in target_exes:
+                    proc.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
+    except Exception as e:
+        log_event(f"Aviso ao varrer processos fantasmas: {e}", "WARNING")
+
 MODULES = {
     "inventory": {"exe": "Doc-IT-Inventory.exe", "process": None},
     "remote": {"exe": "Doc-IT-Remote.exe", "process": None},
@@ -452,11 +465,14 @@ class DocITAgentService(win32serviceutil.ServiceFramework):
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
         win32event.SetEvent(self.hWaitStop)
         self.is_running = False
-        log_event("Recebido sinal de parada do Windows Service. Finalizando módulos...", "INFO")
+        log_event("Recebido sinal de parada do Windows Service. Finalizando módulos suavemente...", "INFO")
         for m in MODULES.values():
             if m["process"]:
                 try: m["process"].kill()
                 except: pass
+        
+        # Aggressive cleanup on stop via native API instead of taskkill
+        cleanup_ghost_processes()
 
     def SvcDoRun(self):
         servicemanager.LogMsg(
@@ -477,6 +493,10 @@ class DocITAgentService(win32serviceutil.ServiceFramework):
         if not config.get("agent_id"):
             config["agent_id"] = get_windows_hardware_uuid()
             save_config(config)
+
+        # Cleanup Any Ghost Processes Before Spawning New Ones (Native approach)
+        log_event("Garantindo ambiente limpo. Purgando processos fantasmas via psutil...", "INFO")
+        cleanup_ghost_processes()
 
         threading.Thread(target=ipc_local_server, daemon=True).start()
 

@@ -1,7 +1,6 @@
-🐛 fix(updater): aplicar intervalo dinamico de polling do painel
+♻️ refactor(agent): substituir hook de taskkill por api nativa
 
-Altera o modulo Doc-IT-Updater para abandonar a constante fixa
-de polling em prol de uma consulta previa a `/settings/agent`.
-Com isso, o fluxo de atualizacao do agente e totalmente teleguiado 
-pelas definicoes estabelecidas no Frontend pelo admin (ex: 2 minutos),
-melhorando a sincronia.
+Remove o anti-pattern do uso sistemático do comando `taskkill` dentro do 
+loop C++ (Windows) e substitui por uma rotina limpa de purgação de
+processos zumbis nativa via `psutil`. Garante extrema invisibilidade
+do orquestrador Core e do Setup.

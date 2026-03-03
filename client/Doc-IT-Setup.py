@@ -7,6 +7,19 @@ import ctypes
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
+import psutil
+
+def kill_agent_processes():
+    target_exes = ["Doc-IT-Core.exe", "Doc-IT-Inventory.exe", "Doc-IT-Remote.exe", "Doc-IT-Updater.exe"]
+    try:
+        for proc in psutil.process_iter(['name']):
+            try:
+                if proc.info['name'] in target_exes:
+                    proc.kill()
+            except:
+                pass
+    except:
+        pass
 
 def is_admin():
     try: return ctypes.windll.shell32.IsUserAnAdmin()
@@ -80,9 +93,8 @@ class InstallerGUI(tk.Tk):
                 subprocess.run([core_path, "remove"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
             time.sleep(2)
 
-            self.log("Limpando processos residuais...", 60)
-            for exe in ["Doc-IT-Core.exe", "Doc-IT-Inventory.exe", "Doc-IT-Remote.exe", "Doc-IT-Updater.exe"]:
-                subprocess.run(["taskkill", "/F", "/IM", exe, "/T"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            self.log("Limpando processos residuais nativamente...", 60)
+            kill_agent_processes()
             time.sleep(2)
 
             self.log("Apagando arquivos...", 80)
@@ -105,8 +117,7 @@ class InstallerGUI(tk.Tk):
             time.sleep(2)
             
             # Matando processos residuais que poderiam travar a cópia
-            for exe in ["Doc-IT-Core.exe", "Doc-IT-Inventory.exe", "Doc-IT-Remote.exe", "Doc-IT-Updater.exe"]:
-                subprocess.run(["taskkill", "/F", "/IM", exe, "/T"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            kill_agent_processes()
             time.sleep(1)
 
             self.log("Preparando pasta de destino...", 30)
