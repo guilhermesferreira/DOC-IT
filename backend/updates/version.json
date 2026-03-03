@@ -1,7 +1,25 @@
 {
-    "version": "1.2.35",
-    "agentHash": "b4bb02bb25bc289a0583259d8fa1d65c74c12bfb3c6a99d66a4765598e50bb6c",
-    "updaterHash": "4749f8be3aef8b51b9832b851689d61913960f7a06c4e574a843baf813d6e157",
-    "agentFileName": "Doc-IT-agent.exe",
-    "updaterFileName": "Doc-IT-updater.exe"
+    "version": "2.0.6",
+    "modules": {
+        "core": {
+            "version": "2.0.6",
+            "file": "Doc-IT-Core.exe",
+            "hash": "a35bbbe432f509b63899d382ff13f984a351c73343727393c3dcf906cddf0033"
+        },
+        "inventory": {
+            "version": "2.0.1",
+            "file": "Doc-IT-Inventory.exe",
+            "hash": "d7144ee50b96a05a8343059b29b6b649e1598c09102bd06ebc73560ba601ef99"
+        },
+        "remote": {
+            "version": "2.0.1",
+            "file": "Doc-IT-Remote.exe",
+            "hash": "0607a4fec376cc4d7e9d903e9e5231de832831d9bc382309df15299b452c74b8"
+        },
+        "updater": {
+            "version": "2.0.2",
+            "file": "Doc-IT-Updater.exe",
+            "hash": "1bc9e6a20da6236043cb8bc435f672aae7b2de2550dd69b33866377485d1cc3b"
+        }
+    }
 }
