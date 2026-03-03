@@ -11,7 +11,9 @@ frontend\node_modules/
 
 client/build/*
 client/dist/*
-client/agent.spec
+*.spec
+client/.build_cache.json
+client/dist/module_versions.json
 client/inventario.txt
 client/dist/agent.exe
 \client\dist\*
