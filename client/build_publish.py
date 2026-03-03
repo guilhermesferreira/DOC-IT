@@ -121,6 +121,8 @@ def process_modules():
             
             # Compila via Pyinstaller
             cmd = ["pyinstaller", "--onefile", "--clean", "--noconfirm", "--noupx"]
+            if mod_key == "core":
+                cmd.append("--hidden-import=win32timezone")
             if mod_key != "core": cmd.append("--noconsole") 
             cmd.append(src)
             subprocess.run(cmd, check=True)
@@ -196,12 +198,34 @@ def copy_certs_to_dist():
         shutil.copy2("config.json", os.path.join(dist_dir, "config.json"))
 
 
+def build_installer():
+    print("\n--- Empacotando Instalador GUI Nativo (Doc-IT-Setup.exe) ---")
+    sep = ";" if os.name == "nt" else ":"
+    cmd = [
+        "pyinstaller", "--onefile", "--clean", "--noconfirm", "--noconsole", "--noupx",
+        f"--add-data=dist/Doc-IT-Core.exe{sep}.",
+        f"--add-data=dist/Doc-IT-Inventory.exe{sep}.",
+        f"--add-data=dist/Doc-IT-Remote.exe{sep}.",
+        f"--add-data=dist/Doc-IT-Updater.exe{sep}.",
+        f"--add-data=dist/module_versions.json{sep}.",
+        "Doc-IT-Setup.py"
+    ]
+    subprocess.run(cmd, check=True)
+    
+    setup_dist = os.path.join("dist", "Doc-IT-Setup.exe")
+    setup_backend = os.path.join(BACKEND_UPDATES_DIR, "Doc-IT-Setup.exe")
+    if os.path.exists(setup_dist):
+        shutil.copy2(setup_dist, setup_backend)
+        print("Instalador Doc-IT-Setup.exe gerado e copiado para o backend com sucesso!")
+
+
 if __name__ == "__main__":
     print("=== Iniciando Build & Publish INCREMENTAL do Agente Doc-IT v2 ===")
     try:
         updated_modules = process_modules()
         copy_certs_to_dist()
         copy_to_backend_and_publish(updated_modules)
+        build_installer()
         print("\n=== DEPLOYMENT INCREMENTAL CONCLUIDO COM SUCESSO! ===")
     except Exception as e:
         print(f"\nERRO FATAL DURANTE O DEPLOY INCREMENTAL: {e}")

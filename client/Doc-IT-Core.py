@@ -9,13 +9,25 @@ from datetime import datetime
 import requests
 import urllib3
 import traceback
+import win32serviceutil
+import win32service
+import win32event
+import servicemanager
+import win32process
+import win32security
+import win32api
+import win32con
+import win32ts
+import win32profile
+import socketio
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 
 # --- Configurações Básicas ---
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.0.6"
+AGENT_VERSION = "2.0.8"
 
 DEFAULT_CONFIG = {
     "server_base_url": "https://localhost:3000",
@@ -184,31 +196,87 @@ MODULES = {
 
 IPC_PORT = 49152 # Porta TCP Local Alta para RPC interno
 
-def start_module(module_name):
-    """Inicia um daemon submódulo (caso ele não esteja rodando)."""
-    exe_name = MODULES[module_name]["exe"]
-    if not os.path.exists(exe_name):
-        log_event(f"Atenção: Submódulo {exe_name} não encontrado no disco local.", "WARNING")
-        return
+class Win32ProcessWrapper:
+    def __init__(self, hProcess):
+        self.hProcess = hProcess
+    def poll(self):
+        try:
+            code = win32process.GetExitCodeProcess(self.hProcess)
+            return None if code == win32con.STILL_ACTIVE else code
+        except: return 1
+    def kill(self):
+        try: win32api.TerminateProcess(self.hProcess, 1)
+        except: pass
 
-    # Se já existir um processo vinculado e ele estiver vivo não faz nada
+def spawn_process_in_session_1(exe_path):
+    """Bypasses Session 0 Isolation to launch a GUI-capable process in the active user session."""
+    try:
+        session_id = win32ts.WTSGetActiveConsoleSessionId()
+        if session_id == 0xFFFFFFFF:
+            log_event("Nenhuma sessão de console ativa encontrada. Remote Module aguardando login.", "WARNING")
+            return None
+            
+        h_token = win32ts.WTSQueryUserToken(session_id)
+        env = win32profile.CreateEnvironmentBlock(h_token, False)
+        
+        si = win32process.STARTUPINFO()
+        si.lpDesktop = "winsta0\\default"
+        si.dwFlags = win32process.STARTF_USESHOWWINDOW
+        si.wShowWindow = win32con.SW_HIDE
+
+        creation_flags = win32con.NORMAL_PRIORITY_CLASS | win32con.CREATE_UNICODE_ENVIRONMENT | 0x08000000
+        
+        hProcess, hThread, dwProcessId, dwThreadId = win32process.CreateProcessAsUser(
+            h_token,
+            None,
+            f'"{exe_path}"',
+            None,
+            None,
+            False,
+            creation_flags,
+            env,
+            os.path.dirname(os.path.abspath(exe_path)),
+            si
+        )
+        return Win32ProcessWrapper(hProcess)
+    except Exception as e:
+        log_event(f"Erro Crítico de IPC/Session 0 Bypass ao instanciar {exe_path}: {e}", "CRITICAL")
+        return None
+
+def start_module(module_name):
+    """Verifica e inicia um módulo. Se ele já estiver rodando, não faz nada."""
+    exe_name = f"Doc-IT-{module_name.capitalize()}.exe"
+    
+    if getattr(sys, 'frozen', False):
+        exe_path = os.path.join(os.path.dirname(sys.executable), exe_name)
+    else:
+        exe_path = os.path.join(os.getcwd(), exe_name)
+
+    if not os.path.exists(exe_path):
+        # Fallback for dev mode
+        if not os.path.exists(exe_name):
+            log_event(f"Atenção: Submódulo {exe_name} não encontrado no disco local.", "WARNING")
+            return
+        else:
+            exe_path = os.path.abspath(exe_name)
+
     p = MODULES[module_name]["process"]
     if p and p.poll() is None:
         return 
 
     try:
-        # TODO: A criação de processo para o módulo Remote terá que ser ajustada no futuro
-        # para usar CreateProcessAsUser (Sessão 1) quando esse Core virar um Windows Service
-        # Por hora, spawnamos ele normalmente.
         log_event(f"Spawnando Submódulo: {exe_name}...", "INFO")
         
-        # Correção: Enviar stdout/stderr para DEVNULL evita deadlocks de buffer 
-        # que causam "Failed to extract _tcl_data" no PyInstaller quando múltiplos EXES iniciam
-        new_process = subprocess.Popen([exe_name], 
-                                     stdout=subprocess.DEVNULL, 
-                                     stderr=subprocess.DEVNULL,
-                                     creationflags=subprocess.CREATE_NO_WINDOW)
-        MODULES[module_name]["process"] = new_process
+        if module_name == "remote":
+            new_process = spawn_process_in_session_1(exe_path)
+            if new_process:
+                MODULES[module_name]["process"] = new_process
+        else:
+            new_process = subprocess.Popen([exe_path], 
+                                         stdout=subprocess.DEVNULL, 
+                                         stderr=subprocess.DEVNULL,
+                                         creationflags=subprocess.CREATE_NO_WINDOW)
+            MODULES[module_name]["process"] = new_process
     except Exception as e:
         log_event(f"Erro ao instanciar módulo {module_name}: {e}", "ERROR")
 
@@ -317,85 +385,128 @@ def send_ipc_command(module_name, payload):
          log_event(f"Falha ao enviar IPC para o submódulo '{module_name}' na porta {target_port}: {e}", "WARNING")
 
 
-# =========================================================
-# MAIN ENTRYPOINT
-# =========================================================
-if __name__ == "__main__":
-    config = load_config()
-    log_event("==== DOC-IT CORE INITIALIZED ====", "INFO")
+# --- Websocket (Conector Mestre de Comandos de Tela/Terminal) ---
+sio = socketio.Client(ssl_verify=False)
 
-    if not config.get("agent_id"):
-        config["agent_id"] = get_windows_hardware_uuid()
-        save_config(config)
+@sio.event
+def connect():
+    log_event("Websocket do Core conectado!", "INFO")
 
-    threading.Thread(target=ipc_local_server, daemon=True).start()
-
-    success, settings = perform_core_check_in(config)
-
-    threading.Thread(target=keep_modules_alive_loop, daemon=True).start()
-
-    # --- Websocket (Conector Mestre de Comandos de Tela/Terminal) ---
-    import socketio
-    sio = socketio.Client(ssl_verify=False)
-
-    @sio.event
-    def connect():
-        log_event("Websocket do Core conectado!", "INFO")
-
-    # ========================================================
-    # Relays: Node.js (WebSocket) -> Core -> Sub-Módulo Remote
-    # ========================================================
+@sio.on('terminal:start')
+def proxy_terminal_start(data):
+    if data.get('agentId') != config.get('agent_id'): return
+    send_ipc_command("remote", {"cmd": "start_terminal"})
     
-    @sio.on('terminal:start')
-    def proxy_terminal_start(data):
-        if data.get('agentId') != config['agent_id']: return
-        send_ipc_command("remote", {"cmd": "start_terminal"})
+@sio.on('terminal:stop')
+def proxy_terminal_stop(data):
+    if data.get('agentId') != config.get('agent_id'): return
+    send_ipc_command("remote", {"cmd": "stop_terminal"})
+    
+@sio.on('terminal:data')
+def proxy_terminal_data(data):
+    if data.get('agentId') != config.get('agent_id'): return
+    send_ipc_command("remote", {"cmd": "input_terminal", "data": {"text": data.get('data')}})
+
+@sio.on('desktop:start')
+def proxy_desktop_start(data):
+    if data.get('agentId') != config.get('agent_id'): return
+    send_ipc_command("remote", {"cmd": "start_desktop", "data": data})
+
+@sio.on('desktop:stop')
+def proxy_desktop_stop(data):
+    if data.get('agentId') != config.get('agent_id'): return
+    send_ipc_command("remote", {"cmd": "stop_desktop"})
+
+@sio.on('desktop:mouse_move')
+def proxy_mouse_move(data):
+    if data.get('agentId') != config.get('agent_id'): return
+    send_ipc_command("remote", {"cmd": "mouse_move", "data": data})
+
+@sio.on('desktop:mouse_click')
+def proxy_mouse_click(data):
+    if data.get('agentId') != config.get('agent_id'): return
+    send_ipc_command("remote", {"cmd": "mouse_click", "data": data})
+
+@sio.on('desktop:key_down')
+def proxy_key_down(data):
+    if data.get('agentId') != config.get('agent_id'): return
+    send_ipc_command("remote", {"cmd": "key_down", "data": data})
+
+@sio.on('desktop:get_monitors')
+def proxy_get_monitors(data):
+    if data.get('agentId') != config.get('agent_id'): return
+    send_ipc_command("remote", {"cmd": "get_monitors"})
+
+
+class DocITAgentService(win32serviceutil.ServiceFramework):
+    _svc_name_ = "DocITAgent"
+    _svc_display_name_ = "Doc-IT Agent Service"
+    _svc_description_ = "Orquestrador do Agente de Monitoramento e Sucesso Doc-IT."
+
+    def __init__(self, args):
+        win32serviceutil.ServiceFramework.__init__(self, args)
+        self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
+        self.is_running = True
+
+    def SvcStop(self):
+        self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
+        win32event.SetEvent(self.hWaitStop)
+        self.is_running = False
+        log_event("Recebido sinal de parada do Windows Service. Finalizando módulos...", "INFO")
+        for m in MODULES.values():
+            if m["process"]:
+                try: m["process"].kill()
+                except: pass
+
+    def SvcDoRun(self):
+        servicemanager.LogMsg(
+            servicemanager.EVENTLOG_INFORMATION_TYPE,
+            servicemanager.PYS_SERVICE_STARTED,
+            (self._svc_name_, '')
+        )
+        self.main()
+
+    def main(self):
+        global config
+        # Troca o diretório de execução para a mesma pasta do EXE, evitando problemas do System32
+        os.chdir(os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__)))
         
-    @sio.on('terminal:stop')
-    def proxy_terminal_stop(data):
-        if data.get('agentId') != config['agent_id']: return
-        send_ipc_command("remote", {"cmd": "stop_terminal"})
+        config = load_config()
+        log_event("==== DOC-IT CORE SERVICE INITIALIZED ====", "INFO")
+
+        if not config.get("agent_id"):
+            config["agent_id"] = get_windows_hardware_uuid()
+            save_config(config)
+
+        threading.Thread(target=ipc_local_server, daemon=True).start()
+
+        success, settings = perform_core_check_in(config)
+
+        threading.Thread(target=keep_modules_alive_loop, daemon=True).start()
         
-    @sio.on('terminal:data')
-    def proxy_terminal_data(data):
-        if data.get('agentId') != config['agent_id']: return
-        send_ipc_command("remote", {"cmd": "input_terminal", "data": {"text": data.get('data')}})
-
-    @sio.on('desktop:start')
-    def proxy_desktop_start(data):
-        if data.get('agentId') != config['agent_id']: return
-        send_ipc_command("remote", {"cmd": "start_desktop", "data": data})
-
-    @sio.on('desktop:stop')
-    def proxy_desktop_stop(data):
-        if data.get('agentId') != config['agent_id']: return
-        send_ipc_command("remote", {"cmd": "stop_desktop"})
-
-    @sio.on('desktop:mouse_move')
-    def proxy_mouse_move(data):
-        if data.get('agentId') != config['agent_id']: return
-        send_ipc_command("remote", {"cmd": "mouse_move", "data": data})
-
-    @sio.on('desktop:mouse_click')
-    def proxy_mouse_click(data):
-        if data.get('agentId') != config['agent_id']: return
-        send_ipc_command("remote", {"cmd": "mouse_click", "data": data})
-
-    @sio.on('desktop:key_down')
-    def proxy_key_down(data):
-        if data.get('agentId') != config['agent_id']: return
-        send_ipc_command("remote", {"cmd": "key_down", "data": data})
-
-    @sio.on('desktop:get_monitors')
-    def proxy_get_monitors(data):
-        if data.get('agentId') != config['agent_id']: return
-        send_ipc_command("remote", {"cmd": "get_monitors"})
+        socket_url = config.get('server_base_url')
+        
+        while self.is_running:
+            try:
+                if not sio.connected:
+                    sio.connect(socket_url, headers={'x-agent-id': config.get("agent_id")})
+            except Exception as e:
+                pass
+                
+            rc = win32event.WaitForSingleObject(self.hWaitStop, 5000)
+            if rc == win32event.WAIT_OBJECT_0:
+                break
+                
+        if sio.connected:
+            sio.disconnect()
 
 
-    socket_url = config.get('server_base_url')
-    while True:
-        try:
-            sio.connect(socket_url, headers={'x-agent-id': config.get("agent_id")})
-            sio.wait()
-        except:
-            time.sleep(10)
+if __name__ == '__main__':
+    if len(sys.argv) == 1:
+        # Se for rodado pelo Service Control Manager sem argumentos
+        servicemanager.Initialize()
+        servicemanager.PrepareToHostSingle(DocITAgentService)
+        servicemanager.StartServiceCtrlDispatcher()
+    else:
+        # Se for rodado com "install", "start", "stop", etc.
+        win32serviceutil.HandleCommandLine(DocITAgentService)

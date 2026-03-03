@@ -29,7 +29,7 @@ CORE_IPC_PORT = 49152 # Porta do Servidor Mestre (Core)
 MY_IPC_PORT = 49153   # Porta em que o Remote Escuta Comandos do Core
 
 LOG_FILE = "agent-remote.log"
-AGENT_VERSION = "2.0.1"
+AGENT_VERSION = "2.0.2"
 
 config = {}
 

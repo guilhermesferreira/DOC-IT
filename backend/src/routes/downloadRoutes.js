@@ -11,20 +11,12 @@ router.get('/agent-bundle', authMiddleware, (req, res) => {
     const zip = new AdmZip();
     const basePath = path.join(__dirname, '..', '..');
 
-    // 1. Adicionar o executável do Agente (se existir)
-    const agentPath = path.join(basePath, 'updates', 'Doc-IT-agent.exe');
-    if (fs.existsSync(agentPath)) {
-      zip.addLocalFile(agentPath);
+    // 1. Adicionar o Instalador Nativo do Agente
+    const setupPath = path.join(basePath, 'updates', 'Doc-IT-Setup.exe');
+    if (fs.existsSync(setupPath)) {
+      zip.addLocalFile(setupPath);
     } else {
-      console.warn(`Aviso: Arquivo do Agente não encontrado em ${agentPath}`);
-    }
-
-    // 2. Adicionar o updater do Agente (se existir)
-    const updaterPath = path.join(basePath, 'updates', 'Doc-IT-updater.exe');
-    if (fs.existsSync(updaterPath)) {
-      zip.addLocalFile(updaterPath);
-    } else {
-      console.warn(`Aviso: Arquivo do Updater não encontrado em ${updaterPath}`);
+      console.warn(`Aviso: Arquivo de Setup não encontrado em ${setupPath}`);
     }
 
     // 3. Adicionar o Certificado Raiz da CA

@@ -19,7 +19,7 @@ MY_IPC_PORT = 49155
 
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.0.5"
+AGENT_VERSION = "2.0.6"
 
 config = {}
 
