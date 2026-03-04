@@ -28,7 +28,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # --- Configurações Básicas ---
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.0.11"
+AGENT_VERSION = "2.0.12"
 
 DEFAULT_CONFIG = {
     "server_base_url": "https://localhost:3000",
@@ -115,8 +115,7 @@ def get_windows_hardware_uuid():
 
 # --- Comunicação com Backend via mTLS (Check-in Leve) ---
 def perform_core_check_in(config, inventory_payload=None):
-    """ O Core notifica que está vivo. Se tiver inventory_payload (repassado via IPC), ele anexa na request. """
-    check_in_url = f"{config.get('server_base_url')}/agent/check-in"
+    """ O Core notifica que está vivo. Itera pela lista de server_urls até encontrar um que responda. """
     
     import platform
     import getpass
@@ -129,31 +128,27 @@ def perform_core_check_in(config, inventory_payload=None):
         "agentId": config.get("agent_id"),
         "hostname": socket.gethostname(),
         "osUsername": osUser,
-        "ipAddress": "127.0.0.1", # Simplificado para o core (o módulo de rede acha o real)
+        "ipAddress": "127.0.0.1",
         "agentVersion": AGENT_VERSION,
         "osInfo": f"{platform.system()} {platform.release()}"
     }
 
     if inventory_payload:
         payload["additionalData"] = inventory_payload
-        # Se veio inventário da interface IPC, atualiza o IP da maquina
         if "network_interfaces" in inventory_payload:
             for d in inventory_payload["network_interfaces"]:
                 for ip in d.get("ipv4_addresses", []):
                     payload["ipAddress"] = ip.get("ip_address", payload["ipAddress"])
     
-    # Sempre injeta as versões dos módulos no additionalData
     if "additionalData" not in payload or payload["additionalData"] is None:
         payload["additionalData"] = {}
     
-    # Lê as versões dos módulos do arquivo gerado pelo build_publish.py
     mod_versions = {"core": AGENT_VERSION}
     try:
         mv_path = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else '.', "module_versions.json")
         if os.path.exists(mv_path):
             with open(mv_path, 'r', encoding='utf-8') as _f:
                 mod_versions = json.load(_f)
-        # Garante que o Core sempre reflete a versão real em execução
         mod_versions["core"] = AGENT_VERSION
     except:
         pass
@@ -171,21 +166,33 @@ def perform_core_check_in(config, inventory_payload=None):
         log_event("Certificados mTLS ausentes. Check-in falhou.", "ERROR")
         return False, None
 
-    try:
-        response = requests.post(check_in_url, json=payload, timeout=20, cert=(cert_path, key_path), verify=ca_path)
-        response.raise_for_status() 
-        global_settings = response.json()
-        
-        # Pega configuracoes do pool
-        settings_url = f"{config.get('server_base_url')}/settings/agent"
-        set_response = requests.get(settings_url, timeout=10, cert=(cert_path, key_path), verify=ca_path)
-        if set_response.status_code == 200:
-            return True, set_response.json()
+    # Failover: tenta cada URL da lista até uma funcionar
+    server_urls = config.get("server_urls", [config.get("server_base_url")])
+    
+    for url in server_urls:
+        try:
+            check_in_url = f"{url}/agent/check-in"
+            response = requests.post(check_in_url, json=payload, timeout=10, cert=(cert_path, key_path), verify=ca_path)
+            response.raise_for_status()
             
-        return True, None
-    except Exception as e:
-        log_event(f"Falha de rede no Checkin mTLS: {e}", "ERROR")
-        return False, None
+            # Sucesso! Persiste essa URL como a ativa
+            if url != config.get("server_base_url"):
+                config["server_base_url"] = url
+                save_config(config)
+                log_event(f"Servidor ativo descoberto: {url}", "INFO")
+            
+            settings_url = f"{url}/settings/agent"
+            set_response = requests.get(settings_url, timeout=10, cert=(cert_path, key_path), verify=ca_path)
+            if set_response.status_code == 200:
+                return True, set_response.json()
+                
+            return True, None
+        except Exception as e:
+            log_event(f"Tentativa de check-in em {url} falhou: {e}", "WARNING")
+            continue
+    
+    log_event("Nenhum servidor respondeu ao check-in. Todas as URLs falharam.", "ERROR")
+    return False, None
 
 
 # --- Orquestração de Submódulos ---
@@ -505,14 +512,24 @@ class DocITAgentService(win32serviceutil.ServiceFramework):
 
         threading.Thread(target=keep_modules_alive_loop, daemon=True).start()
         
-        socket_url = config.get('server_base_url')
+        # Failover de WebSocket: tenta cada URL da lista
+        server_urls = config.get('server_urls', [config.get('server_base_url')])
         
         while self.is_running:
-            try:
-                if not sio.connected:
-                    sio.connect(socket_url, headers={'x-agent-id': config.get("agent_id")})
-            except Exception as e:
-                pass
+            for socket_url in server_urls:
+                if not self.is_running:
+                    break
+                try:
+                    if not sio.connected:
+                        sio.connect(socket_url, headers={'x-agent-id': config.get("agent_id")})
+                        if sio.connected:
+                            log_event(f"WebSocket conectado com sucesso em: {socket_url}", "INFO")
+                            break
+                except Exception as e:
+                    pass
+            
+            if not self.is_running:
+                break
                 
             rc = win32event.WaitForSingleObject(self.hWaitStop, 5000)
             if rc == win32event.WAIT_OBJECT_0:

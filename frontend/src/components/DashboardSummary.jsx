@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './DashboardSummary.css';
 import { useAuth } from '../auth/AuthContext';
 import { useOnlineAgents } from '../hooks/useOnlineAgents';
+import API from '../api/api';
 import {
   MonitorSmartphone,
   Activity,
@@ -10,16 +11,33 @@ import {
   Plus,
   Settings,
   FileDown,
-  Clock
+  Clock,
+  UserCheck
 } from 'lucide-react';
 
 const DashboardSummary = ({ devices = [], setActiveView }) => {
   const { user } = useAuth();
-  const { onlineAgentIds, onlineCount } = useOnlineAgents();
+  const { onlineAgentIds } = useOnlineAgents();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    const fetchPending = async () => {
+      try {
+        const res = await API.get('/device?status=pending');
+        setPendingCount(res.data.length);
+      } catch (e) {
+        console.error('Erro ao buscar dispositivos pendentes:', e);
+      }
+    };
+    fetchPending();
+  }, []);
 
   // Calcular métricas derivadas
   const totalDevices = devices.length;
-  const offlineCount = totalDevices - onlineCount;
+  // Filtra onlineCount para considerar apenas dispositivos aprovados
+  const approvedAgentIds = new Set(devices.map(d => d.agentId).filter(Boolean));
+  const approvedOnlineCount = [...onlineAgentIds].filter(id => approvedAgentIds.has(id)).length;
+  const offlineCount = totalDevices - approvedOnlineCount;
 
   // Pegar os últimos 5 dispositivos baseados no ID (assumindo IDs incrementais como mais recentes) ou data
   const recentDevices = [...devices]
@@ -48,7 +66,7 @@ const DashboardSummary = ({ devices = [], setActiveView }) => {
           </div>
           <div className="kpi-content">
             <h3 className="kpi-title">Máquinas Online</h3>
-            <p className="kpi-value" style={{ color: '#10b981' }}>{onlineCount}</p>
+            <p className="kpi-value" style={{ color: '#10b981' }}>{approvedOnlineCount}</p>
           </div>
         </div>
 
@@ -59,6 +77,16 @@ const DashboardSummary = ({ devices = [], setActiveView }) => {
           <div className="kpi-content">
             <h3 className="kpi-title">Máquinas Offline</h3>
             <p className="kpi-value" style={{ color: '#6b7280' }}>{offlineCount < 0 ? 0 : offlineCount}</p>
+          </div>
+        </div>
+
+        <div className="kpi-card" style={{ flexGrow: 1, cursor: 'pointer' }} onClick={() => setActiveView('inventory')}>
+          <div className="kpi-icon-wrapper" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)' }}>
+            <UserCheck size={24} color="#f59e0b" />
+          </div>
+          <div className="kpi-content">
+            <h3 className="kpi-title">Aguardando Aprovação</h3>
+            <p className="kpi-value" style={{ color: '#f59e0b' }}>{pendingCount}</p>
           </div>
         </div>
       </div>

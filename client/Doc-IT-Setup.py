@@ -140,25 +140,29 @@ class InstallerGUI(tk.Tk):
                 if os.path.exists(src):
                     shutil.copy2(src, os.path.join(self.target_dir, file))
                     
-            self.log("Importando configurações locais...", 70)
-            # Copiar config.json e certs da pasta ONDE O SETUP ESTÁ rodando
-            launch_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
-            local_config = os.path.join(launch_dir, "config.json")
-            if os.path.exists(local_config):
-                shutil.copy2(local_config, os.path.join(self.target_dir, "config.json"))
+            self.log("Importando configurações e certificados embarcados...", 70)
+            # Tenta pegar config.json e certs de DENTRO do bundle (sys._MEIPASS)
+            embedded_config = os.path.join(meipass, "config.json")
+            if os.path.exists(embedded_config):
+                shutil.copy2(embedded_config, os.path.join(self.target_dir, "config.json"))
             
-            local_certs = os.path.join(launch_dir, "certs")
+            embedded_certs = os.path.join(meipass, "certs")
             target_certs = os.path.join(self.target_dir, "certs")
-            if os.path.exists(local_certs):
+            if os.path.exists(embedded_certs):
                 if os.path.exists(target_certs):
                     shutil.rmtree(target_certs)
-                shutil.copytree(local_certs, target_certs)
+                shutil.copytree(embedded_certs, target_certs)
 
             self.log("Registrando o Serviço do Windows...", 85)
             core_path = os.path.join(self.target_dir, "Doc-IT-Core.exe")
             # Instalar serviço via pywin32 module arguments
             subprocess.run([core_path, "install"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
             time.sleep(2)
+            
+            self.log("Configurando o Serviço (Auto-Start e Recovery)...", 90)
+            subprocess.run(["sc", "config", "DocITAgent", "start=", "auto"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            subprocess.run(["sc", "failure", "DocITAgent", "reset=", "0", "actions=", "restart/60000/restart/60000/restart/60000"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            time.sleep(1)
             
             self.log("Iniciando Agente no Background...", 95)
             subprocess.run(["net", "start", "DocITAgent"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)

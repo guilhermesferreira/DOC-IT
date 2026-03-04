@@ -182,6 +182,53 @@ def copy_to_backend_and_publish(updated_modules):
     print("Manifesto version.json modular gerado com sucesso!")
 
 
+def get_server_urls():
+    """Gera uma lista de URLs do servidor para o config.json do agente.
+    Inclui: 1) SERVER_URL do .env (se existir)  2) Todos os IPs reais da máquina automaticamente."""
+    import socket
+    env_path = os.path.join("..", "backend", ".env")
+    urls = []
+    
+    # Lê a porta do .env
+    port = "3000"
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.strip().startswith("PORT="):
+                    port = line.strip().split("=", 1)[1].strip('"').strip("'")
+    
+    # Prioridade 1: SERVER_URL explícita
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.strip().startswith("SERVER_URL="):
+                    val = line.strip().split("=", 1)[1].strip('"').strip("'")
+                    if val:
+                        urls.append(val)
+                        print(f" -> SERVER_URL do .env adicionada: {val}")
+    
+    # Prioridade 2: Auto-detectar TODOS os IPs reais
+    try:
+        hostname = socket.gethostname()
+        ips = socket.getaddrinfo(hostname, None, socket.AF_INET)
+        for info in ips:
+            ip = info[4][0]
+            if not ip.startswith("127.") and not ip.startswith("169.254."):
+                url = f"https://{ip}:{port}"
+                if url not in urls:
+                    urls.append(url)
+                    print(f" -> IP auto-detectado adicionado: {url}")
+    except Exception as e:
+        print(f" -> Aviso: Falha ao auto-detectar IPs: {e}")
+    
+    if not urls:
+        fallback = f"https://localhost:{port}"
+        urls.append(fallback)
+        print(f" -> AVISO: Nenhum IP detectado, usando fallback: {fallback}")
+    
+    return urls
+
+
 def copy_certs_to_dist():
     print("Atualizando pasta dist/ com config e certificados primários...")
     dist_dir = os.path.join("dist")
@@ -194,8 +241,21 @@ def copy_certs_to_dist():
         if os.path.exists(src):
             shutil.copy2(src, os.path.join(dist_certs, cert_file))
     
-    if os.path.exists("config.json"):
-        shutil.copy2("config.json", os.path.join(dist_dir, "config.json"))
+    # Gera config.json dinamicamente com lista de URLs
+    server_urls = get_server_urls()
+    config_data = {
+        "server_urls": server_urls,
+        "server_base_url": server_urls[0],
+        "log_level": "INFO",
+        "cert_path": "./certs/agent.crt",
+        "key_path": "./certs/agent.key",
+        "ca_path": "./certs/ca.crt"
+    }
+    config_path = os.path.join(dist_dir, "config.json")
+    with open(config_path, 'w', encoding='utf-8') as f:
+        json.dump(config_data, f, indent=4)
+    print(f" -> config.json gerado com {len(server_urls)} URL(s) de servidor")
+
 
 
 def build_installer():
@@ -208,6 +268,8 @@ def build_installer():
         f"--add-data=dist/Doc-IT-Remote.exe{sep}.",
         f"--add-data=dist/Doc-IT-Updater.exe{sep}.",
         f"--add-data=dist/module_versions.json{sep}.",
+        f"--add-data=dist/config.json{sep}.",
+        f"--add-data=dist/certs{sep}certs",
         "Doc-IT-Setup.py"
     ]
     subprocess.run(cmd, check=True)

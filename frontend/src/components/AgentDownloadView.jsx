@@ -36,10 +36,7 @@ const AgentDownloadView = () => {
     return (
         <div className="agent-download-section" style={{ padding: '24px', maxWidth: '800px' }}>
             <h2>Instaladores do Agente Doc-IT</h2>
-            <p style={{ marginBottom: '24px', color: 'var(--text-secondary)' }}>
-                Baixe o pacote pré-configurado do Agente para instalação em novas máquinas da rede.
-                O pacote já inclui o executável principal, o atualizador automático e os certificados de segurança necessários.
-            </p>
+
 
             {error && (
                 <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '12px', borderRadius: '6px', marginBottom: '16px' }}>
@@ -63,7 +60,7 @@ const AgentDownloadView = () => {
                     <ul style={{ listStyleType: 'disc', paddingLeft: '20px', marginBottom: '24px', color: 'var(--text-color)', lineHeight: '1.6' }}>
                         <li>Requer Windows 10/11 ou Windows Server 2016+.</li>
                         <li>Extraia o arquivo ZIP recebido.</li>
-                        <li>Execute <strong>Agent.exe</strong> como Administrador.</li>
+                        <li>Execute o<b>Doc-IT-Setup.exe</b>como Administrador.</li>
                         <li>O Agente aparecerá na aba "Onboarding" para sua aprovação.</li>
                     </ul>
 
@@ -104,17 +101,10 @@ const AgentDownloadView = () => {
                         <Info size={18} /> Conteúdo do ZIP
                     </div>
                     <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                        <strong>Doc-IT-agent.exe</strong><br />
-                        Executável principal do serviço.<br /><br />
+                        <strong>Doc-IT-Setup.exe</strong><br />
+                        Instalador tudo-em-um (Self-Contained).<br /><br />
 
-                        <strong>Doc-IT-updater.exe</strong><br />
-                        Utilitário de atualização invisível.<br /><br />
-
-                        <strong>ca.crt</strong><br />
-                        Certificado Raiz para comunicação mTLS segura.<br /><br />
-
-                        <strong>config.json</strong><br />
-                        Arquivo gerado automaticamente apontando para este servidor.
+                        O executável já contém todos os módulos, certificados de segurança (mTLS) e configurações do servidor embutidos nativamente.
                     </div>
                 </div>
             </div>
