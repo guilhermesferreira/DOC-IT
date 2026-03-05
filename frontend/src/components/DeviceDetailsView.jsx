@@ -2,13 +2,46 @@
 import React, { useState } from 'react';
 import './DeviceDetailsView.css'; // Criaremos este CSS
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { ArrowLeft, Monitor, Cpu, HardDrive, Wifi, Shield, Clock, Server, Network, Trash2, Users, FileText, TerminalSquare, WifiOff } from 'lucide-react'; // Adicionado Trash2, Users e TerminalSquare e WifiOff
+import { ArrowLeft, Monitor, Cpu, HardDrive, Wifi, Shield, Clock, Server, Network, Trash2, Users, FileText, TerminalSquare, WifiOff, Lock, Unlock, KeyRound } from 'lucide-react'; // Adicionado Trash2, Users e TerminalSquare e WifiOff e ícones do Tamper
 import RemoteTerminal from './RemoteTerminal';
 import RemoteDesktop from './RemoteDesktop';
+import API from '../api/api';
 
 const DeviceDetailsView = ({ device, onBack, onDeleteRequest, isOnline }) => { // Adicionada prop onDeleteRequest e isOnline
   const [activeTab, setActiveTab] = useState("overview");
   const [activeSecurityTab, setActiveSecurityTab] = useState("firewall");
+  const [showTamperModal, setShowTamperModal] = useState(false);
+  const [tamperPassword, setTamperPassword] = useState('');
+  const [loadingTamper, setLoadingTamper] = useState(false);
+  const [isTamperEnabled, setIsTamperEnabled] = useState(device.tamperEnabled ?? true);
+
+  // Funcões do Tamper Protection
+  const handleViewTamperPassword = async () => {
+    setLoadingTamper(true);
+    try {
+      const response = await API.get(`/device/${device.id}/tamper`);
+      const data = response.data;
+      setTamperPassword(data.tamperPassword);
+      setIsTamperEnabled(data.tamperEnabled);
+      setShowTamperModal(true);
+    } catch (error) {
+      alert("Erro ao buscar a senha do Tamper. Verifique permissões.");
+    } finally {
+      setLoadingTamper(false);
+    }
+  };
+
+  const handleToggleTamper = async () => {
+    const newState = !isTamperEnabled;
+    try {
+      await API.post(`/device/${device.id}/tamper/toggle`, { enabled: newState });
+      setIsTamperEnabled(newState);
+      // Opcional: mostrar toast de sucesso
+    } catch (error) {
+      console.error(error);
+      alert("Falha ao alterar o estado do Tamper Protection.");
+    }
+  };
 
   // Função para formatar datas
   const formatDate = (dateString) => {
@@ -141,6 +174,7 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest, isOnline }) => { /
                 <li><span>Usuário Principal:</span> <strong>{device.osUsername}</strong></li>
                 <li><span>Domínio/Workgroup:</span> <strong>{agentData.domain}</strong></li>
                 <li><span>Versão do Agente:</span> <strong>v{device.agentVersion || '1.0.0'}</strong></li>
+                {device.guiVersion && <li><span>Versão da Interface (GUI):</span> <strong>v{device.guiVersion}</strong></li>}
                 <li><span>Tempo Ligado (Uptime):</span> <strong>{agentData.uptime}</strong></li>
               </ul>
             </div>
@@ -289,26 +323,58 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest, isOnline }) => { /
         )}
         {/* Aba: Software */}
         {activeTab === 'software' && (
-          <div className="card-dashboard full-width"> {/* Alterado e mantido full-width se necessário */}
-            <h2>Softwares Instalados ({agentData.installedSoftware.length})</h2> {/* Alterado */}
-            <ul className="software-list">
-              {agentData.installedSoftware.length > 0 ? (
-                agentData.installedSoftware.map((sw, index) => (
-                  <li key={index}>
-                    <strong>{sw.name || 'Software Desconhecido'}</strong>
-                    {(sw.version && sw.version !== 'N/A') && <span>(Versão: {sw.version})</span>}
-                  </li>
-                ))
-              ) : (
-                <li>Nenhum software listado.</li>
-              )}
-            </ul>
+          <div className="tab-pane-grid">
+            <div className="card-dashboard full-width">
+              <h2>Softwares Instalados ({agentData.installedSoftware.length})</h2>
+              <ul className="software-list">
+                {agentData.installedSoftware.length > 0 ? (
+                  agentData.installedSoftware.map((sw, index) => (
+                    <li key={index}>
+                      <strong>{sw.name || 'Software Desconhecido'}</strong>
+                      {(sw.version && sw.version !== 'N/A') && <span>(Versão: {sw.version})</span>}
+                    </li>
+                  ))
+                ) : (
+                  <li>Nenhum software listado.</li>
+                )}
+              </ul>
+            </div>
           </div>
         )}
 
         {/* Aba: Security */}
         {activeTab === 'security' && (
           <div className="tab-pane-grid">
+
+            {/* Card: Tamper Protection */}
+            <div className="card-dashboard full-width" style={{ borderLeft: isTamperEnabled ? '4px solid #28a745' : '4px solid #dc3545', background: 'var(--card-bg)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {isTamperEnabled ? <Lock size={20} color="#28a745" /> : <Unlock size={20} color="#dc3545" />}
+                  Proteção do Agente (Tamper Protection)
+                </h2>
+                <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                  <label className="toggle-switch">
+                    <input type="checkbox" checked={isTamperEnabled} onChange={handleToggleTamper} />
+                    <span className="slider round"></span>
+                  </label>
+                  <span style={{ fontSize: '0.85em', fontWeight: '500', color: isTamperEnabled ? '#28a745' : '#888' }}>
+                    {isTamperEnabled ? "Ativada" : "Desativada"}
+                  </span>
+                </div>
+              </div>
+              <p style={{ fontSize: '0.9em', color: 'var(--text-muted)', marginTop: '10px' }}>
+                Previne que o agente do Doc-IT seja desvinculado deste servidor ou desabilitado localmente da máquina cliente sem a senha de emergência abaixo.
+              </p>
+              <button
+                onClick={handleViewTamperPassword}
+                className="button-primary"
+                style={{ marginTop: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                disabled={loadingTamper}
+              >
+                <KeyRound size={16} /> {loadingTamper ? 'Buscando...' : 'Visualizar Senha Restrita'}
+              </button>
+            </div>
 
             {/* Card: Firewall */}
             <div className="card-dashboard">
@@ -475,6 +541,27 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest, isOnline }) => { /
         )}
 
       </div>
+
+      {/* Modal do Tamper Password */}
+      {showTamperModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center' }}>
+            <h2><KeyRound size={24} style={{ color: '#d39e00', marginBottom: '-5px' }} /> Senha Tamper Local</h2>
+            <p style={{ fontSize: '0.9em', color: 'var(--text-muted)', margin: '15px 0' }}>
+              Utilize esta senha unicamente na interface gráfica local do cliente para liberar os botões de manutenção do agente (caso a máquina perca acesso ao painel do servidor).
+            </p>
+
+            <div style={{ background: '#f8f9fa', border: '1px dashed #ccc', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+              <strong style={{ fontSize: '2em', letterSpacing: '4px', color: '#333' }}>{tamperPassword}</strong>
+            </div>
+
+            <div className="modal-actions" style={{ justifyContent: 'center' }}>
+              <button onClick={() => setShowTamperModal(false)} className="button-secondary">Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
