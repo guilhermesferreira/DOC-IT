@@ -8,8 +8,8 @@ datasource db {
 }
 
 model UserGroup {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
   description String?
   users       User[]
 
@@ -30,19 +30,19 @@ model UserGroup {
   canManageDevices Boolean @default(false) // Aprovar, rejeitar, arquivar
 
   // Permissões: Módulo Acesso Remoto (Agentes)
-  canAccessRemote  Boolean @default(false) // Acesso especifico de seguranca pro Web Terminal / VNC
+  canAccessRemote Boolean @default(false) // Acesso especifico de seguranca pro Web Terminal / VNC
 
   // Permissões: Módulo Configurações Globais (Settings)
-  canViewSettings  Boolean @default(false)
-  canEditSettings  Boolean @default(false)
+  canViewSettings Boolean @default(false)
+  canEditSettings Boolean @default(false)
 
   // Permissões: Módulo de Auditoria
   canViewAuditLogs     Boolean @default(false)
   canViewAuditSettings Boolean @default(false)
   canEditAuditSettings Boolean @default(false)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model User {
@@ -63,28 +63,34 @@ model User {
 }
 
 model Device {
-  id             Int       @id @default(autoincrement())
-  name           String
-  type           String
-  location       String
-  patrimony      String?
-  userId         Int?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  agentId        String?   @unique
-  hostname       String?
-  osUsername     String?
-  ipAddress      String?
-  agentVersion   String?
-  osInfo         String?
-  additionalData Json?
-  status         String    @default("pending")
-  source         String    @default("manual")
-  firstSeenAt    DateTime?
-  lastSeenAt     DateTime?
-  approvedAt     DateTime?
-  certRenewalPending Boolean @default(false)
-  user           User?     @relation(fields: [userId], references: [id])
+  id                 Int       @id @default(autoincrement())
+  name               String
+  type               String
+  location           String
+  patrimony          String?
+  userId             Int?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  agentId            String?   @unique
+  hostname           String?
+  osUsername         String?
+  ipAddress          String?
+  agentVersion       String?
+  osInfo             String?
+  additionalData     Json?
+  status             String    @default("pending")
+  source             String    @default("manual")
+  firstSeenAt        DateTime?
+  lastSeenAt         DateTime?
+  approvedAt         DateTime?
+  certRenewalPending Boolean   @default(false)
+
+  // Segurança do Agente
+  tamperEnabled  Boolean @default(true)
+  tamperPassword String?
+  guiVersion     String?
+
+  user User? @relation(fields: [userId], references: [id])
 
   @@index([status])
   @@index([hostname])
@@ -103,8 +109,8 @@ model GlobalSettings {
 model AuditLog {
   id        Int      @id @default(autoincrement())
   userId    Int?
-  action    String   // ex: CREATE, UPDATE, DELETE, ACCESS, COMMAND
-  resource  String   // ex: DEVICE, USER, GROUP, TERMINAL, SETTINGS
+  action    String // ex: CREATE, UPDATE, DELETE, ACCESS, COMMAND
+  resource  String // ex: DEVICE, USER, GROUP, TERMINAL, SETTINGS
   details   Json?
   ipAddress String?
   createdAt DateTime @default(now())
