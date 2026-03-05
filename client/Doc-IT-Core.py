@@ -21,14 +21,25 @@ import win32ts
 import win32profile
 import socketio
 import psutil
+from cryptography.fernet import Fernet
+import base64
+import win32file
+from cryptography.fernet import Fernet
+import base64
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 # --- Configurações Básicas ---
-CONFIG_FILE = "config.json"
+CONFIG_FILE = "Doc-IT.dat"
+LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.0.12"
+AGENT_VERSION = "2.0.13"
+
+# Chave Criptográfica Fixa (Hardcoded para o Build)
+# Em produção real, este executável é obfusquado pelo PyArmor/Nuitka.
+ENCRYPTION_KEY = b'r7xK9sLpR2vM4N8wQ3tA5yB1uC6zD0fHjI7oP9lK3nU='
+cipher_suite = Fernet(ENCRYPTION_KEY)
 
 DEFAULT_CONFIG = {
     "server_base_url": "https://localhost:3000",
@@ -37,7 +48,9 @@ DEFAULT_CONFIG = {
     "log_level": "INFO",
     "cert_path": "./certs/agent.crt",
     "key_path": "./certs/agent.key",
-    "ca_path": "./certs/ca.crt"
+    "ca_path": "./certs/ca.crt",
+    "tamper_enabled": True,
+    "tamper_password": None
 }
 
 LOG_LEVELS = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}
@@ -75,30 +88,112 @@ def handle_thread_exception(args):
 threading.excepthook = handle_thread_exception
 
 
-# --- Gerenciamento de Configuração Básica ---
+# --- Gerenciamento de Configuração Básica (Criptografada) ---
 def load_config():
-    if not os.path.exists(CONFIG_FILE):
-        log_event(f"Arquivo de configuração não encontrado. Criando padrão.", "WARNING")
-        save_config(DEFAULT_CONFIG)
-        return DEFAULT_CONFIG
-    try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            loaded_config = json.load(f)
+    global cipher_suite
+    
+    # 1. Tenta carregar o novo formato seguro
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "rb") as f:
+                encrypted_data = f.read()
+                decrypted_data = cipher_suite.decrypt(encrypted_data)
+                loaded_config = json.loads(decrypted_data.decode('utf-8'))
+                
+            # Verifica campos padrão ausentes
             for key, value in DEFAULT_CONFIG.items():
                 if key not in loaded_config:
                     loaded_config[key] = value
             return loaded_config
-    except Exception as e:
-        log_event(f"Erro ao ler config: {e}. Usando fallback.", "ERROR")
-        save_config(DEFAULT_CONFIG)
-        return DEFAULT_CONFIG
+        except Exception as e:
+            log_event(f"Falha CRÍTICA ao decriptar {CONFIG_FILE}. Arquivo corrompido ou chave inválida: {e}", "ERROR")
+            # Não recria o config vazio automaticamente aqui se falhou em decriptar, para evitar reset.
+            # Mas na primeira execução (onde nem legacy existe), ele fará isso.
+
+    # 2. Se .dat não existe, procura o JSON legado (Migração)
+    if os.path.exists(LEGACY_CONFIG_FILE):
+        log_event(f"Arquivo legado {LEGACY_CONFIG_FILE} detectado. Iniciando migração segura para {CONFIG_FILE}...", "INFO")
+        try:
+            with open(LEGACY_CONFIG_FILE, "r", encoding="utf-8") as f:
+                loaded_config = json.load(f)
+                
+            for key, value in DEFAULT_CONFIG.items():
+                if key not in loaded_config:
+                    loaded_config[key] = value
+            
+            # Salva no novo formato
+            save_config(loaded_config)
+            
+            # Deleta o JSON antigo para proteger os dados (como a URL do server)
+            try:
+                os.remove(LEGACY_CONFIG_FILE)
+                log_event(f"Migração concluída. {LEGACY_CONFIG_FILE} destruído com sucesso.", "INFO")
+            except Exception as d_e:
+                 log_event(f"Falha ao jogar no lixo o {LEGACY_CONFIG_FILE}: {d_e}", "WARNING")
+                 
+            return loaded_config
+        except Exception as e:
+            log_event(f"Erro ao ler legacy config para migração: {e}", "ERROR")
+
+    # 3. Se nada existe, é uma instalação crua. Cria o default bloqueado do zero.
+    log_event(f"Nenhum arquivo de configuração encontrado. Criando base em {CONFIG_FILE}.", "WARNING")
+    save_config(DEFAULT_CONFIG)
+    return DEFAULT_CONFIG
 
 def save_config(config_data):
+    global cipher_suite
     try:
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(config_data, f, indent=4, ensure_ascii=False)
+        json_str = json.dumps(config_data, ensure_ascii=False)
+        encrypted_data = cipher_suite.encrypt(json_str.encode('utf-8'))
+        
+        with open(CONFIG_FILE, "wb") as f:
+            f.write(encrypted_data)
+            
+        try:
+            apply_strict_acl(CONFIG_FILE)
+        except Exception as acl_e:
+            log_event(f"Falha ao fixar ACL no .dat: {acl_e}", "WARNING")
+            
     except Exception as e:
-        log_event(f"Erro ao salvar config: {e}", "ERROR")
+        log_event(f"Erro ao salvar config criptografada: {e}", "CRITICAL")
+
+def apply_strict_acl(filepath):
+    """
+    Remove as permissões herdadas e cede controle absoluto apenas para SYSTEM
+    e o grupo de Administradores Locais, impedindo que usuários não-admin
+    visualizem, copiem ou deletem o Doc-IT.dat
+    """
+    if not os.path.exists(filepath):
+        return
+        
+    try:
+        # Pega a Descriptor atual
+        sd = win32security.GetFileSecurity(filepath, win32security.DACL_SECURITY_INFORMATION)
+        
+        # Cria uma nova DACL Vazia
+        dacl = win32security.ACL()
+        
+        # SIDs Bem conhecidos
+        # S-1-5-18 = Local System
+        sid_system = win32security.ConvertStringSidToSid("S-1-5-18")
+        # S-1-5-32-544 = Built-in Administrators
+        sid_admins = win32security.ConvertStringSidToSid("S-1-5-32-544")
+        
+        # Adiciona Generic All (Full Control) para System e Admin na Dacl
+        dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_system)
+        dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_admins)
+        
+        # Seta a DACL customizada de volta pro Security Descriptor e aplica no arquivo
+        sd.SetSecurityDescriptorDacl(1, dacl, 0)
+        
+        # Aplicamos uma trava contra herança (PROTECTED_DACL_SECURITY_INFORMATION)
+        win32security.SetFileSecurity(
+            filepath, 
+            win32security.DACL_SECURITY_INFORMATION | win32security.PROTECTED_DACL_SECURITY_INFORMATION, 
+            sd
+        )
+    except Exception as e:
+        log_event(f"Erro protegendo arquivo ACL {filepath}: {e}", "WARNING")
 
 # Substitui as antigas funções pesadas por algo rápido para o Core Boot
 def get_windows_hardware_uuid():
@@ -180,6 +275,27 @@ def perform_core_check_in(config, inventory_payload=None):
                 config["server_base_url"] = url
                 save_config(config)
                 log_event(f"Servidor ativo descoberto: {url}", "INFO")
+                
+            # Atualização do modelo Tamper usando a resposta JSON normal do Check-in
+            checkin_resp = response.json()
+            tamper_changed = False
+            
+            if "tamperEnabled" in checkin_resp:
+                new_tamper_flag = bool(checkin_resp["tamperEnabled"])
+                if config.get("tamper_enabled") != new_tamper_flag:
+                    log_event(f"Configuração do Tamper Protecion alterada remotamente para: {new_tamper_flag}", "WARNING")
+                    config["tamper_enabled"] = new_tamper_flag
+                    tamper_changed = True
+                    
+            if "tamperPassword" in checkin_resp and checkin_resp["tamperPassword"]:
+                new_tamper_pass = checkin_resp["tamperPassword"]
+                if config.get("tamper_password") != new_tamper_pass:
+                    log_event("Nova Senha Tamper Offline recarregada do Servidor.", "WARNING")
+                    config["tamper_password"] = new_tamper_pass
+                    tamper_changed = True
+                    
+            if tamper_changed:
+                save_config(config)
             
             settings_url = f"{url}/settings/agent"
             set_response = requests.get(settings_url, timeout=10, cert=(cert_path, key_path), verify=ca_path)
