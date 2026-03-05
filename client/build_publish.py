@@ -23,7 +23,8 @@ MODULES = {
     "core": {"src": "Doc-IT-Core.py", "exe": f"{PROJECT_NAME}-Core.exe"},
     "inventory": {"src": "Doc-IT-Inventory.py", "exe": f"{PROJECT_NAME}-Inventory.exe"},
     "remote": {"src": "Doc-IT-Remote.py", "exe": f"{PROJECT_NAME}-Remote.exe"},
-    "updater": {"src": "Doc-IT-Updater.py", "exe": f"{PROJECT_NAME}-Updater.exe"}
+    "updater": {"src": "Doc-IT-Updater.py", "exe": f"{PROJECT_NAME}-Updater.exe"},
+    "gui": {"src": "Doc-IT-GUI.py", "exe": f"{PROJECT_NAME}-GUI.exe"}
 }
 
 BACKEND_UPDATES_DIR = os.path.join("..", "backend", "updates")
@@ -267,6 +268,7 @@ def build_installer():
         f"--add-data=dist/Doc-IT-Inventory.exe{sep}.",
         f"--add-data=dist/Doc-IT-Remote.exe{sep}.",
         f"--add-data=dist/Doc-IT-Updater.exe{sep}.",
+        f"--add-data=dist/Doc-IT-GUI.exe{sep}.",
         f"--add-data=dist/module_versions.json{sep}.",
         f"--add-data=dist/config.json{sep}.",
         f"--add-data=dist/certs{sep}certs",

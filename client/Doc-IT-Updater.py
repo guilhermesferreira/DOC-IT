@@ -19,7 +19,7 @@ MY_IPC_PORT = 49155
 
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.0.11"
+AGENT_VERSION = "2.0.15"
 
 config = {}
 
@@ -60,7 +60,7 @@ def read_local_module_version(mod_key):
     return "0.0.0"
 
 # Lista de módulos locais para varredura de updates
-MODULES_KEYS = ["core", "inventory", "remote", "updater"]
+MODULES_KEYS = ["core", "inventory", "remote", "updater", "gui"]
 
 
 # =========================================================
@@ -79,6 +79,24 @@ def push_restart_to_core():
         client.close()
     except Exception as e:
         log_event(f"Erro ao pedir restart ao Core: {e}", "CRITICAL")
+
+def cleanup_old_files():
+    """Varre a pasta instalada e exclui arquivos .old ou .tmp de atualizações passadas consolidadadas."""
+    try:
+        current_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else '.'
+        count = 0
+        for filename in os.listdir(current_dir):
+            if filename.endswith(".old") or filename.endswith(".tmp"):
+                filepath = os.path.join(current_dir, filename)
+                try:
+                    os.remove(filepath)
+                    count += 1
+                except:
+                    pass
+        if count > 0:
+            log_event(f"Limpeza concluída. {count} arquivos de atualização antigos (.old/.tmp) foram removidos do disco.", "INFO")
+    except Exception as e:
+        pass
 
 
 def check_and_apply_updates():
@@ -177,31 +195,13 @@ def download_module_safe(mod_key, target_file, expected_hash, base_url=None):
                 os.remove(temp_save)
                 return False
                 
-            # 1. Espera o antivírus liberar o arquivo .tmp
-            # Faz um loop de 15 segundos tentando abrir para append (gravação restrita), se funcionar o lock sumiu.
-            lock_cleared = False
-            for _ in range(15):
-                try:
-                    with open(temp_save, 'ab'):
-                        pass
-                    lock_cleared = True
-                    break
-                except OSError:
-                    time.sleep(1)
-                    
-            if not lock_cleared:
-                log_event(f"Antivirus bloqueou {temp_save} por muito tempo. Abortando reposicao.", "ERROR")
-                try: os.remove(temp_save)
-                except: pass
-                return False
-
             # Substituição Eficiente sem BAT
-            # 2. Deleta o .old anterior se existir
+            # 1. Deleta o .old anterior se existir
             if os.path.exists(old_save):
                 try: os.remove(old_save)
                 except Exception as e: log_event(f"Aviso: Nao conseguiu deletar {old_save}: {e}", "WARNING")
             
-            # 3. Renomeia o executavel VIVO para .old (O Windows permite renomear arquivos em uso)
+            # 2. Renomeia o executável VIVO para .old (O Windows permite renomear arquivos em uso)
             if os.path.exists(target_file):
                 try:
                     os.rename(target_file, old_save)
@@ -209,14 +209,25 @@ def download_module_safe(mod_key, target_file, expected_hash, base_url=None):
                     log_event(f"Falha ao renomear {target_file} para .old: {e}. Abortando.", "ERROR")
                     return False
                 
-            # 4. Coloca o arquivo novo no lugar
-            try:
-                os.rename(temp_save, target_file)
+            # 3. Coloca o arquivo novo no lugar iterando para aguardar liberação final do Sistema Operacional (File Lock)
+            rename_success = False
+            for _ in range(30):
+                try:
+                    os.rename(temp_save, target_file)
+                    rename_success = True
+                    break
+                except OSError as e:
+                    time.sleep(1)
+                    
+            if rename_success:
                 log_event(f"Módulo [{mod_key}] substituído com sucesso através de rename (.old).", "INFO")
                 return True
-            except Exception as e:
-                log_event(f"Falha ao renomear novo binario {temp_save}: {e}. Rollback acionado.", "ERROR")
+            else:
+                log_event(f"Falha ao renomear novo binário {temp_save} após 30 tentativas. Timeout de I/O. Rollback acionado.", "ERROR")
                 try: os.rename(old_save, target_file)
+                except: pass
+                
+                try: os.remove(temp_save)
                 except: pass
                 return False
                 
@@ -241,6 +252,7 @@ if __name__ == "__main__":
     
     while True:
         try:
+            cleanup_old_files()
             check_and_apply_updates()
         except Exception as e:
             pass

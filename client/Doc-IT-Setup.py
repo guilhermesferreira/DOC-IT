@@ -8,9 +8,10 @@ import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 import psutil
+import winreg
 
 def kill_agent_processes():
-    target_exes = ["Doc-IT-Core.exe", "Doc-IT-Inventory.exe", "Doc-IT-Remote.exe", "Doc-IT-Updater.exe"]
+    target_exes = ["Doc-IT-Core.exe", "Doc-IT-Inventory.exe", "Doc-IT-Remote.exe", "Doc-IT-Updater.exe", "Doc-IT-GUI.exe"]
     try:
         for proc in psutil.process_iter(['name']):
             try:
@@ -96,6 +97,14 @@ class InstallerGUI(tk.Tk):
             self.log("Limpando processos residuais nativamente...", 60)
             kill_agent_processes()
             time.sleep(2)
+            
+            self.log("Limpando chaves de inicialização...", 70)
+            try:
+                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
+                winreg.DeleteValue(key, "DocITAgentGUI")
+                winreg.CloseKey(key)
+            except:
+                pass
 
             self.log("Apagando arquivos...", 80)
             if os.path.exists(self.target_dir):
@@ -132,6 +141,7 @@ class InstallerGUI(tk.Tk):
                 "Doc-IT-Inventory.exe", 
                 "Doc-IT-Remote.exe", 
                 "Doc-IT-Updater.exe",
+                "Doc-IT-GUI.exe",
                 "module_versions.json"
             ]
             
@@ -166,6 +176,18 @@ class InstallerGUI(tk.Tk):
             
             self.log("Iniciando Agente no Background...", 95)
             subprocess.run(["net", "start", "DocITAgent"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            
+            self.log("Registrando GUI na Inicialização do Windows...", 98)
+            try:
+                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
+                gui_path = os.path.join(self.target_dir, "Doc-IT-GUI.exe")
+                winreg.SetValueEx(key, "DocITAgentGUI", 0, winreg.REG_SZ, f'"{gui_path}" --hide')
+                winreg.CloseKey(key)
+                
+                # Inicia a interface silenciosamente pro usuário logado logo no final da instalação.
+                subprocess.Popen([gui_path, "--hide"], creationflags=subprocess.CREATE_NO_WINDOW)
+            except Exception as reg_e:
+                print(f"Aviso Setup GUI Registry: {reg_e}")
             
             self.log("Instalação Concluída com Sucesso!", 100)
             self.btn_action.config(text="Fechar", command=self.destroy, state="normal")
