@@ -2,7 +2,7 @@
 const prisma = require('../../prisma/prismaClient');
 
 async function checkIn(req, res) {
-  const { agentId, hostname, osUsername, ipAddress, agentVersion, osInfo, additionalData } = req.body;
+  const { agentId, hostname, osUsername, ipAddress, agentVersion, guiVersion, osInfo, additionalData } = req.body;
 
   // Força o mTLS para o Agente (certificado válido assinado pela nossa CA)
   const isDirectMTLS = req.socket.authorized;
@@ -47,6 +47,7 @@ async function checkIn(req, res) {
           osUsername,
           ipAddress,
           agentVersion,
+          guiVersion,
           osInfo,
           additionalData,
           lastSeenAt: now,
@@ -64,6 +65,7 @@ async function checkIn(req, res) {
           osUsername,
           ipAddress,
           agentVersion,
+          guiVersion,
           osInfo,
           type: osInfo ? `SO: ${osInfo.substring(0,50)}` : 'Descoberto por Agente',
           location: 'Detectado via Agente',
@@ -84,6 +86,8 @@ async function checkIn(req, res) {
       agentId: device.agentId, // Return agentId
       deviceId: device.id,     // Return the database ID of the device
       message: message,
+      tamperEnabled: device.tamperEnabled || false,
+      tamperPassword: device.tamperPassword || null
     });
 
 

@@ -6,8 +6,10 @@ const {
   addDevice,
   updateDevice,
   deleteDevice,
-  approveDevice, // Nova função importada
-  rejectDevice   // Nova função importada
+  approveDevice,
+  rejectDevice,
+  getTamperPassword,     // Novas funções Tamper
+  toggleTamperProtection // Novas funções Tamper
 } = require('../controllers/deviceController');
 
 // A documentação Swagger precisará ser atualizada para refletir o modelo Device unificado
@@ -337,6 +339,26 @@ const {
 
 
 
+/**
+ * @swagger
+ * /device/{id}/tamper:
+ *   get:
+ *     summary: Recupera a senha offline de Tamper Protection do dispositivo
+ *     tags: [Devices]
+ *   post:
+ *     summary: Ativa ou desativa a Proteção Tamper do dispositivo remotamente
+ *     tags: [Devices]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               enabled:
+ *                 type: boolean
+ */
+
 router.use(authMiddleware);
 
 router.get('/', getDevices);
@@ -345,5 +367,9 @@ router.put('/:id', updateDevice);
 router.delete('/:id', deleteDevice);
 router.patch('/:id/approve', approveDevice); // Rota para aprovar
 router.patch('/:id/reject', rejectDevice);   // Rota para rejeitar
+
+// Rotas Tamper Protection
+router.get('/:id/tamper', getTamperPassword);
+router.post('/:id/tamper/toggle', toggleTamperProtection);
 
 module.exports = router;

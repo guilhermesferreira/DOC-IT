@@ -2,6 +2,18 @@
 //const prisma = new PrismaClient();
 const prisma = require('../../prisma/prismaClient');
 const { logAudit } = require('../services/auditService');
+const crypto = require('crypto');
+
+// Gera OTP pseudo-aleatório (ex: A5B9-XQW2)
+function generateTamperPassword() {
+  const chars = 'JKHHSLDhkdjahsdlLDAHSLDKJHldakjshJDKSh'; // Sem O/0/1/I para evitar confusão de leitura
+  let password = '';
+  for (let i = 0; i < 8; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+    if (i === 3) password += '-';
+  }
+  return password;
+}
 
 async function getDevices(req, res) {
   const loggedInUserId = req.user.id; // Usuário logado
@@ -147,6 +159,8 @@ async function approveDevice(req, res) {
         status: 'approved',
         userId: approverUserId, // Associa o dispositivo ao usuário que aprovou
         approvedAt: new Date(),
+        tamperEnabled: true,
+        tamperPassword: generateTamperPassword(), // Gera uma senha para blindagem local
         // Campos como name, type, location podem ter sido preenchidos no check-in do agente
         // ou podem ser atualizados aqui se necessário.
         // Ex: gerar patrimônio se ainda não existir
@@ -208,4 +222,57 @@ async function rejectDevice(req, res) {
   }
 }
 
-module.exports = { getDevices, addDevice, updateDevice, deleteDevice, approveDevice, rejectDevice };
+// Exibe a senha off-line do Tamper (Apenas Admin/Owner)
+async function getTamperPassword(req, res) {
+  const deviceId = parseInt(req.params.id, 10);
+  
+  if (isNaN(deviceId)) return res.status(400).json({ error: 'ID do dispositivo inválido.' });
+
+  try {
+    let device = await prisma.device.findUnique({ where: { id: deviceId } });
+    if (!device) return res.status(404).json({ error: 'Dispositivo não encontrado.' });
+    
+    // Retrocompatibilidade: Se o host for antigo e não tiver senha, geramos agora.
+    if (!device.tamperPassword) {
+      const newPassword = generateTamperPassword();
+      device = await prisma.device.update({
+        where: { id: deviceId },
+        data: { tamperPassword: newPassword, tamperEnabled: true }
+      });
+    }
+
+    res.json({ tamperPassword: device.tamperPassword, tamperEnabled: device.tamperEnabled });
+  } catch (error) {
+    console.error('Erro ao buscar Tamper:', error);
+    res.status(500).json({ error: 'Erro ao buscar senha do Tamper' });
+  }
+}
+
+// Ativa ou desativa remotamente a Proteção do Agente
+async function toggleTamperProtection(req, res) {
+  const deviceId = parseInt(req.params.id, 10);
+  const { enabled } = req.body;
+
+  if (isNaN(deviceId) || typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'Payload ou ID inválido.' });
+  }
+
+  try {
+    const device = await prisma.device.findUnique({ where: { id: deviceId } });
+    if (!device) return res.status(404).json({ error: 'Dispositivo não encontrado.' });
+
+    const updatedDevice = await prisma.device.update({
+      where: { id: deviceId },
+      data: { tamperEnabled: enabled }
+    });
+    
+    await logAudit('DEVICES', req.user.id, 'UPDATE', 'DEVICE_TAMPER_TOGGLE', { deviceId, tamperEnabled: enabled }, req.ip);
+
+    res.json({ message: `Tamper Protection ${enabled ? 'ativada' : 'desativada'} com sucesso.`, tamperEnabled: enabled });
+  } catch (error) {
+    console.error('Erro ao atualizar Tamper:', error);
+    res.status(500).json({ error: 'Falha ao atualizar a proteção do dispositivo.' });
+  }
+}
+
+module.exports = { getDevices, addDevice, updateDevice, deleteDevice, approveDevice, rejectDevice, getTamperPassword, toggleTamperProtection };
