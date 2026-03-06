@@ -2,12 +2,14 @@ import os
 import sys
 import json
 import time
+import re
 import socket
 import threading
 import subprocess
 from datetime import datetime
 import requests
 import urllib3
+import platform
 import traceback
 import win32serviceutil
 import win32service
@@ -34,7 +36,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.0.43"
+AGENT_VERSION = "2.0.47"
 
 # Chave Criptográfica Fixa (Hardcoded para o Build)
 # Em produção real, este executável é obfusquado pelo PyArmor/Nuitka.
@@ -690,11 +692,15 @@ class DocITAgentService(win32serviceutil.ServiceFramework):
         cleanup_ghost_processes()
 
     def SvcDoRun(self):
+        # Reporta que o serviço está iniciando
+        self.ReportServiceStatus(win32service.SERVICE_START_PENDING)
         servicemanager.LogMsg(
             servicemanager.EVENTLOG_INFORMATION_TYPE,
             servicemanager.PYS_SERVICE_STARTED,
             (self._svc_name_, '')
         )
+        # Reporta que o serviço está pronto (Rodando)
+        self.ReportServiceStatus(win32service.SERVICE_RUNNING)
         self.main()
 
     def main(self):
