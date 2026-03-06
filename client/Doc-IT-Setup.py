@@ -141,9 +141,7 @@ class InstallerGUI(tk.Tk):
                 "Doc-IT-Inventory.exe", 
                 "Doc-IT-Remote.exe", 
                 "Doc-IT-Updater.exe",
-                "Doc-IT-GUI.exe",
-                "module_versions.json"
-            ]
+                "Doc-IT-GUI.exe"]
             
             for file in files_to_copy:
                 src = os.path.join(meipass, file)
@@ -151,7 +149,6 @@ class InstallerGUI(tk.Tk):
                     shutil.copy2(src, os.path.join(self.target_dir, file))
                     
             self.log("Importando configurações e certificados embarcados...", 70)
-            # Tenta pegar config.json e certs de DENTRO do bundle (sys._MEIPASS)
             embedded_config = os.path.join(meipass, "config.json")
             if os.path.exists(embedded_config):
                 shutil.copy2(embedded_config, os.path.join(self.target_dir, "config.json"))
@@ -171,7 +168,7 @@ class InstallerGUI(tk.Tk):
             
             self.log("Configurando o Serviço (Auto-Start e Recovery)...", 90)
             subprocess.run(["sc", "config", "DocITAgent", "start=", "auto"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            subprocess.run(["sc", "failure", "DocITAgent", "reset=", "0", "actions=", "restart/60000/restart/60000/restart/60000"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            subprocess.run(["sc", "failure", "DocITAgent", "reset=", "0", "actions=", "restart/5000/restart/5000/restart/10000"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
             time.sleep(1)
             
             self.log("Iniciando Agente no Background...", 95)
@@ -197,11 +194,16 @@ class InstallerGUI(tk.Tk):
             messagebox.showerror("Doc-IT Setup", f"Erro fatal durante instalação: {str(e)}")
             self.btn_action.config(text="Sair", command=self.destroy, state="normal")
 
-
 if __name__ == "__main__":
     if not is_admin():
         run_as_admin()
         sys.exit(0)
     
     app = InstallerGUI()
+
+    if "--silent" in sys.argv:
+        app.withdraw() # Esconde a interface
+        app.install_process()
+        sys.exit(0)
+    
     app.mainloop()

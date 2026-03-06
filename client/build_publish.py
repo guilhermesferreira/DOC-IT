@@ -91,6 +91,58 @@ def update_module_file_version(filepath, current_published_version=None):
         return bump_version(ver_to_bump)
 
 
+def create_version_info_file(version, filename):
+    """Gera o arquivo de texto version_info.txt que o PyInstaller usa para embutir metadados no .exe."""
+    # Garante que a versão seja uma string limpa
+    version = str(version).strip()
+    # Garante que a versão tenha 4 partes para o tuple (major, minor, micro, build)
+    parts = version.split('.')
+    clean_parts = []
+    for p in parts:
+        m = re.match(r'(\d+)', p)
+        if m:
+            clean_parts.append(m.group(1))
+        else:
+            clean_parts.append('0')
+            
+    while len(clean_parts) < 4:
+        clean_parts.append('0')
+    version_tuple = f"({', '.join(clean_parts[:4])})"
+    print(f"DEBUG: version='{version}', version_tuple='{version_tuple}'")
+    
+    content = f"""# UTF-8
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers={version_tuple},
+    prodvers={version_tuple},
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+    ),
+  kids=[
+    StringFileInfo(
+      [
+      StringTable(
+        '040904B0',
+        [StringStruct('CompanyName', 'Doc-IT by Guilherme S. Ferreira'),
+        StringStruct('FileDescription', 'Doc-IT Agent Module'),
+        StringStruct('FileVersion', '{version}'),
+        StringStruct('InternalName', '{filename}'),
+        StringStruct('LegalCopyright', 'Doc-IT by Guilherme S. Ferreira'),
+        StringStruct('OriginalFilename', '{filename}'),
+        StringStruct('ProductName', 'Doc-IT'),
+        StringStruct('ProductVersion', '{version}')])
+      ]), 
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)"""
+
+    with open("version_info.txt", "w", encoding="utf-8") as f:
+        f.write(content)
+
 def process_modules():
     cache = load_build_cache()
     manifest = load_manifest()
@@ -120,13 +172,23 @@ def process_modules():
             new_version = update_module_file_version(src, current_version)
             if not new_version: new_version = bump_version(current_version)
             
+            print(f"[{mod_key.upper()}] New version: '{new_version}'")
+            
+            # Gera metadados de versão para o Windows
+            create_version_info_file(new_version, mod_info["exe"])
+            
             # Compila via Pyinstaller
-            cmd = ["pyinstaller", "--onefile", "--clean", "--noconfirm", "--noupx"]
+            cmd = ["pyinstaller", "--onefile", "--clean", "--noconfirm", "--noupx", "--version-file=version_info.txt"]
             if mod_key == "core":
                 cmd.append("--hidden-import=win32timezone")
             if mod_key != "core": cmd.append("--noconsole") 
             cmd.append(src)
+            print(f"Executando: {' '.join(cmd)}")
             subprocess.run(cmd, check=True)
+            
+            # Limpa lixo do version_info
+            if os.path.exists("version_info.txt"):
+                os.remove("version_info.txt")
             
             # Atualiza Cache
             cache[mod_key] = {"src_hash": calculate_sha256(src)}
@@ -168,17 +230,11 @@ def copy_to_backend_and_publish(updated_modules):
         }
     
     # Salva JSON Final (para o Backend servir ao Updater)
+    # Mantemos este arquivo no backend porque o Updater ainda baixa o JSON do servidor
+    # para saber se há novos arquivos, hash de validação e o nome do arquivo.
+    # O que mudou é que a VERSÃO LOCAL agora é lida do .exe e não de um JSON local.
     with open(VERSION_JSON_FILE, 'w', encoding='utf-8') as f:
         json.dump(new_manifest, f, indent=4)
-    
-    # Salva um JSON local simplificado na pasta dist/ para o Core ler em runtime
-    local_versions = {}
-    for mod_key in MODULES:
-        local_versions[mod_key] = updated_modules.get(mod_key, "2.0.0")
-    
-    dist_versions_path = os.path.join("dist", "module_versions.json")
-    with open(dist_versions_path, 'w', encoding='utf-8') as f:
-        json.dump(local_versions, f, indent=4)
         
     print("Manifesto version.json modular gerado com sucesso!")
 

@@ -19,7 +19,7 @@ MY_IPC_PORT = 49155
 
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.0.15"
+AGENT_VERSION = "2.0.20"
 
 config = {}
 
@@ -48,15 +48,53 @@ def load_config():
     except:
         return {}
 
-def read_local_module_version(mod_key):
-    """Lê a versão do módulo a partir do module_versions.json gerado no build no diretório atual."""
+import ctypes
+
+def get_file_version(path):
+    """Lê a versão (ProductVersion) diretamente dos metadados do executável via API do Windows."""
+    if not os.path.exists(path):
+        return None
     try:
-        mv_path = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else '.', "module_versions.json")
-        if os.path.exists(mv_path):
-            with open(mv_path, 'r', encoding='utf-8') as f:
-                return json.load(f).get(mod_key, "0.0.0")
-    except:
-        pass
+        size = ctypes.windll.version.GetFileVersionInfoSizeW(path, None)
+        if not size: return None
+        buffer = ctypes.create_string_buffer(size)
+        ctypes.windll.version.GetFileVersionInfoW(path, None, size, buffer)
+        length = ctypes.c_uint()
+        ptr = ctypes.c_void_p()
+        # Tenta obter a informação de tradução (idioma/codepage)
+        ctypes.windll.version.VerQueryValueW(buffer, '\\VarFileInfo\\Translation', ctypes.byref(ptr), ctypes.byref(length))
+        if length.value >= 4:
+            data = ctypes.string_at(ptr, 4)
+            lang = data[1] << 8 | data[0]
+            cp = data[3] << 8 | data[2]
+            key = f'\\StringFileInfo\\{lang:04x}{cp:04x}\\ProductVersion'
+            ctypes.windll.version.VerQueryValueW(buffer, key, ctypes.byref(ptr), ctypes.byref(length))
+            if length.value > 0:
+                return ctypes.wstring_at(ptr, length.value).strip('\x00')
+    except Exception as e:
+        log_event(f"Erro ao extrair versão de {path}: {e}", "WARNING")
+    return None
+
+def read_local_module_version(mod_key):
+    """Lê a versão do módulo diretamente do .exe no diretório atual."""
+    # Mapeamento do mod_key para o nome real do arquivo (pode variar se o PROJECT_NAME mudar,
+    # mas o default/atual é Doc-IT-*)
+    exe_name = f"Doc-IT-{mod_key.capitalize()}.exe"
+    
+    # Se estiver rodando como script para testes locais
+    if not getattr(sys, 'frozen', False):
+        # Tenta achar no diretório atual ou fallback para AGENT_VERSION se for o próprio updater
+        if mod_key == "updater":
+            return AGENT_VERSION
+        return "0.0.0"
+
+    current_dir = os.path.dirname(sys.executable)
+    exe_path = os.path.join(current_dir, exe_name)
+    
+    version = get_file_version(exe_path)
+    if version:
+        return version
+        
     return "0.0.0"
 
 # Lista de módulos locais para varredura de updates
