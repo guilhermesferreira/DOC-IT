@@ -175,6 +175,17 @@ const { logAudit } = require('../services/auditService');
           io.emit('desktop:key_down', { agentId, key });
         });
     
+        // Relay de Confirmação de Tamper (Agente -> Backend/Frontend)
+        socket.on('tamper:confirmed', (data) => {
+          console.log(`[Socket] Agente ${data.agentId} confirmou recebimento de novo Tamper OTP.`);
+          io.emit('tamper:confirmed', data);
+          
+          // Emite também no barramento interno para os controllers HTTP
+          if (global.bus) {
+            global.bus.emit('tamper:confirmed', data);
+          }
+        });
+    
         socket.on('disconnect', () => {
           console.log(`[Socket] Conexão encerrada: ${socket.id}`);
           

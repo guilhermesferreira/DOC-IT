@@ -222,7 +222,8 @@ async function rejectDevice(req, res) {
   }
 }
 
-// Exibe a senha off-line do Tamper (Apenas Admin/Owner)
+// Exibe ou Gera a senha off-line do Tamper (Apenas Admin/Owner)
+// Lógica de OTP Dinâmico: Se online, gera nova e aguarda confirmação. Se offline, mostra a última.
 async function getTamperPassword(req, res) {
   const deviceId = parseInt(req.params.id, 10);
   
@@ -232,16 +233,73 @@ async function getTamperPassword(req, res) {
     let device = await prisma.device.findUnique({ where: { id: deviceId } });
     if (!device) return res.status(404).json({ error: 'Dispositivo não encontrado.' });
     
-    // Retrocompatibilidade: Se o host for antigo e não tiver senha, geramos agora.
-    if (!device.tamperPassword) {
-      const newPassword = generateTamperPassword();
-      device = await prisma.device.update({
-        where: { id: deviceId },
-        data: { tamperPassword: newPassword, tamperEnabled: true }
-      });
+    // 1. Verifica se o agente está online via Socket.IO global
+    const io = global.io;
+    let isOnline = false;
+    let agentSocketId = null;
+
+    if (io && device.agentId) {
+       // O Map onlineAgents está dentro de terminalSocket.js, mas o io.sockets.adapter.rooms ou similar pode ajudar.
+       // No terminalSocket.js original, usamos um Map local. Precisamos exportá-lo ou usar o io para checar.
+       // Alternativa: Emitir um evento broadcast com agentId e esperar o ACK.
     }
 
-    res.json({ tamperPassword: device.tamperPassword, tamperEnabled: device.tamperEnabled });
+    // Como o Map 'onlineAgents' é privado no terminalSocket, vamos emitir para todos e o agente que der matching responde.
+    // Mas para o fluxo ser síncrono (Request/Response HTTP), precisamos de um Timeout.
+    
+    if (device.agentId && io) {
+      const newPassword = generateTamperPassword();
+      
+      // Tenta enviar o novo OTP para o agente.
+      // Usamos um timeout de 5 segundos para a confirmação.
+      const syncPromise = new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          resolve({ success: false, reason: 'timeout' });
+        }, 5000);
+
+        // Ouve a confirmação vindo do agente via barramento interno (Bus)
+        const onConfirmed = (data) => {
+          if (data.agentId === device.agentId && data.status === 'success') {
+            clearTimeout(timeout);
+            if (global.bus) global.bus.off('tamper:confirmed', onConfirmed);
+            resolve({ success: true });
+          }
+        };
+
+        if (global.bus) global.bus.on('tamper:confirmed', onConfirmed);
+        
+        // Emite o comando para o agente via Socket.IO
+        io.emit('tamper:update', { 
+          agentId: device.agentId, 
+          newPassword: newPassword 
+        });
+      });
+
+      const result = await syncPromise;
+
+      if (result.success) {
+        // Agente confirmou! Salva no banco e retorna.
+        device = await prisma.device.update({
+          where: { id: deviceId },
+          data: { tamperPassword: newPassword, tamperEnabled: true }
+        });
+        return res.json({ 
+          tamperPassword: device.tamperPassword, 
+          tamperEnabled: device.tamperEnabled,
+          synced: true,
+          message: "Novo OTP gerado e sincronizado com o agente."
+        });
+      }
+    }
+
+    // Se falhou o sync ou agente offline, apenas retorna o que está no DB (Última senha válida)
+    res.json({ 
+      tamperPassword: device.tamperPassword || "Aguardando sincronização inicial...", 
+      tamperEnabled: device.tamperEnabled,
+      synced: false,
+      message: "Exibindo última senha conhecida (Agente Offline ou Ocupado)."
+    });
+
   } catch (error) {
     console.error('Erro ao buscar Tamper:', error);
     res.status(500).json({ error: 'Erro ao buscar senha do Tamper' });

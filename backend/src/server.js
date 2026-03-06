@@ -2,7 +2,11 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const EventEmitter = require('events');
 const setupSwagger = require("./config/swagger");
+
+// Barramento de Eventos Global para comunicação síncrona interna
+global.bus = new EventEmitter();
 
 
 const authRoutes = require('./routes/auth');
@@ -65,6 +69,9 @@ const server = https.createServer(httpsOptions, app);
 // Configuração do WebSocket (Socket.IO)
 const configureSockets = require('./sockets/terminalSocket');
 const io = configureSockets(server);
+
+// Exporta o io para ser usado em outros controllers
+global.io = io;
 
 server.listen(PORT, () => {
   console.log(`Backend HTTPS rodando na porta ${PORT}`);
