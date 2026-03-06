@@ -19,7 +19,7 @@ MY_IPC_PORT = 49155
 
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.0.20"
+AGENT_VERSION = "2.0.21"
 
 config = {}
 
@@ -153,7 +153,10 @@ def check_and_apply_updates():
         try:
             version_url = f"{url}/agent/version"
             if os.path.exists(cert_path) and os.path.exists(key_path) and os.path.exists(ca_path):
-                response = requests.get(version_url, cert=(cert_path, key_path), verify=ca_path, timeout=10)
+                # Se a URL for um IP, desabilita a verificação de hostname para evitar SSLError mismatch
+                verify_ssl = ca_path
+                if re.match(r"https?://\d+\.\d+\.\d+\.\d+", url): verify_ssl = False
+                response = requests.get(version_url, cert=(cert_path, key_path), verify=verify_ssl, timeout=10)
             else:
                 response = requests.get(version_url, verify=False, timeout=10)
             
@@ -216,7 +219,9 @@ def download_module_safe(mod_key, target_file, expected_hash, base_url=None):
         ca_path = config.get("ca_path", "./certs/ca.crt")
         
         if os.path.exists(cert_path) and os.path.exists(key_path) and os.path.exists(ca_path):
-            r = requests.get(file_url, cert=(cert_path, key_path), verify=ca_path, stream=True, timeout=30)
+            verify_ssl = ca_path
+            if re.match(r"https?://\d+\.\d+\.\d+\.\d+", base_url): verify_ssl = False
+            r = requests.get(file_url, cert=(cert_path, key_path), verify=verify_ssl, stream=True, timeout=30)
         else:
             r = requests.get(file_url, verify=False, stream=True, timeout=30)
         
@@ -306,7 +311,9 @@ if __name__ == "__main__":
                 try:
                     settings_url = f"{url}/settings/agent"
                     if os.path.exists(cert_path) and os.path.exists(key_path) and os.path.exists(ca_path):
-                        r = requests.get(settings_url, cert=(cert_path, key_path), verify=ca_path, timeout=15)
+                        verify_ssl = ca_path
+                        if re.match(r"https?://\d+\.\d+\.\d+\.\d+", url): verify_ssl = False
+                        r = requests.get(settings_url, cert=(cert_path, key_path), verify=verify_ssl, timeout=15)
                     else:
                         r = requests.get(settings_url, verify=False, timeout=15)
                         

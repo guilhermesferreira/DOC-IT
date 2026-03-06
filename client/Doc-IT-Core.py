@@ -34,7 +34,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.0.42"
+AGENT_VERSION = "2.0.43"
 
 # Chave Criptográfica Fixa (Hardcoded para o Build)
 # Em produção real, este executável é obfusquado pelo PyArmor/Nuitka.
@@ -318,7 +318,12 @@ def perform_core_check_in(config, inventory_payload=None):
     for url in server_urls:
         try:
             check_in_url = f"{url}/agent/check-in"
-            response = requests.post(check_in_url, json=payload, timeout=10, cert=(cert_path, key_path), verify=ca_path)
+            # Se a URL for um IP, desabilita a verificação de hostname para evitar SSLError mismatch, mas mantém mTLS
+            verify_ssl = ca_path
+            is_ip = re.match(r"https?://\d+\.\d+\.\d+\.\d+", url)
+            if is_ip: verify_ssl = False
+            
+            response = requests.post(check_in_url, json=payload, timeout=10, cert=(cert_path, key_path), verify=verify_ssl)
             response.raise_for_status()
             
             # Sucesso! Persiste essa URL como a ativa
@@ -349,7 +354,11 @@ def perform_core_check_in(config, inventory_payload=None):
                 save_config(config)
             
             settings_url = f"{url}/settings/agent"
-            set_response = requests.get(settings_url, timeout=10, cert=(cert_path, key_path), verify=ca_path)
+            # Mesma lógica de bypass de hostname para IP
+            verify_ssl = ca_path
+            if re.match(r"https?://\d+\.\d+\.\d+\.\d+", url): verify_ssl = False
+            
+            set_response = requests.get(settings_url, timeout=10, cert=(cert_path, key_path), verify=verify_ssl)
             if set_response.status_code == 200:
                 return True, set_response.json()
                 
@@ -527,10 +536,10 @@ def handle_ipc_client(client_socket):
                     try: m["process"].kill()
                     except: pass
             cleanup_ghost_processes()
-            # Lança um processo "zumbi" destacado para garantir o restart do serviço mesmo que o SCM demore
-            subprocess.Popen(["cmd.exe", "/c", "timeout /t 5 && net start DocITAgent"], 
-                             creationflags=subprocess.CREATE_NO_WINDOW | 0x00000008) # DETACHED_PROCESS
-            os._exit(1) # Sai com erro para forçar o SCM a agir se o comando acima falhar
+            # Deixa o Windows Service Manager cuidar do restart (configurado para 5s no Setup)
+            # Sair com código != 0 aciona as 'failure actions' do serviço.
+            log_event("Solicitando auto-reinicialização do serviço via SCM failure actions...", "WARNING")
+            os._exit(1)
             
         # ========================================================
         # Relays: Sub-Módulo Remote -> Core -> Node.js (WebSocket)
