@@ -22,7 +22,7 @@ CORE_IPC_PORT = 49152 # Inventário empurra os dados lidos de volta pro servidor
 MY_IPC_PORT = 49154   # Porta Opcional caso o Core precise injetar comandos síncronos neste módulo
 
 LOG_FILE = "agent-inventory.log"
-AGENT_VERSION = "2.0.2"
+AGENT_VERSION = "2.0.6"
 
 def log_event(message, level="INFO"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
