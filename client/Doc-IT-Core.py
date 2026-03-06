@@ -34,7 +34,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.0.39"
+AGENT_VERSION = "2.0.42"
 
 # Chave Criptográfica Fixa (Hardcoded para o Build)
 # Em produção real, este executável é obfusquado pelo PyArmor/Nuitka.
@@ -207,6 +207,33 @@ def get_windows_hardware_uuid():
     import uuid
     return str(uuid.uuid4())
 
+def get_logged_in_user():
+    """Detecta o usuário humano na sessão de console (Session 1+)."""
+    try:
+        session_id = win32ts.WTSGetActiveConsoleSessionId()
+        if session_id != 0xFFFFFFFF:
+            user = win32ts.WTSQuerySessionInformation(None, session_id, win32ts.WTSUserName)
+            if user and user.strip():
+                return user
+    except:
+        pass
+    try:
+        users = psutil.users()
+        if users: return users[0].name
+    except: pass
+    return "Desconhecido"
+
+def get_primary_ip():
+    """Identifica o IP que sai para a internet (UDP trick)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except:
+        return "127.0.0.1"
+
 
 # --- Comunicação com Backend via mTLS (Check-in Leve) ---
 import ctypes
@@ -238,18 +265,11 @@ def get_file_version(path):
 def perform_core_check_in(config, inventory_payload=None):
     """ O Core notifica que está vivo. Itera pela lista de server_urls até encontrar um que responda. """
     
-    import platform
-    import getpass
-    try:
-        osUser = getpass.getuser()
-    except:
-        osUser = "Unknown"
-        
     payload = {
         "agentId": config.get("agent_id"),
         "hostname": socket.gethostname(),
-        "osUsername": osUser,
-        "ipAddress": "127.0.0.1",
+        "osUsername": get_logged_in_user(),
+        "ipAddress": get_primary_ip(),
         "agentVersion": AGENT_VERSION,
         "osInfo": f"{platform.system()} {platform.release()}"
     }

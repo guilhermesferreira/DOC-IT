@@ -14,6 +14,7 @@ try:
     import winreg
     import wmi
     import pythoncom
+    import win32ts
 except ImportError:
     pass
 
@@ -22,7 +23,7 @@ CORE_IPC_PORT = 49152 # Inventário empurra os dados lidos de volta pro servidor
 MY_IPC_PORT = 49154   # Porta Opcional caso o Core precise injetar comandos síncronos neste módulo
 
 LOG_FILE = "agent-inventory.log"
-AGENT_VERSION = "2.0.6"
+AGENT_VERSION = "2.0.7"
 
 def log_event(message, level="INFO"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -100,8 +101,40 @@ def get_cpu_model_clean():
     except Exception:
         return platform.processor()
 
+def get_logged_in_user():
+    """Detecta o usuário humano na sessão de console (ignora SYSTEM)."""
+    try:
+        session_id = win32ts.WTSGetActiveConsoleSessionId()
+        if session_id != 0xFFFFFFFF:
+            user = win32ts.WTSQuerySessionInformation(None, session_id, win32ts.WTSUserName)
+            if user and user.strip():
+                return user
+    except:
+        pass
+    
+    # Fallback para psutil se WTS falhar
+    try:
+        users = psutil.users()
+        if users:
+            return users[0].name
+    except:
+        pass
+    return "Desconhecido"
+
+def get_primary_ip():
+    """Identifica o IP que sai para a internet (UDP trick)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Não precisa conectar de verdade, apenas forçar o OS a escolher a rota
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except:
+        return None
+
 def get_local_users_info():
-    users_data = {"local_accounts": [], "active_sessions": []}
+    users_data = {"local_accounts": [], "active_sessions": [], "current_user": get_logged_in_user()}
     try:
         if platform.system() == "Windows":
             output = subprocess.check_output(
@@ -138,6 +171,12 @@ def get_ad_gpo_info():
         for sys in c.Win32_ComputerSystem():
             ad_data["domain_or_workgroup"] = sys.Domain
             ad_data["is_domain_joined"] = sys.PartOfDomain
+            
+        # Coleta de Gateway via WMI
+        for config in c.Win32_NetworkAdapterConfiguration(IPEnabled=True):
+            if config.DefaultIPGateway:
+                ad_data["gateway"] = config.DefaultIPGateway[0]
+                break
             
         if ad_data["is_domain_joined"] and platform.system() == "Windows":
             output = subprocess.check_output(
@@ -285,6 +324,7 @@ def get_additional_inventory_data():
         log_event(f"Erro ao coletar rede: {e}", "WARNING")
         
     data["network_interfaces"] = network_interfaces_info
+    data["primary_ip"] = get_primary_ip()
     data["installed_software"] = get_installed_software()
     data["windows_updates"] = get_windows_updates()
     data["security"] = get_security_info()
