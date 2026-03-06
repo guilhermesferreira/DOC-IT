@@ -13,15 +13,10 @@ import win32con
 import win32security
 from cryptography.fernet import Fernet
 
-# --- Configurações Básicas ---
-CONFIG_FILE = "Doc-IT.dat"
-LOG_FILE = "agent-gui.log"
+import socket
 
-ENCRYPTION_KEY = b'r7xK9sLpR2vM4N8wQ3tA5yB1uC6zD0fHjI7oP9lK3nU='
-cipher_suite = Fernet(ENCRYPTION_KEY)
-
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
+# --- Constantes IPC ---
+CORE_IPC_PORT = 49152
 
 def log_event(message, level="INFO"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -30,23 +25,34 @@ def log_event(message, level="INFO"):
         with open(LOG_FILE, "a", encoding='utf-8') as f:
             f.write(log_entry)
             
-        # Log rotation simples se passar de 2MB
         if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > 2 * 1024 * 1024:
             os.replace(LOG_FILE, LOG_FILE + ".bak")
     except:
         pass
 
-def load_secure_config():
-    if not os.path.exists(CONFIG_FILE):
-        return None
+def request_config_from_core():
+    """Solicita a configuração ativa ao processo Core via IPC Socket."""
     try:
-        with open(CONFIG_FILE, "rb") as f:
-            encrypted_data = f.read()
-            decrypted_data = cipher_suite.decrypt(encrypted_data)
-            return json.loads(decrypted_data.decode('utf-8'))
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.settimeout(3)
+        client.connect(('127.0.0.1', CORE_IPC_PORT))
+        
+        payload = {"action": "get_config"}
+        client.sendall(json.dumps(payload).encode('utf-8'))
+        client.shutdown(socket.SHUT_WR)
+        
+        data = b""
+        while True:
+            chunk = client.recv(4096)
+            if not chunk: break
+            data += chunk
+            
+        response = json.loads(data.decode('utf-8'))
+        if response.get("status") == "success":
+            return response.get("config")
     except Exception as e:
-        log_event(f"Falha ao ler o config seguro da GUI: {e}", "ERROR")
-        return None
+        log_event(f"Falha ao solicitar config ao Core via IPC: {e}", "WARNING")
+    return None
 
 def check_process_running(process_name):
     for proc in psutil.process_iter(['name']):
@@ -66,12 +72,34 @@ def check_service_running(service_name):
     except:
         return False
 
-def get_local_gui_version():
+import ctypes
+def get_file_version(path):
+    """Lê a versão (ProductVersion) diretamente dos metadados do executável via API do Windows."""
+    if not os.path.exists(path): return None
     try:
-        if os.path.exists("module_versions.json"):
-            with open("module_versions.json", "r", encoding="utf-8") as f:
-                return json.load(f).get("gui", "0.0.0")
+        size = ctypes.windll.version.GetFileVersionInfoSizeW(path, None)
+        if not size: return None
+        buffer = ctypes.create_string_buffer(size)
+        ctypes.windll.version.GetFileVersionInfoW(path, None, size, buffer)
+        length = ctypes.c_uint()
+        ptr = ctypes.c_void_p()
+        ctypes.windll.version.VerQueryValueW(buffer, '\\VarFileInfo\\Translation', ctypes.byref(ptr), ctypes.byref(length))
+        if length.value >= 4:
+            data = ctypes.string_at(ptr, 4)
+            lang = data[1] << 8 | data[0]
+            cp = data[3] << 8 | data[2]
+            key = f'\\StringFileInfo\\{lang:04x}{cp:04x}\\ProductVersion'
+            ctypes.windll.version.VerQueryValueW(buffer, key, ctypes.byref(ptr), ctypes.byref(length))
+            if length.value > 0:
+                return ctypes.wstring_at(ptr, length.value).strip('\x00')
     except: pass
+    return None
+
+def get_local_gui_version():
+    """Tenta ler a versão do próprio executável ou fallback."""
+    if getattr(sys, 'frozen', False):
+        v = get_file_version(sys.executable)
+        if v: return v
     return "0.0.0"
 
 # --- Classe Principal da Janela GUI ---
@@ -83,19 +111,19 @@ class DocITDashboard(ctk.CTk):
         self.geometry("600x480")
         self.resizable(False, False)
         
-        # Centralizar a janela
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
         x = (screen_width/2) - (600/2)
         y = (screen_height/2) - (480/2)
         self.geometry(f'+{int(x)}+{int(y)}')
 
-        self.protocol("WM_DELETE_WINDOW", self.hide_window) # Minimiza pra bandeja em vez de fechar
+        self.protocol("WM_DELETE_WINDOW", self.hide_window)
         
         self.is_unlocked = False
-        self.config_data = load_secure_config() or {}
+        self.config_data = {}
         self.current_gui_version = get_local_gui_version()
         self.auto_lock_timer = None
+        self.tray_icon = None
         
         self.setup_ui()
         self.update_status_loop()
@@ -139,7 +167,6 @@ class DocITDashboard(ctk.CTk):
 
         ctk.CTkLabel(self.actions_frame, text="Administração Local", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
 
-        # Botões Iniciais (Instanciados mas ocultos até o desbloqueio)
         self.btn_restart = ctk.CTkButton(self.actions_frame, text="Reiniciar Agente", fg_color="#1f538d", command=self.restart_agent)
         self.btn_force_sync = ctk.CTkButton(self.actions_frame, text="Forçar Sincronização", fg_color="#1f538d", command=self.force_sync)
         self.btn_lock = ctk.CTkButton(self.actions_frame, text="Bloquear Painel (Lock)", fg_color="#dc3545", hover_color="#c82333", command=self.lock_actions)
@@ -148,33 +175,38 @@ class DocITDashboard(ctk.CTk):
         self.tamper_frame = ctk.CTkFrame(self.actions_frame, fg_color="transparent")
         self.tamper_frame.pack(pady=20, fill="x")
         
-        tamper_enabled = self.config_data.get("tamper_enabled", True)
+        self.lbl_tamper = ctk.CTkLabel(self.tamper_frame, text="Aguardando Core...", text_color="gray")
+        self.lbl_tamper.pack(pady=5)
         
-        if tamper_enabled:
-            self.lbl_tamper = ctk.CTkLabel(self.tamper_frame, text="🔒 Proteção de Agente Ativa", text_color="#dc3545", font=ctk.CTkFont(weight="bold"))
-            self.lbl_tamper.pack(pady=5)
-            
-            self.entry_password = ctk.CTkEntry(self.tamper_frame, placeholder_text="Senha Tamper (OTP)", show="*")
-            self.entry_password.pack(pady=5, padx=20, fill="x")
-            
-            self.btn_unlock = ctk.CTkButton(self.tamper_frame, text="Desbloquear Ações", command=self.unlock_actions)
-            self.btn_unlock.pack(pady=5, padx=20, fill="x")
-        else:
-            self.lbl_tamper = ctk.CTkLabel(self.tamper_frame, text="🔓 Proteção de Agente Inativa", text_color="#28a745", font=ctk.CTkFont(weight="bold"))
-            self.lbl_tamper.pack(pady=5)
-            self.unlock_actions(bypass=True)
+        self.entry_password = ctk.CTkEntry(self.tamper_frame, placeholder_text="Senha Tamper (OTP)", show="*")
+        self.btn_unlock = ctk.CTkButton(self.tamper_frame, text="Desbloquear Ações", command=self.unlock_actions)
 
         # Server Info
+        self.lbl_server = ctk.CTkLabel(self.actions_frame, text="Servidor: ...", font=ctk.CTkFont(size=10), text_color="gray")
+        self.lbl_server.pack(side="bottom", pady=5)
+
+    def refresh_tamper_ui(self):
+        tamper_enabled = self.config_data.get("tamper_enabled", True)
         srv = self.config_data.get("server_base_url", "Desconhecido")
-        ctk.CTkLabel(self.actions_frame, text=f"Servidor: {srv}", font=ctk.CTkFont(size=10), text_color="gray").pack(side="bottom", pady=5)
+        self.lbl_server.configure(text=f"Servidor: {srv}")
+
+        if tamper_enabled:
+            if not self.is_unlocked:
+                self.lbl_tamper.configure(text="🔒 Proteção de Agente Ativa", text_color="#dc3545", font=ctk.CTkFont(weight="bold"))
+                self.entry_password.pack(pady=5, padx=20, fill="x")
+                self.btn_unlock.pack(pady=5, padx=20, fill="x")
+        else:
+            self.lbl_tamper.configure(text="🔓 Proteção de Agente Inativa", text_color="#28a745", font=ctk.CTkFont(weight="bold"))
+            self.entry_password.pack_forget()
+            self.btn_unlock.pack_forget()
+            self.unlock_actions(bypass=True)
 
     def unlock_actions(self, bypass=False):
         if not bypass:
             typed_pass = self.entry_password.get().strip()
             real_pass = self.config_data.get("tamper_password")
             
-            # Fallback se a senha não estiver cacheada e o servidor ativou. 
-            if typed_pass != real_pass and not (typed_pass == "EMERGENCY_OVERRIDE_DOCIT_2026"): 
+            if typed_pass != real_pass: 
                 self.lbl_tamper.configure(text="❌ Senha Incorreta", text_color="#dc3545")
                 return
 
@@ -189,7 +221,6 @@ class DocITDashboard(ctk.CTk):
         self.btn_force_sync.pack(pady=10, padx=20, fill="x")
         self.btn_lock.pack(pady=10, padx=20, fill="x")
         
-        # Agenda o Auto-Lock para 1 hora (3600000 ms) se não for bypass
         if not bypass:
             if self.auto_lock_timer:
                 self.after_cancel(self.auto_lock_timer)
@@ -203,12 +234,10 @@ class DocITDashboard(ctk.CTk):
             self.after_cancel(self.auto_lock_timer)
             self.auto_lock_timer = None
 
-        # Esconde botões de ação
         self.btn_restart.pack_forget()
         self.btn_force_sync.pack_forget()
         self.btn_lock.pack_forget()
 
-        # Restaura UI do Tamper
         if hasattr(self, 'lbl_tamper'):
             msg = "🔒 Painel Bloqueado (Auto-Lock 1h)" if auto else "🔒 Proteção de Agente Ativa"
             self.lbl_tamper.configure(text=msg, text_color="#dc3545")
@@ -218,7 +247,6 @@ class DocITDashboard(ctk.CTk):
             log_event(f"Acesso Administrativo da GUI foi revogado/bloqueado. (Auto-Lock: {auto})", "INFO")
 
     def update_status_loop(self):
-        # Update UI async from psutil
         threading.Thread(target=self._check_status_worker, daemon=True).start()
         self.after(5000, self.update_status_loop)
 
@@ -228,12 +256,12 @@ class DocITDashboard(ctk.CTk):
         inv_running = check_process_running("Doc-IT-Inventory.exe")
         updater_running = check_process_running("Doc-IT-Updater.exe")
         
-        # Reload config in case server changed it
-        new_config = load_secure_config() 
+        # Agora busca o config via IPC em vez de ler o .dat
+        new_config = request_config_from_core()
+        
         if new_config:
             self.config_data = new_config
 
-        # Auto-Restart GUI caso o Doc-IT-Updater mude o módulo na pasta
         new_gui_ver = get_local_gui_version()
         if new_gui_ver != "0.0.0" and new_gui_ver != self.current_gui_version:
             log_event(f"Auto-Restart da GUI devido a OTA Update ({self.current_gui_version} -> {new_gui_ver})...", "INFO")
@@ -251,14 +279,16 @@ class DocITDashboard(ctk.CTk):
         self.lbl_remote.configure(text=f"Remote Desktop: {'🟢 Rodando' if remote else '🔴 Parado'}")
         self.lbl_inventory.configure(text=f"Inventory: {'🟢 Rodando' if inv else '🔴 Parado'}")
         self.lbl_updater.configure(text=f"Updater: {'🟢 Rodando' if updater else '🔴 Parado'}")
+        
+        # Atualiza a UI do Tamper se recebemos config
+        if self.config_data:
+            self.refresh_tamper_ui()
 
     def restart_agent(self):
         if not self.is_unlocked: return
         log_event("Usuário local solicitou reinicialização do Serviço CORE via GUI.", "WARNING")
-        # Mandar reinício via command service
         import subprocess
         try:
-            # Requer elevação (A GUI pode tentar, mas se não for admin falha)
             subprocess.run(["net", "stop", "DocITAgent"], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(1)
             subprocess.run(["net", "start", "DocITAgent"], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -270,7 +300,6 @@ class DocITDashboard(ctk.CTk):
         if not self.is_unlocked: return
         log_event("Usuário local solicitou sincronização forçada via GUI.", "INFO")
         try:
-            # Envia um comando para matar o inventory para que o core religue-o imediatamente
             for proc in psutil.process_iter(['name']):
                 if proc.info['name'] == 'Doc-IT-Inventory.exe':
                     proc.kill()
@@ -280,29 +309,25 @@ class DocITDashboard(ctk.CTk):
 
 # --- Bandeja do Sistema (Tray Icon) ---
 
-app_instance = None
-
 def on_quit_clicked(icon, item):
     icon.stop()
-    if app_instance:
-        app_instance.quit()
     os._exit(0)
 
 def on_show_clicked(icon, item):
     if app_instance:
-        # Traz para a frente
-        app_instance.deiconify()
-        app_instance.lift()
+        app_instance.after(0, app_instance.deiconify)
+        app_instance.after(0, app_instance.lift)
 
 def create_image(width, height):
-    # Gera um ícone genérico se não tiver o oficial .ico
     image = Image.new('RGB', (width, height), color=(31, 83, 141))
     dc = ImageDraw.Draw(image)
     dc.rectangle((width // 2, 0, width, height // 2), fill=(40, 167, 69))
     dc.rectangle((0, height // 2, width // 2, height), fill=(40, 167, 69))
     return image
 
-def tray_worker():
+app_instance = None
+
+def setup_tray():
     icon_image = create_image(64, 64)
     if os.path.exists("icon.ico"):
         try:
@@ -315,11 +340,11 @@ def tray_worker():
     )
     
     icon = pystray.Icon("Doc-IT", icon_image, "Doc-IT Endpoint Agent", menu)
-    icon.run()
+    # run_detached não bloqueia a thread, permitindo que o mainloop do Tkinter rode na principal
+    icon.run_detached()
+    return icon
 
-# --- Entry Point ---
 if __name__ == "__main__":
-    # Evita instâncias duplicadas (Múltiplos cliques do usuário encavalando Tray Icons)
     try:
         import win32event
         import win32api
@@ -332,16 +357,14 @@ if __name__ == "__main__":
 
     app_instance = DocITDashboard()
     
-    # Inicia SEMPRE em modo invisível na bandeja, a não ser que forçado a aparecer.
     if len(sys.argv) > 1 and sys.argv[1] == "--show":
         pass
     else:
         app_instance.withdraw()
 
-    # Sobe o Tray Icon em segundo plano
-    threading.Thread(target=tray_worker, daemon=True).start()
+    # Inicia a Tray de forma Detached (Estável no Windows)
+    app_instance.tray_icon = setup_tray()
     
-    # Loop Tkinter (Trava a Thread Principal)
     try:
         app_instance.mainloop()
     except KeyboardInterrupt:

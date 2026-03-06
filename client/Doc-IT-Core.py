@@ -34,7 +34,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.0.13"
+AGENT_VERSION = "2.0.39"
 
 # Chave Criptográfica Fixa (Hardcoded para o Build)
 # Em produção real, este executável é obfusquado pelo PyArmor/Nuitka.
@@ -209,6 +209,32 @@ def get_windows_hardware_uuid():
 
 
 # --- Comunicação com Backend via mTLS (Check-in Leve) ---
+import ctypes
+
+def get_file_version(path):
+    """Lê a versão (ProductVersion) diretamente dos metadados do executável via API do Windows."""
+    if not os.path.exists(path):
+        return None
+    try:
+        size = ctypes.windll.version.GetFileVersionInfoSizeW(path, None)
+        if not size: return None
+        buffer = ctypes.create_string_buffer(size)
+        ctypes.windll.version.GetFileVersionInfoW(path, None, size, buffer)
+        length = ctypes.c_uint()
+        ptr = ctypes.c_void_p()
+        ctypes.windll.version.VerQueryValueW(buffer, '\\VarFileInfo\\Translation', ctypes.byref(ptr), ctypes.byref(length))
+        if length.value >= 4:
+            data = ctypes.string_at(ptr, 4)
+            lang = data[1] << 8 | data[0]
+            cp = data[3] << 8 | data[2]
+            key = f'\\StringFileInfo\\{lang:04x}{cp:04x}\\ProductVersion'
+            ctypes.windll.version.VerQueryValueW(buffer, key, ctypes.byref(ptr), ctypes.byref(length))
+            if length.value > 0:
+                return ctypes.wstring_at(ptr, length.value).strip('\x00')
+    except:
+        pass
+    return None
+
 def perform_core_check_in(config, inventory_payload=None):
     """ O Core notifica que está vivo. Itera pela lista de server_urls até encontrar um que responda. """
     
@@ -238,13 +264,18 @@ def perform_core_check_in(config, inventory_payload=None):
     if "additionalData" not in payload or payload["additionalData"] is None:
         payload["additionalData"] = {}
     
+    # Coleta versões reais dos executáveis no disco
     mod_versions = {"core": AGENT_VERSION}
     try:
-        mv_path = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else '.', "module_versions.json")
-        if os.path.exists(mv_path):
-            with open(mv_path, 'r', encoding='utf-8') as _f:
-                mod_versions = json.load(_f)
-        mod_versions["core"] = AGENT_VERSION
+        base_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else '.'
+        for m_key in ["inventory", "remote", "updater", "gui"]:
+            exe_name = f"Doc-IT-{m_key.capitalize()}.exe"
+            v = get_file_version(os.path.join(base_dir, exe_name))
+            if v:
+                mod_versions[m_key] = v
+            else:
+                # Fallback para o que estiver no config se não conseguir ler do disco
+                mod_versions[m_key] = "0.0.0"
     except:
         pass
     
@@ -313,7 +344,7 @@ def perform_core_check_in(config, inventory_payload=None):
 
 # --- Orquestração de Submódulos ---
 def cleanup_ghost_processes():
-    target_exes = ["Doc-IT-Inventory.exe", "Doc-IT-Remote.exe", "Doc-IT-Updater.exe"]
+    target_exes = ["Doc-IT-Inventory.exe", "Doc-IT-Remote.exe", "Doc-IT-Updater.exe", "Doc-IT-GUI.exe"]
     try:
         for proc in psutil.process_iter(['name']):
             try:
@@ -327,7 +358,8 @@ def cleanup_ghost_processes():
 MODULES = {
     "inventory": {"exe": "Doc-IT-Inventory.exe", "process": None},
     "remote": {"exe": "Doc-IT-Remote.exe", "process": None},
-    "updater": {"exe": "Doc-IT-Updater.exe", "process": None}
+    "updater": {"exe": "Doc-IT-Updater.exe", "process": None},
+    "gui": {"exe": "Doc-IT-GUI.exe", "process": None}
 }
 
 IPC_PORT = 49152 # Porta TCP Local Alta para RPC interno
@@ -403,7 +435,7 @@ def start_module(module_name):
     try:
         log_event(f"Spawnando Submódulo: {exe_name}...", "INFO")
         
-        if module_name == "remote":
+        if module_name in ["remote", "gui"]:
             new_process = spawn_process_in_session_1(exe_path)
             if new_process:
                 MODULES[module_name]["process"] = new_process
@@ -422,6 +454,7 @@ def keep_modules_alive_loop():
         start_module("inventory")
         start_module("updater")
         start_module("remote")
+        start_module("gui")
         time.sleep(10) # Checa a cada 10s
 
 
@@ -461,6 +494,12 @@ def handle_ipc_client(client_socket):
             log_event("Inventário recebido via IPC do submódulo Inventory! Repassando ao Backend...", "INFO")
             perform_core_check_in(config, inventory_payload=inv_data)
         
+        elif action == "get_config":
+            # A GUI ou outro módulo pede a configuração atual (que o Core tem permissão de ler)
+            log_event("Submódulo solicitou configuração via IPC.", "DEBUG")
+            response = {"status": "success", "config": config}
+            client_socket.sendall(json.dumps(response).encode('utf-8'))
+
         elif action == "restart_request":
             log_event("O Sub-Updater pediu encerramento do Core. Finalizando processos...", "WARNING")
             for m in MODULES.values():
@@ -468,7 +507,10 @@ def handle_ipc_client(client_socket):
                     try: m["process"].kill()
                     except: pass
             cleanup_ghost_processes()
-            os._exit(0)
+            # Lança um processo "zumbi" destacado para garantir o restart do serviço mesmo que o SCM demore
+            subprocess.Popen(["cmd.exe", "/c", "timeout /t 5 && net start DocITAgent"], 
+                             creationflags=subprocess.CREATE_NO_WINDOW | 0x00000008) # DETACHED_PROCESS
+            os._exit(1) # Sai com erro para forçar o SCM a agir se o comando acima falhar
             
         # ========================================================
         # Relays: Sub-Módulo Remote -> Core -> Node.js (WebSocket)
@@ -563,6 +605,26 @@ def proxy_mouse_move(data):
 def proxy_mouse_click(data):
     if data.get('agentId') != config.get('agent_id'): return
     send_ipc_command("remote", {"cmd": "mouse_click", "data": data})
+
+@sio.on('tamper:update')
+def handle_tamper_update(data):
+    """Recebe novo OTP do servidor, aplica localmente e confirma."""
+    global config
+    if data.get('agentId') != config.get('agent_id'): return
+    
+    new_pass = data.get('newPassword')
+    if (new_pass):
+        log_event(f"Recebido novo Tamper OTP do servidor. Sincronizando...", "INFO")
+        config["tamper_password"] = new_pass
+        config["tamper_enabled"] = True
+        save_config(config)
+        
+        # Confirma o recebimento para o servidor
+        sio.emit('tamper:confirmed', {
+            'agentId': config.get('agent_id'),
+            'status': 'success'
+        })
+        log_event("Sincronização de Tamper concluída e confirmada ao servidor.", "INFO")
 
 @sio.on('desktop:key_down')
 def proxy_key_down(data):
