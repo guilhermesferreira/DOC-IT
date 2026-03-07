@@ -115,10 +115,6 @@
   border-bottom-color: #007bff;
 }
 
-.details-tab-content {
-  /* Conteúdo da aba */
-}
-
 /* Grid para os cards de informação */
 .tab-pane-grid {
   display: grid;
@@ -176,17 +172,6 @@
 .software-list li {
   justify-content: flex-start;
   gap: 10px;
-}
-
-.tab-pane-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-}
-
-/* Estilos para os cards que contêm gráficos */
-.chart-card {
-  /* .card-dashboard já é aplicado */
 }
 
 .chart-card h2 {
@@ -268,4 +253,129 @@
     transform: scale(1);
     opacity: 0.8;
   }
+}
+
+/* ========================
+   Toggle Switch (Premium)
+   ======================== */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #cbd5e1;
+  /* slate-300 */
+  transition: .3s;
+  border-radius: 24px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+input:checked+.slider {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  /* Emerald Gradient */
+}
+
+input:focus+.slider {
+  box-shadow: 0 0 1px #10b981;
+}
+
+input:checked+.slider:before {
+  transform: translateX(20px);
+}
+
+/* ========================
+   Tamper View Button (Premium)
+   ======================== */
+.button-tamper-view {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  /* Indigo Gradient */
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2), 0 2px 4px -1px rgba(79, 70, 229, 0.1);
+  margin-top: 15px;
+}
+
+.button-tamper-view:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3), 0 4px 6px -2px rgba(79, 70, 229, 0.15);
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+}
+
+.button-tamper-view:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.button-tamper-view:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* ========================
+   Modal Close Button
+   ======================== */
+.button-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2), 0 2px 4px -1px rgba(79, 70, 229, 0.1);
+  width: 100%;
+}
+
+.button-modal-close:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3), 0 4px 6px -2px rgba(79, 70, 229, 0.15);
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+}
+
+.button-modal-close:active {
+  transform: scale(0.98);
 }

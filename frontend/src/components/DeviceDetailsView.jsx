@@ -347,10 +347,10 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest, isOnline }) => { /
           <div className="tab-pane-grid">
 
             {/* Card: Tamper Protection */}
-            <div className="card-dashboard full-width" style={{ borderLeft: isTamperEnabled ? '4px solid #28a745' : '4px solid #dc3545', background: 'var(--card-bg)' }}>
+            <div className="card-dashboard full-width" style={{ borderLeft: isTamperEnabled ? '4px solid #10b981' : '4px solid #ef4444', background: 'var(--card-bg)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {isTamperEnabled ? <Lock size={20} color="#28a745" /> : <Unlock size={20} color="#dc3545" />}
+                  {isTamperEnabled ? <Lock size={20} color="#10b981" /> : <Unlock size={20} color="#ef4444" />}
                   Proteção do Agente (Tamper Protection)
                 </h2>
                 <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
@@ -358,21 +358,20 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest, isOnline }) => { /
                     <input type="checkbox" checked={isTamperEnabled} onChange={handleToggleTamper} />
                     <span className="slider round"></span>
                   </label>
-                  <span style={{ fontSize: '0.85em', fontWeight: '500', color: isTamperEnabled ? '#28a745' : '#888' }}>
+                  <span style={{ fontSize: '0.85em', fontWeight: '600', color: isTamperEnabled ? '#10b981' : '#64748b' }}>
                     {isTamperEnabled ? "Ativada" : "Desativada"}
                   </span>
                 </div>
               </div>
-              <p style={{ fontSize: '0.9em', color: 'var(--text-muted)', marginTop: '10px' }}>
+              <p style={{ fontSize: '0.9em', color: 'var(--text-muted)', marginTop: '10px', maxWidth: '80%' }}>
                 Previne que o agente do Doc-IT seja desvinculado deste servidor ou desabilitado localmente da máquina cliente sem a senha de emergência abaixo.
               </p>
               <button
                 onClick={handleViewTamperPassword}
-                className="button-primary"
-                style={{ marginTop: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                className="button-tamper-view"
                 disabled={loadingTamper}
               >
-                <KeyRound size={16} /> {loadingTamper ? 'Buscando...' : 'Visualizar Senha Restrita'}
+                <KeyRound size={16} /> {loadingTamper ? 'Sincronizando...' : 'Visualizar Senha de Emergência'}
               </button>
             </div>
 
@@ -556,7 +555,7 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest, isOnline }) => { /
             </div>
 
             <div className="modal-actions" style={{ justifyContent: 'center' }}>
-              <button onClick={() => setShowTamperModal(false)} className="button-secondary">Fechar</button>
+              <button onClick={() => setShowTamperModal(false)} className="button-modal-close">Entendido</button>
             </div>
           </div>
         </div>
