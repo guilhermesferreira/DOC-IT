@@ -299,7 +299,7 @@ def copy_certs_to_dist():
     os.makedirs(dist_certs, exist_ok=True)
     
     backend_certs = os.path.join("..", "backend", "certs")
-    for cert_file in ["ca.crt", "agent.crt", "agent.key"]:
+    for cert_file in ["ca.crt"]:
         src = os.path.join(backend_certs, cert_file)
         if os.path.exists(src):
             shutil.copy2(src, os.path.join(dist_certs, cert_file))

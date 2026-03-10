@@ -165,6 +165,9 @@ const authMiddleware = require('../middleware/auth');
 // será tratada através das rotas de /devices, operando em entidades Device com source='agent'.
 router.post('/check-in', agentController.checkIn);
 
+// Primeira requisição do Agente para solicitar certificado assinado (Boot 1)
+router.post('/enroll', agentController.enrollAgent);
+
 // Rotas de Auto-Update do Agente
 router.get('/version', agentController.getVersion);
 router.get('/update/:file', agentController.downloadUpdate);

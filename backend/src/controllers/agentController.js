@@ -154,6 +154,58 @@ async function downloadUpdate(req, res) {
 
 const certService = require('../services/certService');
 
+// ─── Enrollment Inicial (Sem mTLS, o agente ainda não possui certificado) ───
+
+async function enrollAgent(req, res) {
+  const { agentId, csr, hostname, osUsername } = req.body;
+
+  if (!agentId || !csr || !hostname) {
+    return res.status(400).json({ error: 'agentId, hostname e csr são obrigatórios.' });
+  }
+
+  try {
+    // 1. Verifica ou cria o dispositivo no estado pending
+    let device = await prisma.device.findUnique({ where: { agentId } });
+    const now = new Date();
+
+    if (!device) {
+      device = await prisma.device.create({
+        data: {
+          agentId,
+          hostname,
+          name: hostname,
+          osUsername: osUsername || 'Desconhecido',
+          type: 'Descoberto por Agente (Enroll)',
+          location: 'Detectado via Enrollment',
+          status: 'pending',
+          source: 'agent',
+          createdAt: now,
+          firstSeenAt: now,
+          lastSeenAt: now,
+        },
+      });
+      console.log(`[Enrollment] Novo agente registrado: ${agentId}`);
+    } else {
+      await prisma.device.update({
+        where: { agentId },
+        data: { lastSeenAt: now }
+      });
+      console.log(`[Enrollment] Agente existente solicitando cert: ${agentId}`);
+    }
+
+    // 2. Assina o CSR usando a CA do servidor
+    const newCertPem = certService.signAgentCsr(csr);
+    console.log(`[Enrollment] Certificado forjado e assinado para ${agentId}`);
+
+    // Retorna o certificado para o agente salvar
+    res.json({ cert: newCertPem, message: 'Enrollment bem-sucedido.' });
+
+  } catch (error) {
+    console.error('Erro geral no enrollment do agente:', error);
+    res.status(500).json({ error: 'Falha grave no processo de enrollment.' });
+  }
+}
+
 // ─── Renovação de Certificado (mTLS obrigatório — cert ainda válido) ────────
 
 async function renewCert(req, res) {
@@ -236,4 +288,4 @@ function getCaCert(req, res) {
 
 // As funções getAgentHosts, approveAgentHost, rejectAgentHost, deleteAgentHost
 // foram movidas e adaptadas para o deviceController.js
-module.exports = { checkIn, getVersion, downloadUpdate, renewCert, emergencyCertRequest, getCaCert };
+module.exports = { checkIn, getVersion, downloadUpdate, renewCert, emergencyCertRequest, getCaCert, enrollAgent };

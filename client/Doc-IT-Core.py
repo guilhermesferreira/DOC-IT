@@ -29,21 +29,47 @@ import win32file
 import win32pipe
 import pywintypes
 import secrets
+import win32crypt
 from cryptography.fernet import Fernet
 import base64
+from cryptography import x509
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 # --- Configurações Básicas ---
 CONFIG_FILE = "Doc-IT.dat"
+LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.0.57"
+AGENT_VERSION = "2.1.1"
 
-# Chave Criptográfica Fixa (Hardcoded para o Build)
-# Em produção real, este executável é obfusquado pelo PyArmor/Nuitka.
-ENCRYPTION_KEY = b'r7xK9sLpR2vM4N8wQ3tA5yB1uC6zD0fHjI7oP9lK3nU='
-cipher_suite = Fernet(ENCRYPTION_KEY)
+# Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
+KEY_FILE = "Doc-IT.key"
+cipher_suite = None
+
+def init_cipher():
+    global cipher_suite
+    try:
+        if os.path.exists(KEY_FILE):
+            with open(KEY_FILE, "rb") as f:
+                encrypted_key = f.read()
+            _, decrypted_key = win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0)
+            cipher_suite = Fernet(decrypted_key)
+        else:
+            new_key = Fernet.generate_key()
+            encrypted_key = win32crypt.CryptProtectData(new_key, "Doc-IT Master Key", None, None, None, 0)
+            with open(KEY_FILE, "wb") as f:
+                f.write(encrypted_key)
+            try:
+                apply_strict_acl(KEY_FILE)
+            except: pass
+            cipher_suite = Fernet(new_key)
+    except Exception as e:
+        log_event(f"Erro Fatal Inicializando DPAPI Key: {e}", "CRITICAL")
+        sys.exit(1)
 
 # Token de Autenticação IPC (Gerado Dinamicamente para cada Inicialização)
 IPC_TOKEN = secrets.token_hex(24)
@@ -98,6 +124,8 @@ threading.excepthook = handle_thread_exception
 # --- Gerenciamento de Configuração Básica (Criptografada) ---
 def load_config():
     global cipher_suite
+    if not cipher_suite:
+        init_cipher()
     
     # 1. Tenta carregar o novo formato seguro
     if os.path.exists(CONFIG_FILE):
@@ -269,6 +297,76 @@ def get_file_version(path):
         pass
     return None
 
+def enroll_agent(config, payload):
+    log_event("Certificados mTLS ausentes. Iniciando fluxo de Enrollment (First Boot)...", "INFO")
+    cert_dir = "./certs"
+    os.makedirs(cert_dir, exist_ok=True)
+    
+    key_path = config.get("key_path", "./certs/agent.key")
+    cert_path = config.get("cert_path", "./certs/agent.crt")
+    ca_path = config.get("ca_path", "./certs/ca.crt")
+    
+    try:
+        # Gera a chave privada RSA 2048 bits
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        with open(key_path, "wb") as f:
+            f.write(private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+            
+        # Bloqueia a chave privada com ACL
+        try: apply_strict_acl(key_path)
+        except: pass
+        
+        # Gera o CSR (Certificate Signing Request)
+        csr = x509.CertificateSigningRequestBuilder().subject_name(
+            x509.Name([
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Doc-IT Endpoint"),
+                x509.NameAttribute(NameOID.COMMON_NAME, payload.get("agentId", "unknown-agent"))
+            ])
+        ).sign(private_key, hashes.SHA256())
+        
+        csr_pem = csr.public_bytes(serialization.Encoding.PEM).decode('utf-8')
+        
+        enroll_payload = {
+            "agentId": payload.get("agentId"),
+            "hostname": payload.get("hostname"),
+            "osUsername": payload.get("osUsername"),
+            "csr": csr_pem
+        }
+        
+        # Failover de URL
+        server_urls = config.get("server_urls", [config.get("server_base_url")])
+        for url in server_urls:
+            try:
+                enroll_url = f"{url}/agent/enroll"
+                verify_ssl = ca_path if os.path.exists(ca_path) else False
+                if re.match(r"https?://\d+\.\d+\.\d+\.\d+", url): verify_ssl = False
+                
+                resp = requests.post(enroll_url, json=enroll_payload, timeout=15, verify=verify_ssl)
+                resp.raise_for_status()
+                
+                data = resp.json()
+                if "cert" in data:
+                    with open(cert_path, "w", encoding='utf-8') as f:
+                        f.write(data["cert"])
+                    log_event("Enrollment realizado com sucesso e certificado provisionado nativamente.", "INFO")
+                    try: apply_strict_acl(cert_path)
+                    except: pass
+                    return True
+            except Exception as ep:
+                log_event(f"Tentativa de enrollment em {url} falhou: {ep}", "WARNING")
+                continue
+                
+        log_event("Falha absoluta no fluxo de Enrollment (Nenhuma URL respondeu corretamente).", "ERROR")
+        return False
+    except Exception as e:
+        log_event(f"Falha criptográfica durante a geração do CSR: {e}", "ERROR")
+        return False
+
+
 def perform_core_check_in(config, inventory_payload=None):
     """ O Core notifica que está vivo. Itera pela lista de server_urls até encontrar um que responda. """
     
@@ -315,9 +413,12 @@ def perform_core_check_in(config, inventory_payload=None):
     key_path = config.get("key_path")
     ca_path = config.get("ca_path")
 
-    if not (os.path.exists(cert_path) and os.path.exists(key_path) and os.path.exists(ca_path)):
-        log_event("Certificados mTLS ausentes. Check-in falhou.", "ERROR")
-        return False, None
+    # Verifica os certificados. Se faltarem a Private Key ou Agent Cert, executa o Enrollment dinamicamente.
+    # O CA deve estar sempre presente via instalador base.
+    if not (os.path.exists(cert_path) and os.path.exists(key_path)):
+        if not enroll_agent(config, payload):
+            log_event("Certificados mTLS ausentes e Enrollment falhou. Check-in abortado.", "ERROR")
+            return False, None
 
     # Failover: tenta cada URL da lista até uma funcionar
     server_urls = config.get("server_urls", [config.get("server_base_url")])

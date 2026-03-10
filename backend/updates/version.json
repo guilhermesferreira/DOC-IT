@@ -1,10 +1,10 @@
 {
-    "version": "2.0.57",
+    "version": "2.1.1",
     "modules": {
         "core": {
-            "version": "2.0.57",
+            "version": "2.1.1",
             "file": "Doc-IT-Core.exe",
-            "hash": "59ad521a58aa2f9af06a58fa25c84509034c8f66e56bd9774387c0640aa40d9f"
+            "hash": "67fbea6f0ba55241f87048dbdaccf7fa1cb24508951e752df8c1814472361b5f"
         },
         "inventory": {
             "version": "2.0.11",
@@ -17,9 +17,9 @@
             "hash": "64c37b0b8461c728d3c9d51bd0ffcbeec1ab152e811ce11aae16ceac2da3e07d"
         },
         "updater": {
-            "version": "2.0.34",
+            "version": "2.0.35",
             "file": "Doc-IT-Updater.exe",
-            "hash": "230d1f3ff7e310f159595f48840bc4ec8af83fa6e935895ddc69783c04ad3803"
+            "hash": "4154f790106395fa23d376d2e9834d054d3c05529cba42dfbbe9bb38b496fcb5"
         },
         "gui": {
             "version": "2.0.27",

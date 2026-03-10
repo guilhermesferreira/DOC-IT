@@ -23,7 +23,7 @@ CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 # Token de Autenticação (Lido da Variável de Ambiente em segurança)
 IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.0.34"
+AGENT_VERSION = "2.0.35"
 
 config = {}
 
