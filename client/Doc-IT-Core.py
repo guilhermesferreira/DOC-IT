@@ -44,7 +44,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.1.1"
+AGENT_VERSION = "2.1.2"
 
 # Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
 KEY_FILE = "Doc-IT.key"
@@ -685,6 +685,8 @@ def ipc_local_server():
             threading.Thread(target=handle_ipc_client, args=(pipe,), daemon=True).start()
         except Exception as e:
             log_event(f"Erro no Servidor IPC (Named Pipe): {e}", "ERROR")
+            try: win32file.CloseHandle(pipe)
+            except: pass
             time.sleep(1)
 
 def handle_ipc_client(pipe):
@@ -765,7 +767,12 @@ def handle_ipc_client(pipe):
             # o serviço após 5 segundos se ele falhar (reset=0, actions=restart/5000).
             # Sair com os._exit(1) é interpretado como falha do processo, acionando o gatilho.
             log_event("Core finalizado. SCM deve reiniciar o serviço em 5 segundos.", "WARNING")
-            time.sleep(0.5)
+            
+            # Flush final e soltar hooks NTFS das chaves de criptografia DPAPI para o restart sujo não dar conflito
+            time.sleep(1)
+            try: win32file.CloseHandle(pipe)
+            except: pass
+            
             os._exit(1)
             
         # ========================================================
@@ -824,6 +831,9 @@ def send_ipc_command(module_name, payload):
         win32file.CloseHandle(handle)
     except pywintypes.error as e:
          log_event(f"Falha ao enviar IPC para o submódulo '{module_name}' via Pipe {pipe_path}: {e}", "WARNING")
+    finally:
+         try: win32file.CloseHandle(handle)
+         except: pass
 
 
 # --- Websocket (Conector Mestre de Comandos de Tela/Terminal) ---

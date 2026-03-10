@@ -72,6 +72,9 @@ def request_config_from_core():
             return response.get("config")
     except Exception as e:
         log_event(f"Falha ao solicitar config ao Core via Pipe {CORE_IPC_PIPE}: {e}", "WARNING")
+    finally:
+        try: win32file.CloseHandle(handle)
+        except: pass
     return None
 
 def check_process_running(process_name):
@@ -304,6 +307,9 @@ class DocITDashboard(ctk.CTk):
                 self.restart_agent()
         except Exception as e:
             log_event(f"Falha ao enviar save_config: {e}", "ERROR")
+        finally:
+            try: win32file.CloseHandle(handle)
+            except: pass
 
     def refresh_tamper_ui(self):
         tamper_enabled = self.config_data.get("tamper_enabled", True)
@@ -441,6 +447,9 @@ class DocITDashboard(ctk.CTk):
         except Exception as e:
             log_event(f"Falha ao enviar restart_request via IPC: {e}", "ERROR")
             self.lbl_tamper.configure(text="❌ Erro IPC na Reinicialização")
+        finally:
+            try: win32file.CloseHandle(handle)
+            except: pass
             
     def force_sync(self):
         if not self.is_unlocked: return

@@ -23,7 +23,7 @@ CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 # Token de Autenticação (Lido da Variável de Ambiente em segurança)
 IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.0.35"
+AGENT_VERSION = "2.0.36"
 
 config = {}
 
@@ -69,12 +69,14 @@ def request_config_from_core():
             if resp == 0: break
             
         win32file.CloseHandle(handle)
-        
         response = json.loads(data.decode('utf-8'))
         if response.get("status") == "success":
             return response.get("config", {})
     except Exception as e:
         log_event(f"Falha ao carregar config via IPC (Core offline?): {e}", "WARNING")
+    finally:
+        try: win32file.CloseHandle(handle)
+        except: pass
     return {}
 
 import ctypes
@@ -155,6 +157,9 @@ def push_restart_to_core():
         win32file.CloseHandle(handle)
     except Exception as e:
         log_event(f"Erro ao pedir restart ao Core via Pipe {CORE_IPC_PIPE}: {e}", "CRITICAL")
+    finally:
+        try: win32file.CloseHandle(handle)
+        except: pass
 
 def cleanup_old_files():
     """Varre a pasta instalada e exclui arquivos .old ou .tmp de atualizações passadas consolidadadas."""
