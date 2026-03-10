@@ -20,16 +20,10 @@ import pywintypes
 # --- Configurações IPC ---
 CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 
-# Token de Autenticação (Recebido via CLI)
-IPC_TOKEN = ""
-for i, arg in enumerate(sys.argv):
-    if arg == "--token" and i + 1 < len(sys.argv):
-        IPC_TOKEN = sys.argv[i+1]
-        break
-
-CONFIG_FILE = "config.json"
+# Token de Autenticação (Lido da Variável de Ambiente em segurança)
+IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.0.22"
+AGENT_VERSION = "2.0.34"
 
 config = {}
 
@@ -50,13 +44,38 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 sys.excepthook = handle_exception
 
-def load_config():
-    if not os.path.exists(CONFIG_FILE): return {}
+def request_config_from_core():
+    """Solicita a configuração ativa ao processo Core via Named Pipe."""
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return {}
+        payload = {
+            "action": "get_config",
+            "token": IPC_TOKEN
+        }
+        
+        handle = win32file.CreateFile(
+            CORE_IPC_PIPE,
+            win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+            0, None,
+            win32file.OPEN_EXISTING,
+            0, None
+        )
+        win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
+        win32file.WriteFile(handle, json.dumps(payload).encode('utf-8'))
+        
+        data = b""
+        while True:
+            resp, chunk = win32file.ReadFile(handle, 4096)
+            data += chunk
+            if resp == 0: break
+            
+        win32file.CloseHandle(handle)
+        
+        response = json.loads(data.decode('utf-8'))
+        if response.get("status") == "success":
+            return response.get("config", {})
+    except Exception as e:
+        log_event(f"Falha ao carregar config via IPC (Core offline?): {e}", "WARNING")
+    return {}
 
 import ctypes
 
@@ -225,7 +244,7 @@ def download_module_safe(mod_key, target_file, expected_hash, base_url=None):
     log_event(f"Iniciando reposição segura do módulo [{mod_key}] ({target_file})...", "INFO")
     
     if not base_url:
-        base_url = config.get('server_base_url', 'https://localhost:3000')
+        base_url = config.get('server_base_url')
     base_update_url = f"{base_url}/agent/update"
     file_url = f"{base_update_url}/{target_file}"
     
@@ -310,16 +329,23 @@ def download_module_safe(mod_key, target_file, expected_hash, base_url=None):
 # =========================================================
 if __name__ == "__main__":
     log_event("==== DOC-IT UPDATER INITIALIZED ====", "INFO")
-    config = load_config()
     
     while True:
+        # Puxa o config fresquinho a cada ciclo via IPC
+        config = request_config_from_core()
+        
         try:
             cleanup_old_files()
             check_and_apply_updates()
         except Exception as e:
             pass
             
-        polling_minutes = 60 # Fallback default
+        # Garante um valor padrão (agora tratado como o valor 'bruto' desejado pelo usuário)
+        try:
+            polling_interval = int(config.get("update_check_interval_minutes", 60))
+        except:
+            polling_interval = 60
+
         try:
             server_urls = config.get("server_urls", [config.get('server_base_url')])
             cert_path = config.get("cert_path", "./certs/agent.crt")
@@ -332,18 +358,21 @@ if __name__ == "__main__":
                     if os.path.exists(cert_path) and os.path.exists(key_path) and os.path.exists(ca_path):
                         verify_ssl = ca_path
                         if re.match(r"https?://\d+\.\d+\.\d+\.\d+", url): verify_ssl = False
-                        r = requests.get(settings_url, cert=(cert_path, key_path), verify=verify_ssl, timeout=15)
+                        r = requests.get(settings_url, cert=(cert_path, key_path), verify=verify_ssl, timeout=10)
                     else:
-                        r = requests.get(settings_url, verify=False, timeout=15)
+                        r = requests.get(settings_url, verify=False, timeout=10)
                         
                     if r.status_code == 200:
                         settings_data = r.json()
                         if "updateCheckIntervalMinutes" in settings_data:
-                            polling_minutes = int(settings_data["updateCheckIntervalMinutes"])
+                            polling_interval = int(settings_data["updateCheckIntervalMinutes"])
                         break
                 except:
                     continue
-        except Exception as e:
-            log_event(f"Aviso: Nao foi possivel buscar o intervalo de atualizacao do painel ({e}). Usando {polling_minutes} min.", "WARNING")
+        except:
+            pass
             
-        time.sleep(polling_minutes * 60)
+        
+        # O painel/config guarda em MINUTOS. Multiplicamos por 60 para sleep em segundos.
+        actual_sleep = max(1, polling_interval)
+        time.sleep(actual_sleep * 60)

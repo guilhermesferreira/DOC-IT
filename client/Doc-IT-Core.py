@@ -37,9 +37,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- Configurações Básicas ---
 CONFIG_FILE = "Doc-IT.dat"
-LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.0.49"
+AGENT_VERSION = "2.0.57"
 
 # Chave Criptográfica Fixa (Hardcoded para o Build)
 # Em produção real, este executável é obfusquado pelo PyArmor/Nuitka.
@@ -424,7 +423,11 @@ def spawn_process_in_session_1(exe_path):
             return None
             
         h_token = win32ts.WTSQueryUserToken(session_id)
-        env = win32profile.CreateEnvironmentBlock(h_token, False)
+        # Herdamos o ambiente do Core para garantir que o DOCIT_IPC_TOKEN passe adiante
+        # Mas o CreateEnvironmentBlock retorna apenas o ambiente do USUÁRIO.
+        # Para simplificar e garantir que o Token seja passado, usaremos o ambiente do Core
+        # mas forçaremos o carregamento do perfil se necessário. 
+        # No entanto, subprocessos em Session 0 -> 1 funcionam melhor com o env do Core + modificações.
         
         si = win32process.STARTUPINFO()
         si.lpDesktop = "winsta0\\default"
@@ -436,12 +439,12 @@ def spawn_process_in_session_1(exe_path):
         hProcess, hThread, dwProcessId, dwThreadId = win32process.CreateProcessAsUser(
             h_token,
             None,
-            f'"{exe_path}" --token {IPC_TOKEN}',
+            f'"{exe_path}"',
             None,
             None,
             False,
             creation_flags,
-            env,
+            None, # Passamos None para herdar env do Core (que agora tem o TOKEN)
             os.path.dirname(os.path.abspath(exe_path)),
             si
         )
@@ -468,7 +471,15 @@ def start_module(module_name):
             exe_path = os.path.abspath(exe_name)
 
     p = MODULES[module_name]["process"]
-    if p and p.poll() is None:
+    # Verifica se o processo existe e se está realmente respondendo/rodando
+    is_alive = False
+    if p:
+        try:
+            if p.poll() is None:
+                is_alive = True
+        except: pass
+        
+    if is_alive:
         return 
 
     try:
@@ -479,7 +490,8 @@ def start_module(module_name):
             if new_process:
                 MODULES[module_name]["process"] = new_process
         else:
-            new_process = subprocess.Popen([exe_path, "--token", IPC_TOKEN], 
+            # Posen herda o DOCIT_IPC_TOKEN automaticamente do os.environ
+            new_process = subprocess.Popen([exe_path], 
                                          stdout=subprocess.DEVNULL, 
                                          stderr=subprocess.DEVNULL,
                                          creationflags=subprocess.CREATE_NO_WINDOW)
@@ -494,13 +506,24 @@ def keep_modules_alive_loop():
     HEARTBEAT_INTERVALSeconds = 300 # 5 Minutos
     
     while True:
-        start_module("inventory")
-        start_module("updater")
-        start_module("remote")
-        start_module("gui")
-        
+        try:
+            # Módulos Críticos de Background
+            start_module("inventory")
+            start_module("updater")
+            start_module("remote")
+            
+            # A GUI é opcional mas o Core garante que ela se mantenha aberta se o usuário não fechou.
+            # Nota: Se o usuário fechar a GUI pelo menu, o status dela aqui será None/Dead e o Core vai reabrir?
+            # Por design, o Doc-IT Agent GUI deve ficar sempre na bandeja. 
+            # Reabre apenas se crashear ou for encerrado externamente.
+            start_module("gui")
+            
+        except Exception as e:
+            log_event(f"Erro no loop de monitoramento de módulos: {e}", "ERROR")
+            
         # Periodic Heartbeat
-        if time.time() - last_heartbeat >= HEARTBEAT_INTERVALSeconds:
+        now = time.time()
+        if now - last_heartbeat >= HEARTBEAT_INTERVALSeconds:
             log_event("Iniciando heartbeat periódico do Core...", "DEBUG")
             try:
                 perform_core_check_in(config)
@@ -508,6 +531,9 @@ def keep_modules_alive_loop():
                 log_event(f"Falha ao realizar heartbeat periódico: {e}", "WARNING")
             finally:
                 last_heartbeat = time.time()
+        
+        # Throttling: Não consome 100% de CPU checando processos
+        time.sleep(10)
                 
         time.sleep(10) # Checa a cada 10s
 
@@ -523,6 +549,15 @@ def get_pipe_acl():
     
     dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_system)
     dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_admins)
+
+    # --- S-1-5-4 representa qualquer usuário logado fisicamente ---
+    sid_interactive = win32security.ConvertStringSidToSid("S-1-5-4") 
+    
+    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_system)
+    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_admins)
+    
+    #  --- Concede permissão ao usuário interativo na DACL ---
+    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_interactive)
     
     sd.SetSecurityDescriptorDacl(1, dacl, 0)
     
@@ -582,16 +617,54 @@ def handle_ipc_client(pipe):
             response = {"status": "success", "config": config}
             win32file.WriteFile(pipe, json.dumps(response).encode('utf-8'))
 
+        elif action == "save_config":
+            # A GUI envia atualizações de configuração. O Core salva no Doc-IT.dat usando os privilégios SYSTEM
+            log_event("GUI enviou alterações na configuração via IPC.", "INFO")
+            new_cfg = payload.get("config", {})
+            
+            # Limpa server_urls atuais exceto o localhost e injeta a nova principal
+            current_port = "3000"
+            for url in config.get("server_urls", []):
+                if url.startswith("https://localhost:") or url.startswith("http://localhost:"):
+                    current_port = url.split(":")[-1]
+                    break
+                    
+            base_url = new_cfg.get("server_base_url")
+            if base_url:
+                config["server_base_url"] = base_url
+                config["server_urls"] = [base_url, f"https://localhost:{current_port}"]
+                
+            if "log_level" in new_cfg: config["log_level"] = new_cfg["log_level"]
+            
+            if "update_check_interval_minutes" in new_cfg:
+                try:
+                    config["update_check_interval_minutes"] = int(new_cfg["update_check_interval_minutes"])
+                except:
+                    pass
+                 
+            save_config(config)
+            
+            response = {"status": "success"}
+            win32file.WriteFile(pipe, json.dumps(response).encode('utf-8'))
+
         elif action == "restart_request":
-            log_event("O Sub-Updater pediu encerramento do Core. Finalizando processos...", "WARNING")
-            for m in MODULES.values():
-                if m["process"]:
-                    try: m["process"].kill()
+            log_event("O Sub-Updater ou GUI pediu reinicialização do Agente. Encerrando para gatilho de recuperação...", "WARNING")
+            
+            # Matamos os submódulos para não deixar processos órfãos
+            for m_name, m_data in MODULES.items():
+                if m_data["process"]:
+                    try:
+                        log_event(f"Encerrando submódulo {m_name} para restart...", "DEBUG")
+                        m_data["process"].kill()
                     except: pass
+            
             cleanup_ghost_processes()
-            # Deixa o Windows Service Manager cuidar do restart (configurado para 5s no Setup)
-            # Sair com código != 0 aciona as 'failure actions' do serviço.
-            log_event("Solicitando auto-reinicialização do serviço via SCM failure actions...", "WARNING")
+            
+            # O SCM (Service Control Manager) está configurado no Setup.exe para reiniciar
+            # o serviço após 5 segundos se ele falhar (reset=0, actions=restart/5000).
+            # Sair com os._exit(1) é interpretado como falha do processo, acionando o gatilho.
+            log_event("Core finalizado. SCM deve reiniciar o serviço em 5 segundos.", "WARNING")
+            time.sleep(0.5)
             os._exit(1)
             
         # ========================================================
@@ -766,6 +839,9 @@ class DocITAgentService(win32serviceutil.ServiceFramework):
         os.chdir(os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__)))
         
         config = load_config()
+        # Exporta o Token para o Ambiente para que todos os subprocessos herdem via os.environ
+        os.environ["DOCIT_IPC_TOKEN"] = IPC_TOKEN
+
         log_event("==== DOC-IT CORE SERVICE INITIALIZED ====", "INFO")
 
         if not config.get("agent_id"):

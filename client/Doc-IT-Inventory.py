@@ -24,15 +24,11 @@ except ImportError:
 # --- Configurações IPC ---
 CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 
-# Token de Autenticação (Recebido via CLI)
-IPC_TOKEN = ""
-for i, arg in enumerate(sys.argv):
-    if arg == "--token" and i + 1 < len(sys.argv):
-        IPC_TOKEN = sys.argv[i+1]
-        break
+# Token de Autenticação (Lido da Variável de Ambiente em segurança)
+IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 
 LOG_FILE = "agent-inventory.log"
-AGENT_VERSION = "2.0.8"
+AGENT_VERSION = "2.0.11"
 
 def log_event(message, level="INFO"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

@@ -182,6 +182,12 @@ def process_modules():
             if mod_key == "core":
                 cmd.append("--hidden-import=win32timezone")
             if mod_key != "core": cmd.append("--noconsole") 
+            
+            sep = ";" if os.name == "nt" else ":"
+            if mod_key == "gui":
+                cmd.append(f"--add-data=assets{sep}assets")
+                cmd.append("--icon=assets/icon.ico")
+                
             cmd.append(src)
             print(f"Executando: {' '.join(cmd)}")
             subprocess.run(cmd, check=True)
@@ -325,9 +331,10 @@ def build_installer():
         f"--add-data=dist/Doc-IT-Remote.exe{sep}.",
         f"--add-data=dist/Doc-IT-Updater.exe{sep}.",
         f"--add-data=dist/Doc-IT-GUI.exe{sep}.",
-        f"--add-data=dist/module_versions.json{sep}.",
         f"--add-data=dist/config.json{sep}.",
         f"--add-data=dist/certs{sep}certs",
+        f"--add-data=assets{sep}assets",
+        "--icon=assets/icon.ico",
         "Doc-IT-Setup.py"
     ]
     subprocess.run(cmd, check=True)

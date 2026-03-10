@@ -33,15 +33,11 @@ except ImportError:
 CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 MY_IPC_PIPE = r'\\.\pipe\DocIT_Remote_IPC'
 
-# Token de Autenticação (Recebido via CLI)
-IPC_TOKEN = ""
-for i, arg in enumerate(sys.argv):
-    if arg == "--token" and i + 1 < len(sys.argv):
-        IPC_TOKEN = sys.argv[i+1]
-        break
+# Token de Autenticação (Lido da Variável de Ambiente em segurança)
+IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 
 LOG_FILE = "agent-remote.log"
-AGENT_VERSION = "2.0.8"
+AGENT_VERSION = "2.0.11"
 
 config = {}
 

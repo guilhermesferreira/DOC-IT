@@ -22,12 +22,11 @@ import pywintypes
 # --- Constantes IPC ---
 CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 
-# Token de Autenticação (Receivado via CLI)
-IPC_TOKEN = ""
-for i, arg in enumerate(sys.argv):
-    if arg == "--token" and i + 1 < len(sys.argv):
-        IPC_TOKEN = sys.argv[i+1]
-        break
+# Token de Autenticação (Lido da Variável de Ambiente em segurança)
+IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
+
+# Versão do Módulo GUI
+GUI_VERSION = "2.0.30"
 
 def log_event(message, level="INFO"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -137,6 +136,9 @@ class DocITDashboard(ctk.CTk):
         x = (screen_width/2) - (600/2)
         y = (screen_height/2) - (480/2)
         self.geometry(f'+{int(x)}+{int(y)}')
+        
+        # --- Configura o Ícone da Barra de Tarefas (Taskbar) e Janela ---
+        self.set_window_icon()
 
         self.protocol("WM_DELETE_WINDOW", self.hide_window)
         
@@ -149,6 +151,35 @@ class DocITDashboard(ctk.CTk):
         self.setup_ui()
         self.update_status_loop()
 
+    def set_window_icon(self):
+        try:
+            if hasattr(sys, '_MEIPASS'):
+                base_path = sys._MEIPASS
+            else:
+                base_path = os.path.dirname(__file__)
+            
+            ico_path = os.path.join(base_path, "assets", "icon.ico")
+            logo_path = os.path.join(base_path, "assets", "logo-ico-azul.ico") # Símbolo limpo
+            
+            import ctypes
+            myappid = u'docit.agent.gui.v2'
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+            
+            # Tenta setar nativo (pode falhar e ficar em branco com ICOs modernos comprimidos)
+            if os.path.exists(ico_path):
+                try:
+                    self.iconbitmap(ico_path)
+                except:
+                    pass
+                
+            # Fallback INFALÍVEL via Pillow (Garante que a barra de tarefas não fique em branco)
+            icon_src = ico_path if os.path.exists(ico_path) else logo_path
+            if os.path.exists(icon_src):
+                img = Image.open(icon_src).convert("RGBA")
+                self.after(200, lambda: self.wm_iconphoto(True, ImageTk.PhotoImage(img)))
+        except Exception as e:
+            log_event(f"Erro ao setar ícone da janela: {e}", "WARNING")
+
     def hide_window(self):
         self.withdraw()
 
@@ -158,9 +189,15 @@ class DocITDashboard(ctk.CTk):
         self.header_frame.pack(fill="x")
         
         try:
-            logo_path = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
+            if hasattr(sys, '_MEIPASS'):
+                base_path = sys._MEIPASS
+            else:
+                base_path = os.path.dirname(__file__)
+            logo_path = os.path.join(base_path, "assets", "logo.png")
             if os.path.exists(logo_path):
-                logo_img = ctk.CTkImage(light_image=Image.open(logo_path), dark_image=Image.open(logo_path), size=(40, 40))
+                logo_img = ctk.CTkImage(light_image=Image.open(logo_path), 
+                                       dark_image=Image.open(logo_path), 
+                                       size=(50, 50)) # Aumentado de 40 para 50
                 self.logo_label = ctk.CTkLabel(self.header_frame, image=logo_img, text="")
                 self.logo_label.pack(side="left", padx=20, pady=10)
         except Exception as e:
@@ -169,15 +206,18 @@ class DocITDashboard(ctk.CTk):
         self.title_label = ctk.CTkLabel(self.header_frame, text="Doc-IT Endpoint Agent", font=ctk.CTkFont(size=20, weight="bold"), text_color="white")
         self.title_label.pack(side="left", pady=10)
 
-        # Content Frame
-        self.content_frame = ctk.CTkFrame(self)
-        self.content_frame.pack(fill="both", expand=True, padx=20, pady=20)
-
-        # Coluna Status
-        self.status_frame = ctk.CTkFrame(self.content_frame)
-        self.status_frame.pack(side="left", fill="both", expand=True, padx=(0,10))
+        # Tabview para dividir Status e Configurações
+        self.tabview = ctk.CTkTabview(self, width=560, height=360)
+        self.tabview.pack(padx=20, pady=10, fill="both", expand=True)
         
-        ctk.CTkLabel(self.status_frame, text="Status dos Módulos", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
+        self.tab_status = self.tabview.add("Estado do Sistema")
+        self.tab_config = self.tabview.add("Configurações")
+        
+        # === ABA: ESTADO DO SISTEMA ===
+        self.status_frame = ctk.CTkFrame(self.tab_status)
+        self.status_frame.pack(side="left", fill="both", expand=True, padx=(0,5))
+        
+        ctk.CTkLabel(self.status_frame, text="Módulos Locais", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10)
 
         self.lbl_core = ctk.CTkLabel(self.status_frame, text="Core Service: Verificando...")
         self.lbl_core.pack(anchor="w", padx=20, pady=5)
@@ -191,19 +231,13 @@ class DocITDashboard(ctk.CTk):
         self.lbl_updater = ctk.CTkLabel(self.status_frame, text="Updater: Verificando...")
         self.lbl_updater.pack(anchor="w", padx=20, pady=5)
 
-        # Coluna Ações
-        self.actions_frame = ctk.CTkFrame(self.content_frame)
-        self.actions_frame.pack(side="right", fill="both", expand=True)
+        self.actions_frame = ctk.CTkFrame(self.tab_status)
+        self.actions_frame.pack(side="right", fill="both", expand=True, padx=(5,0))
 
-        ctk.CTkLabel(self.actions_frame, text="Administração Local", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
+        ctk.CTkLabel(self.actions_frame, text="Tamper Protection", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10)
 
-        self.btn_restart = ctk.CTkButton(self.actions_frame, text="Reiniciar Agente", fg_color="#1f538d", command=self.restart_agent)
-        self.btn_force_sync = ctk.CTkButton(self.actions_frame, text="Forçar Sincronização", fg_color="#1f538d", command=self.force_sync)
-        self.btn_lock = ctk.CTkButton(self.actions_frame, text="Bloquear Painel (Lock)", fg_color="#dc3545", hover_color="#c82333", command=self.lock_actions)
-
-        # Área do Tamper Protection
         self.tamper_frame = ctk.CTkFrame(self.actions_frame, fg_color="transparent")
-        self.tamper_frame.pack(pady=20, fill="x")
+        self.tamper_frame.pack(pady=10, fill="x")
         
         self.lbl_tamper = ctk.CTkLabel(self.tamper_frame, text="Aguardando Core...", text_color="gray")
         self.lbl_tamper.pack(pady=5)
@@ -211,14 +245,78 @@ class DocITDashboard(ctk.CTk):
         self.entry_password = ctk.CTkEntry(self.tamper_frame, placeholder_text="Senha Tamper (OTP)", show="*")
         self.btn_unlock = ctk.CTkButton(self.tamper_frame, text="Desbloquear Ações", command=self.unlock_actions)
 
-        # Server Info
+        self.btn_restart = ctk.CTkButton(self.actions_frame, text="Reiniciar Agente", fg_color="#1f538d", command=self.restart_agent)
+        self.btn_force_sync = ctk.CTkButton(self.actions_frame, text="Sincronizar Inventário", fg_color="#1f538d", command=self.force_sync)
+        self.btn_lock = ctk.CTkButton(self.actions_frame, text="Bloquear Painel", fg_color="#dc3545", hover_color="#c82333", command=self.lock_actions)
+
         self.lbl_server = ctk.CTkLabel(self.actions_frame, text="Servidor: ...", font=ctk.CTkFont(size=10), text_color="gray")
         self.lbl_server.pack(side="bottom", pady=5)
+        
+        # === ABA: CONFIGURAÇÕES ===
+        ctk.CTkLabel(self.tab_config, text="Ajustes de Telemetria e Conexão", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
+        
+        self.cfg_frame = ctk.CTkFrame(self.tab_config, fg_color="transparent")
+        self.cfg_frame.pack(fill="both", expand=True, padx=20)
+        
+        ctk.CTkLabel(self.cfg_frame, text="Servidor Base URL:").grid(row=0, column=0, sticky="w", pady=(10,0))
+        self.input_base_url = ctk.CTkEntry(self.cfg_frame, width=300)
+        self.input_base_url.grid(row=1, column=0, sticky="w", pady=(0,10))
+        
+        ctk.CTkLabel(self.cfg_frame, text="Nível de Log Global:").grid(row=2, column=0, sticky="w", pady=(10,0))
+        self.combo_log = ctk.CTkComboBox(self.cfg_frame, values=["INFO", "DEBUG", "WARNING", "CRITICAL"])
+        self.combo_log.grid(row=3, column=0, sticky="w", pady=(0,10))
+        
+        ctk.CTkLabel(self.cfg_frame, text="Intervalo de Update (min):").grid(row=4, column=0, sticky="w", pady=(10,0))
+        self.input_update_interval = ctk.CTkEntry(self.cfg_frame, width=100)
+        self.input_update_interval.grid(row=5, column=0, sticky="w", pady=(0,10))
+        
+        self.btn_save_cfg = ctk.CTkButton(self.tab_config, text="Salvar Alterações e Reiniciar", fg_color="#28a745", hover_color="#218838", command=self.save_settings)
+        # Oculto por padrão (até destravar)
+        self.lbl_cfg_locked = ctk.CTkLabel(self.tab_config, text="🔒 Desbloqueie o Painel na aba de Status para editar as configurações.", text_color="#dc3545")
+        self.lbl_cfg_locked.pack(pady=20)
+
+    def save_settings(self):
+        if not self.is_unlocked: return
+        try:
+            payload = {
+                "action": "save_config",
+                "token": IPC_TOKEN,
+                "config": {
+                    "server_base_url": self.input_base_url.get(),
+                    "log_level": self.combo_log.get(),
+                    "update_check_interval_minutes": self.input_update_interval.get()
+                }
+            }
+            handle = win32file.CreateFile(CORE_IPC_PIPE, win32file.GENERIC_READ | win32file.GENERIC_WRITE, 0, None, win32file.OPEN_EXISTING, 0, None)
+            win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
+            win32file.WriteFile(handle, json.dumps(payload).encode('utf-8'))
+            
+            data = b""
+            while True:
+                resp, chunk = win32file.ReadFile(handle, 4096)
+                data += chunk
+                if resp == 0: break
+            win32file.CloseHandle(handle)
+            res = json.loads(data.decode('utf-8'))
+            if res.get("status") == "success":
+                self.lbl_cfg_locked.configure(text="✅ Configuração Salva! Reiniciando agente...", text_color="#28a745")
+                self.lbl_cfg_locked.pack(pady=20)
+                self.restart_agent()
+        except Exception as e:
+            log_event(f"Falha ao enviar save_config: {e}", "ERROR")
 
     def refresh_tamper_ui(self):
         tamper_enabled = self.config_data.get("tamper_enabled", True)
         srv = self.config_data.get("server_base_url", "Desconhecido")
         self.lbl_server.configure(text=f"Servidor: {srv}")
+        
+        # Popula inputs da aba config
+        if not self.input_base_url.get():
+            self.input_base_url.delete(0, 'end')
+            self.input_base_url.insert(0, srv)
+            self.combo_log.set(self.config_data.get("log_level", "INFO"))
+            self.input_update_interval.delete(0, 'end')
+            self.input_update_interval.insert(0, str(self.config_data.get("update_check_interval_minutes", 60)))
 
         if tamper_enabled:
             if not self.is_unlocked:
@@ -248,6 +346,12 @@ class DocITDashboard(ctk.CTk):
             self.btn_unlock.configure(state="disabled")
 
         self.btn_restart.pack(pady=10, padx=20, fill="x")
+        self.btn_force_sync.pack(pady=10, padx=20, fill="x")
+        self.btn_lock.pack(pady=10, padx=20, fill="x")
+        
+        # Libera controles da aba de configuração
+        self.lbl_cfg_locked.pack_forget()
+        self.btn_save_cfg.pack(pady=20, side="bottom")
         self.btn_force_sync.pack(pady=10, padx=20, fill="x")
         self.btn_lock.pack(pady=10, padx=20, fill="x")
         
@@ -286,6 +390,12 @@ class DocITDashboard(ctk.CTk):
         inv_running = check_process_running("Doc-IT-Inventory.exe")
         updater_running = check_process_running("Doc-IT-Updater.exe")
         
+        # Coleta Versões
+        core_ver = get_file_version("Doc-IT-Core.exe") or "0.0.0"
+        remote_ver = get_file_version("Doc-IT-Remote.exe") or "0.0.0"
+        inv_ver = get_file_version("Doc-IT-Inventory.exe") or "0.0.0"
+        updater_ver = get_file_version("Doc-IT-Updater.exe") or "0.0.0"
+        
         # Agora busca o config via IPC em vez de ler o .dat
         new_config = request_config_from_core()
         
@@ -302,13 +412,13 @@ class DocITDashboard(ctk.CTk):
                 subprocess.Popen([sys.executable, "Doc-IT-GUI.py", "--hide"], creationflags=subprocess.CREATE_NO_WINDOW)
             os._exit(0)
 
-        self.after(0, self._apply_status_ui, core_running, remote_running, inv_running, updater_running)
+        self.after(0, self._apply_status_ui, core_running, remote_running, inv_running, updater_running, core_ver, remote_ver, inv_ver, updater_ver)
 
-    def _apply_status_ui(self, core, remote, inv, updater):
-        self.lbl_core.configure(text=f"Core Service: {'🟢 Rodando' if core else '🔴 Parado'}")
-        self.lbl_remote.configure(text=f"Remote Desktop: {'🟢 Rodando' if remote else '🔴 Parado'}")
-        self.lbl_inventory.configure(text=f"Inventory: {'🟢 Rodando' if inv else '🔴 Parado'}")
-        self.lbl_updater.configure(text=f"Updater: {'🟢 Rodando' if updater else '🔴 Parado'}")
+    def _apply_status_ui(self, core, remote, inv, updater, core_ver, remote_ver, inv_ver, updater_ver):
+        self.lbl_core.configure(text=f"Core Service: {'🟢 v' + core_ver if core else '🔴 Parado'}")
+        self.lbl_remote.configure(text=f"Remote Desktop: {'🟢 v' + remote_ver if remote else '🔴 Parado'}")
+        self.lbl_inventory.configure(text=f"Inventory: {'🟢 v' + inv_ver if inv else '🔴 Parado'}")
+        self.lbl_updater.configure(text=f"Updater: {'🟢 v' + updater_ver if updater else '🔴 Parado'}")
         
         # Atualiza a UI do Tamper se recebemos config
         if self.config_data:
@@ -316,15 +426,21 @@ class DocITDashboard(ctk.CTk):
 
     def restart_agent(self):
         if not self.is_unlocked: return
-        log_event("Usuário local solicitou reinicialização do Serviço CORE via GUI.", "WARNING")
-        import subprocess
+        log_event("Usuário local solicitou reinicialização do Serviço CORE via IPC.", "WARNING")
         try:
-            subprocess.run(["net", "stop", "DocITAgent"], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(1)
-            subprocess.run(["net", "start", "DocITAgent"], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            self.lbl_tamper.configure(text="✅ Comando Enviado")
-        except:
-            self.lbl_tamper.configure(text="❌ Falha: Requer Adm Local")
+            payload = {
+                "action": "restart_request",
+                "token": IPC_TOKEN,
+                "data": "user_ui_request"
+            }
+            handle = win32file.CreateFile(CORE_IPC_PIPE, win32file.GENERIC_READ | win32file.GENERIC_WRITE, 0, None, win32file.OPEN_EXISTING, 0, None)
+            win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
+            win32file.WriteFile(handle, json.dumps(payload).encode('utf-8'))
+            win32file.CloseHandle(handle)
+            self.lbl_tamper.configure(text="✅ Reiniciando em 5-10s...")
+        except Exception as e:
+            log_event(f"Falha ao enviar restart_request via IPC: {e}", "ERROR")
+            self.lbl_tamper.configure(text="❌ Erro IPC na Reinicialização")
             
     def force_sync(self):
         if not self.is_unlocked: return
@@ -359,16 +475,40 @@ app_instance = None
 
 def setup_tray():
     icon_image = create_image(64, 64)
-    logo_path = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
+    if hasattr(sys, '_MEIPASS'):
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.dirname(__file__)
+    logo_path = os.path.join(base_path, "assets", "logo-png-azul.png")
+    ico_path = os.path.join(base_path, "assets", "icon.ico")
+    simplified_path = os.path.join(base_path, "assets", "logo-ico-azul.ico")
     
-    if os.path.exists(logo_path):
-        try:
-            icon_image = Image.open(logo_path)
-        except: pass
-    elif os.path.exists("icon.ico"):
-        try:
-            icon_image = Image.open("icon.ico")
-        except: pass
+    # Prioridade pro ícone simplificado na bandeja (maior legibilidade 16x16)
+    found_image = False
+    for path in [simplified_path, ico_path, logo_path]:
+        if os.path.exists(path):
+            try:
+                img = Image.open(path).convert("RGBA")
+                
+                # CORTA BORDAS TRANSPARENTES PARA MAXIMIZAR O TAMANHO NA BANDEJA
+                bbox = img.getbbox()
+                if bbox:
+                    img = img.crop(bbox)
+                
+                # Deixa quadrado de novo para o pystray não distorcer
+                w, h = img.size
+                size = max(w, h)
+                new_img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+                new_img.paste(img, ((size - w) // 2, (size - h) // 2))
+                
+                icon_image = new_img
+                found_image = True
+                break
+            except Exception as e:
+                log_event(f"Falha ao carregar ícone {path}: {e}", "WARNING")
+    
+    if not found_image:
+        icon_image = create_image(64, 64)
 
     menu = pystray.Menu(
         pystray.MenuItem('Abrir Painel Admin', on_show_clicked, default=True),
