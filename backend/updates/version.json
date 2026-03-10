@@ -1,30 +1,30 @@
 {
-    "version": "2.0.47",
+    "version": "2.0.49",
     "modules": {
         "core": {
-            "version": "2.0.47",
+            "version": "2.0.49",
             "file": "Doc-IT-Core.exe",
-            "hash": "a69a0d65f9b0a385d42b8d385bcba6977a6606a99fb849aad22473fea215cd09"
+            "hash": "3666c632d1f7b71fed68eed942464877e47af6d4e895776c8227172a0ac6423b"
         },
         "inventory": {
-            "version": "2.0.7",
+            "version": "2.0.8",
             "file": "Doc-IT-Inventory.exe",
-            "hash": "067978a8ef6fe883f1dead29250bf6a3f20ae72abfdcc688d9b1ceaa037092ce"
+            "hash": "30127b03d8de6f8301f89566347ced68da6b49dcb6e1344700dbdfa6277c1d6f"
         },
         "remote": {
-            "version": "2.0.7",
+            "version": "2.0.8",
             "file": "Doc-IT-Remote.exe",
-            "hash": "68022f60e1b7128808fb19677dce6ae701952804d29f4106219f63a9772e54ed"
+            "hash": "ab3f976ce2b6db6c54f754013dab83bf6fbcb5f857ab0490152d0381f065dae4"
         },
         "updater": {
-            "version": "2.0.21",
+            "version": "2.0.22",
             "file": "Doc-IT-Updater.exe",
-            "hash": "32ac5b946258ee675af8f302a04dd19355b42258f0fb430c3d2172df4efd6ecb"
+            "hash": "e6be04af4f8e58b5db6ad03142cc5ec580cf9621a8b9456c524f54a4b6ad8ffa"
         },
         "gui": {
-            "version": "2.0.8",
+            "version": "2.0.9",
             "file": "Doc-IT-GUI.exe",
-            "hash": "ad177d162b4b29a16a632368156ba8b74e97e65c5c3c1977fcc6f64e183d1576"
+            "hash": "f2e5ebaf889b25f80ece1008a6f299986779be5f1b832c4adcc308a63084be3c"
         }
     }
 }

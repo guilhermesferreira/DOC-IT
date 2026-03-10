@@ -1,6 +1,6 @@
 import React from 'react';
 import './Sidebar.css';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldAlert, Shield } from 'lucide-react';
 import { FaHouse, FaBox, FaRightFromBracket } from 'react-icons/fa6';
 import { FaCog as FaSettingsIcon } from 'react-icons/fa';
 import { useAuth } from '../auth/AuthContext';
@@ -24,7 +24,7 @@ const Sidebar = ({ setActiveView, logout, isExpanded, setIsExpanded }) => {
     >
       <div className="sidebar-header">
         <h2>
-          <ShieldAlert className="logo-icon" size={24} strokeWidth={2.5} />
+          <img src="/logo.svg" className="logo-img" alt="Doc-IT Logo" />
           {isExpanded && (import.meta.env.VITE_PROJECT_NAME || 'Doc-IT')}
         </h2>
       </div>

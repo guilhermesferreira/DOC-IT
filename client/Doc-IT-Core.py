@@ -26,6 +26,9 @@ import psutil
 from cryptography.fernet import Fernet
 import base64
 import win32file
+import win32pipe
+import pywintypes
+import secrets
 from cryptography.fernet import Fernet
 import base64
 
@@ -36,12 +39,15 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.0.47"
+AGENT_VERSION = "2.0.49"
 
 # Chave Criptográfica Fixa (Hardcoded para o Build)
 # Em produção real, este executável é obfusquado pelo PyArmor/Nuitka.
 ENCRYPTION_KEY = b'r7xK9sLpR2vM4N8wQ3tA5yB1uC6zD0fHjI7oP9lK3nU='
 cipher_suite = Fernet(ENCRYPTION_KEY)
+
+# Token de Autenticação IPC (Gerado Dinamicamente para cada Inicialização)
+IPC_TOKEN = secrets.token_hex(24)
 
 DEFAULT_CONFIG = {
     "server_base_url": "https://localhost:3000",
@@ -362,8 +368,10 @@ def perform_core_check_in(config, inventory_payload=None):
             
             set_response = requests.get(settings_url, timeout=10, cert=(cert_path, key_path), verify=verify_ssl)
             if set_response.status_code == 200:
+                log_event("Check-in periódico realizado com sucesso.", "INFO")
                 return True, set_response.json()
                 
+            log_event("Check-in periódico realizado com sucesso.", "INFO")
             return True, None
         except Exception as e:
             log_event(f"Tentativa de check-in em {url} falhou: {e}", "WARNING")
@@ -393,7 +401,7 @@ MODULES = {
     "gui": {"exe": "Doc-IT-GUI.exe", "process": None}
 }
 
-IPC_PORT = 49152 # Porta TCP Local Alta para RPC interno
+IPC_PIPE_NAME = r'\\.\pipe\DocIT_Core_IPC'
 
 class Win32ProcessWrapper:
     def __init__(self, hProcess):
@@ -428,7 +436,7 @@ def spawn_process_in_session_1(exe_path):
         hProcess, hThread, dwProcessId, dwThreadId = win32process.CreateProcessAsUser(
             h_token,
             None,
-            f'"{exe_path}"',
+            f'"{exe_path}" --token {IPC_TOKEN}',
             None,
             None,
             False,
@@ -471,7 +479,7 @@ def start_module(module_name):
             if new_process:
                 MODULES[module_name]["process"] = new_process
         else:
-            new_process = subprocess.Popen([exe_path], 
+            new_process = subprocess.Popen([exe_path, "--token", IPC_TOKEN], 
                                          stdout=subprocess.DEVNULL, 
                                          stderr=subprocess.DEVNULL,
                                          creationflags=subprocess.CREATE_NO_WINDOW)
@@ -480,44 +488,87 @@ def start_module(module_name):
         log_event(f"Erro ao instanciar módulo {module_name}: {e}", "ERROR")
 
 def keep_modules_alive_loop():
-    """Thread em background que garante que todos os módulos definidos estão rodando."""
+    """Thread em background que garante que todos os módulos rodando e faz o heartbeat."""
+    global config
+    last_heartbeat = time.time()
+    HEARTBEAT_INTERVALSeconds = 300 # 5 Minutos
+    
     while True:
         start_module("inventory")
         start_module("updater")
         start_module("remote")
         start_module("gui")
+        
+        # Periodic Heartbeat
+        if time.time() - last_heartbeat >= HEARTBEAT_INTERVALSeconds:
+            log_event("Iniciando heartbeat periódico do Core...", "DEBUG")
+            try:
+                perform_core_check_in(config)
+            except Exception as e:
+                log_event(f"Falha ao realizar heartbeat periódico: {e}", "WARNING")
+            finally:
+                last_heartbeat = time.time()
+                
         time.sleep(10) # Checa a cada 10s
 
 
-# --- Servidor IPC Local (Para receber dados dos submódulos) ---
-def ipc_local_server():
-    """
-    Servidor Socket TCP local exclusivo para receber dados assíncronos dos módulos.
-    Ex: O arquivo Doc-IT-Inventory.exe coleta pesado durante 1 minuto, e depois cospe
-    os dados nesse socket pro Core reenviar ao Backend.
-    """
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(('127.0.0.1', IPC_PORT))
-    server.listen(5)
-    log_event(f"Servidor IPC interno ouvindo na porta {IPC_PORT}", "INFO")
+# --- Servidor IPC Local (via Named Pipes) ---
+def get_pipe_acl():
+    """Cria uma Descriptor de Segurança que permite apenas SYSTEM e Admins."""
+    sd = win32security.SECURITY_DESCRIPTOR()
+    dacl = win32security.ACL()
+    
+    sid_system = win32security.ConvertStringSidToSid("S-1-5-18")
+    sid_admins = win32security.ConvertStringSidToSid("S-1-5-32-544")
+    
+    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_system)
+    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_admins)
+    
+    sd.SetSecurityDescriptorDacl(1, dacl, 0)
+    
+    sa = win32security.SECURITY_ATTRIBUTES()
+    sa.SECURITY_DESCRIPTOR = sd
+    return sa
 
+def ipc_local_server():
+    """Servidor Named Pipe para receber dados dos módulos."""
+    sa = get_pipe_acl()
+    
     while True:
         try:
-            client, addr = server.accept()
-            threading.Thread(target=handle_ipc_client, args=(client,), daemon=True).start()
+            pipe = win32pipe.CreateNamedPipe(
+                IPC_PIPE_NAME,
+                win32pipe.PIPE_ACCESS_DUPLEX,
+                win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT,
+                255, 65536, 65536,
+                0,
+                sa
+            )
+            
+            win32pipe.ConnectNamedPipe(pipe, None)
+            threading.Thread(target=handle_ipc_client, args=(pipe,), daemon=True).start()
         except Exception as e:
-            log_event(f"Erro ao aceitar conexão IPC Local: {e}", "ERROR")
+            log_event(f"Erro no Servidor IPC (Named Pipe): {e}", "ERROR")
+            time.sleep(1)
 
-def handle_ipc_client(client_socket):
+def handle_ipc_client(pipe):
     try:
+        # Buffer de leitura
         data = b""
         while True:
-            chunk = client_socket.recv(4096)
-            if not chunk:
-                break
+            resp, chunk = win32file.ReadFile(pipe, 4096)
             data += chunk
-
+            if resp == 0: # Success
+                break
+        
         payload = json.loads(data.decode('utf-8'))
+        
+        # VALIDAÇÃO DO TOKEN
+        client_token = payload.get("token")
+        if client_token != IPC_TOKEN:
+            log_event("TENTATIVA DE ACESSO IPC NÃO AUTORIZADA: Token inválido.", "CRITICAL")
+            return
+
         action = payload.get("action")
         
         if action == "inventory_ready":
@@ -529,7 +580,7 @@ def handle_ipc_client(client_socket):
             # A GUI ou outro módulo pede a configuração atual (que o Core tem permissão de ler)
             log_event("Submódulo solicitou configuração via IPC.", "DEBUG")
             response = {"status": "success", "config": config}
-            client_socket.sendall(json.dumps(response).encode('utf-8'))
+            win32file.WriteFile(pipe, json.dumps(response).encode('utf-8'))
 
         elif action == "restart_request":
             log_event("O Sub-Updater pediu encerramento do Core. Finalizando processos...", "WARNING")
@@ -573,26 +624,32 @@ def handle_ipc_client(client_socket):
     except Exception as e:
         log_event(f"Erro mapeando payload IPC local: {e}", "ERROR")
     finally:
-        client_socket.close()
+        win32file.CloseHandle(pipe)
 
 
 def send_ipc_command(module_name, payload):
-    """Envia um comando Socket para um submódulo."""
-    target_port = None
-    if module_name == "remote": target_port = 49153
-    elif module_name == "inventory": target_port = 49154
-    elif module_name == "updater": target_port = 49155
+    """Envia um comando via Named Pipe para um submódulo."""
+    pipe_path = None
+    if module_name == "remote": pipe_path = r"\\.\pipe\DocIT_Remote_IPC"
+    # Adicionar outros se necessário
     
-    if not target_port: return
+    if not pipe_path: return
     
+    payload["token"] = IPC_TOKEN # Inclui o token para que o módulo valide o Core
+
     try:
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.settimeout(2)
-        client.connect(('127.0.0.1', target_port))
-        client.sendall(json.dumps(payload).encode('utf-8'))
-        client.close()
-    except Exception as e:
-         log_event(f"Falha ao enviar IPC para o submódulo '{module_name}' na porta {target_port}: {e}", "WARNING")
+        handle = win32file.CreateFile(
+            pipe_path,
+            win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+            0, None,
+            win32file.OPEN_EXISTING,
+            0, None
+        )
+        win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
+        win32file.WriteFile(handle, json.dumps(payload).encode('utf-8'))
+        win32file.CloseHandle(handle)
+    except pywintypes.error as e:
+         log_event(f"Falha ao enviar IPC para o submódulo '{module_name}' via Pipe {pipe_path}: {e}", "WARNING")
 
 
 # --- Websocket (Conector Mestre de Comandos de Tela/Terminal) ---

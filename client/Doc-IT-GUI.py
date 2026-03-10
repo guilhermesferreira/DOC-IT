@@ -15,8 +15,19 @@ from cryptography.fernet import Fernet
 
 import socket
 
+import win32pipe
+import win32file
+import pywintypes
+
 # --- Constantes IPC ---
-CORE_IPC_PORT = 49152
+CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
+
+# Token de Autenticação (Receivado via CLI)
+IPC_TOKEN = ""
+for i, arg in enumerate(sys.argv):
+    if arg == "--token" and i + 1 < len(sys.argv):
+        IPC_TOKEN = sys.argv[i+1]
+        break
 
 def log_event(message, level="INFO"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -31,27 +42,37 @@ def log_event(message, level="INFO"):
         pass
 
 def request_config_from_core():
-    """Solicita a configuração ativa ao processo Core via IPC Socket."""
+    """Solicita a configuração ativa ao processo Core via Named Pipe."""
     try:
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.settimeout(3)
-        client.connect(('127.0.0.1', CORE_IPC_PORT))
+        payload = {
+            "action": "get_config",
+            "token": IPC_TOKEN # Inclui o token para o Core validar
+        }
         
-        payload = {"action": "get_config"}
-        client.sendall(json.dumps(payload).encode('utf-8'))
-        client.shutdown(socket.SHUT_WR)
+        handle = win32file.CreateFile(
+            CORE_IPC_PIPE,
+            win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+            0, None,
+            win32file.OPEN_EXISTING,
+            0, None
+        )
+        win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
+        win32file.WriteFile(handle, json.dumps(payload).encode('utf-8'))
         
+        # Leitura da resposta
         data = b""
         while True:
-            chunk = client.recv(4096)
-            if not chunk: break
+            resp, chunk = win32file.ReadFile(handle, 4096)
             data += chunk
+            if resp == 0: break
             
+        win32file.CloseHandle(handle)
+        
         response = json.loads(data.decode('utf-8'))
         if response.get("status") == "success":
             return response.get("config")
     except Exception as e:
-        log_event(f"Falha ao solicitar config ao Core via IPC: {e}", "WARNING")
+        log_event(f"Falha ao solicitar config ao Core via Pipe {CORE_IPC_PIPE}: {e}", "WARNING")
     return None
 
 def check_process_running(process_name):
@@ -136,8 +157,17 @@ class DocITDashboard(ctk.CTk):
         self.header_frame = ctk.CTkFrame(self, fg_color="#1f538d", corner_radius=0)
         self.header_frame.pack(fill="x")
         
+        try:
+            logo_path = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
+            if os.path.exists(logo_path):
+                logo_img = ctk.CTkImage(light_image=Image.open(logo_path), dark_image=Image.open(logo_path), size=(40, 40))
+                self.logo_label = ctk.CTkLabel(self.header_frame, image=logo_img, text="")
+                self.logo_label.pack(side="left", padx=20, pady=10)
+        except Exception as e:
+            log_event(f"Erro ao carregar logo no header: {e}", "WARNING")
+
         self.title_label = ctk.CTkLabel(self.header_frame, text="Doc-IT Endpoint Agent", font=ctk.CTkFont(size=20, weight="bold"), text_color="white")
-        self.title_label.pack(pady=10)
+        self.title_label.pack(side="left", pady=10)
 
         # Content Frame
         self.content_frame = ctk.CTkFrame(self)
@@ -329,7 +359,13 @@ app_instance = None
 
 def setup_tray():
     icon_image = create_image(64, 64)
-    if os.path.exists("icon.ico"):
+    logo_path = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
+    
+    if os.path.exists(logo_path):
+        try:
+            icon_image = Image.open(logo_path)
+        except: pass
+    elif os.path.exists("icon.ico"):
         try:
             icon_image = Image.open("icon.ico")
         except: pass

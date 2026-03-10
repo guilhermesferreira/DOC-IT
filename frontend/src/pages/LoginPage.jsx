@@ -94,14 +94,10 @@ const LoginPage = () => {
     <div className="login-page-container">
       <div className="login-content">
         <div className="login-header">
-          <div className="logo-shield">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-            </svg>
-          </div>
-          <h1 className="header-title">
-            {!mfaRequired ? (import.meta.env.VITE_PROJECT_NAME || "Doc-IT") : "Verificação Segura"}
-          </h1>
+          <img src="/logo.svg" className="logo-img-header" alt="Doc-IT Logo" />
+          {mfaRequired && (
+            <h1 className="header-title">Verificação Segura</h1>
+          )}
           <p className="header-subtitle">
             {!mfaRequired ? "" : "Confirme sua identidade para continuar"}
           </p>

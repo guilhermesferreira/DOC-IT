@@ -1,11 +1,10 @@
 {
     "server_urls": [
-        "https://192.168.10.211:3000",
-        "https://10.1.200.253:3000",
+        "https://10.1.200.211:3000",
         "https://10.1.1.3:3000",
         "https://172.23.96.1:3000"
     ],
-    "server_base_url": "https://192.168.10.211:3000",
+    "server_base_url": "https://10.1.200.211:3000",
     "log_level": "INFO",
     "cert_path": "./certs/agent.crt",
     "key_path": "./certs/agent.key",

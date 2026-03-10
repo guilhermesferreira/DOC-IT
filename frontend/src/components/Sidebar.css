@@ -72,8 +72,10 @@
     gap: 12px;
 }
 
-.sidebar-header .logo-icon {
-    color: var(--sidebar-active-bg-color);
+.sidebar-header .logo-img {
+    height: 38px;
+    width: auto;
+    object-fit: contain;
     flex-shrink: 0;
 }
 

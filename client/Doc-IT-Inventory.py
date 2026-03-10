@@ -15,15 +15,24 @@ try:
     import wmi
     import pythoncom
     import win32ts
+    import win32pipe
+    import win32file
+    import pywintypes
 except ImportError:
     pass
 
 # --- Configurações IPC ---
-CORE_IPC_PORT = 49152 # Inventário empurra os dados lidos de volta pro servidor IPC do Core
-MY_IPC_PORT = 49154   # Porta Opcional caso o Core precise injetar comandos síncronos neste módulo
+CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
+
+# Token de Autenticação (Recebido via CLI)
+IPC_TOKEN = ""
+for i, arg in enumerate(sys.argv):
+    if arg == "--token" and i + 1 < len(sys.argv):
+        IPC_TOKEN = sys.argv[i+1]
+        break
 
 LOG_FILE = "agent-inventory.log"
-AGENT_VERSION = "2.0.7"
+AGENT_VERSION = "2.0.8"
 
 def log_event(message, level="INFO"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -334,21 +343,27 @@ def get_additional_inventory_data():
 
 # --- Comunicação com o Core (IPC) ---
 def push_inventory_to_core(payload):
-    """Abre socket tcp leve para o Core e empurra o payload."""
+    """Abre Named Pipe para o Core e empurra o payload."""
     try:
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.settimeout(10)
-        client.connect(('127.0.0.1', CORE_IPC_PORT))
-        
         ipc_message = {
             "action": "inventory_ready",
-            "data": payload
+            "data": payload,
+            "token": IPC_TOKEN  # Inclui o token para o Core validar
         }
-        client.sendall(json.dumps(ipc_message).encode('utf-8'))
-        client.close()
-        log_event("Dados enviados com sucesso paro o IPC do Core.", "INFO")
+        
+        handle = win32file.CreateFile(
+            CORE_IPC_PIPE,
+            win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+            0, None,
+            win32file.OPEN_EXISTING,
+            0, None
+        )
+        win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
+        win32file.WriteFile(handle, json.dumps(ipc_message).encode('utf-8'))
+        win32file.CloseHandle(handle)
+        log_event("Dados enviados com sucesso para o IPC do Core.", "INFO")
     except Exception as e:
-         log_event(f"Falha ao empurrar dados de inventário pro Core IPC (Porta {CORE_IPC_PORT}): {e}. O Core está rodando?", "ERROR")
+         log_event(f"Falha ao empurrar dados de inventário pro Core IPC (Pipe {CORE_IPC_PIPE}): {e}. O Core está rodando?", "ERROR")
 
 
 # =========================================================

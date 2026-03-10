@@ -8,6 +8,11 @@ import subprocess
 import base64
 from datetime import datetime
 import traceback
+import win32pipe
+import win32file
+import win32security
+import win32con
+import pywintypes
 
 # Bibliotecas pesadas focadas em Interface de Usuário
 import mss
@@ -25,11 +30,18 @@ except ImportError:
 
 
 # --- Configurações IPC ---
-CORE_IPC_PORT = 49152 # Porta do Servidor Mestre (Core) 
-MY_IPC_PORT = 49153   # Porta em que o Remote Escuta Comandos do Core
+CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
+MY_IPC_PIPE = r'\\.\pipe\DocIT_Remote_IPC'
+
+# Token de Autenticação (Recebido via CLI)
+IPC_TOKEN = ""
+for i, arg in enumerate(sys.argv):
+    if arg == "--token" and i + 1 < len(sys.argv):
+        IPC_TOKEN = sys.argv[i+1]
+        break
 
 LOG_FILE = "agent-remote.log"
-AGENT_VERSION = "2.0.7"
+AGENT_VERSION = "2.0.8"
 
 config = {}
 
@@ -89,17 +101,24 @@ if len(sys.argv) >= 3 and sys.argv[1] == "--osd":
 def push_to_core(action, data):
     """Envia um payload de resposta (ex: um frame jpg ou texto do cmd) de volta pro Core via TCP IPC"""
     try:
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.settimeout(2)
-        client.connect(('127.0.0.1', CORE_IPC_PORT))
-        ipc_message = {
+        payload = {
             "action": action,
-            "data": data
+            "data": data,
+            "token": IPC_TOKEN # Envia o token para o Core validar
         }
-        client.sendall(json.dumps(ipc_message).encode('utf-8'))
-        client.close()
+        
+        handle = win32file.CreateFile(
+            CORE_IPC_PIPE,
+            win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+            0, None,
+            win32file.OPEN_EXISTING,
+            0, None
+        )
+        win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
+        win32file.WriteFile(handle, json.dumps(payload).encode('utf-8'))
+        win32file.CloseHandle(handle)
     except Exception:
-        pass # Ignora erros se o Pipe quebrar para nao vazar RAM
+        pass
 
 def stream_screen(monitor_idx, quality_profile, stream_id):
     """Laço infinito de captura de tela"""
@@ -270,27 +289,53 @@ def execute_ipc_command(payload):
          except: pass
 
 
-def ipc_listener_loop():
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        server.bind(('127.0.0.1', MY_IPC_PORT))
-        server.listen(5)
-        log_event(f"Módulo Remote aguardando Ordens do Core na porta {MY_IPC_PORT}...", "INFO")
-    except Exception as e:
-        log_event(f"Falha ao iniciar socket bind na porta {MY_IPC_PORT} (O processo é fantasma?): {e}", "CRITICAL")
-        sys.exit(1)
+def get_pipe_acl():
+    sd = win32security.SECURITY_DESCRIPTOR()
+    dacl = win32security.ACL()
+    sid_system = win32security.ConvertStringSidToSid("S-1-5-18")
+    sid_admins = win32security.ConvertStringSidToSid("S-1-5-32-544")
+    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_system)
+    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_admins)
+    sd.SetSecurityDescriptorDacl(1, dacl, 0)
+    sa = win32security.SECURITY_ATTRIBUTES()
+    sa.SECURITY_DESCRIPTOR = sd
+    return sa
 
+def ipc_listener_loop():
+    sa = get_pipe_acl()
+    
     while True:
         try:
-            client, _ = server.accept()
-            # Trata requests curtos inline. Para arquivos grandes, usar threading
-            data = client.recv(4096)
-            if data:
-                payload = json.loads(data.decode('utf-8'))
+            pipe = win32pipe.CreateNamedPipe(
+                MY_IPC_PIPE,
+                win32pipe.PIPE_ACCESS_DUPLEX,
+                win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT,
+                1, 65536, 65536,
+                0,
+                sa
+            )
+            
+            win32pipe.ConnectNamedPipe(pipe, None)
+            
+            # Leitura do comando do Core
+            data = b""
+            while True:
+                resp, chunk = win32file.ReadFile(pipe, 4096)
+                data += chunk
+                if resp == 0: break
+            
+            payload = json.loads(data.decode('utf-8'))
+            
+            # VALIDAÇÃO DO TOKEN
+            if payload.get("token") == IPC_TOKEN:
                 execute_ipc_command(payload)
-            client.close()
-        except:
-            pass
+            else:
+                log_event("BLOQUEADO: Tentativa de controle remoto sem token válido.", "WARNING")
+                
+            win32file.CloseHandle(pipe)
+        except Exception as e:
+            log_event(f"Erro no Listener IPC (Remote Pipe): {e}", "ERROR")
+            time.sleep(1)
 
 # =========================================================
 # MAIN ENTRYPOINT

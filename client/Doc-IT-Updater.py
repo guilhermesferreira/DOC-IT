@@ -13,13 +13,23 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
+import win32pipe
+import win32file
+import pywintypes
+
 # --- Configurações IPC ---
-CORE_IPC_PORT = 49152
-MY_IPC_PORT = 49155
+CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
+
+# Token de Autenticação (Recebido via CLI)
+IPC_TOKEN = ""
+for i, arg in enumerate(sys.argv):
+    if arg == "--token" and i + 1 < len(sys.argv):
+        IPC_TOKEN = sys.argv[i+1]
+        break
 
 CONFIG_FILE = "config.json"
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.0.21"
+AGENT_VERSION = "2.0.22"
 
 config = {}
 
@@ -106,17 +116,26 @@ MODULES_KEYS = ["core", "inventory", "remote", "updater", "gui"]
 # =========================================================
 
 def push_restart_to_core():
-    """Avisa o Core via IPC que atualizações foram baixadas e requerem Restart Geral"""
-    """Avisa o Core via IPC que atualizações foram baixadas e requerem Restart"""
+    """Avisa o Core via Named Pipe que atualizações foram baixadas e requerem Restart Geral"""
     try:
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.settimeout(2)
-        client.connect(('127.0.0.1', CORE_IPC_PORT))
-        ipc_message = {"action": "restart_request", "data": "update_applied"}
-        client.sendall(json.dumps(ipc_message).encode('utf-8'))
-        client.close()
+        ipc_message = {
+            "action": "restart_request", 
+            "data": "update_applied",
+            "token": IPC_TOKEN # Inclui o token para o Core validar
+        }
+        
+        handle = win32file.CreateFile(
+            CORE_IPC_PIPE,
+            win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+            0, None,
+            win32file.OPEN_EXISTING,
+            0, None
+        )
+        win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
+        win32file.WriteFile(handle, json.dumps(ipc_message).encode('utf-8'))
+        win32file.CloseHandle(handle)
     except Exception as e:
-        log_event(f"Erro ao pedir restart ao Core: {e}", "CRITICAL")
+        log_event(f"Erro ao pedir restart ao Core via Pipe {CORE_IPC_PIPE}: {e}", "CRITICAL")
 
 def cleanup_old_files():
     """Varre a pasta instalada e exclui arquivos .old ou .tmp de atualizações passadas consolidadadas."""
