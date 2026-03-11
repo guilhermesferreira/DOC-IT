@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSocket } from '../context/SocketContext';
-import { Play, Square, Loader, Maximize2, Monitor, Eye, EyeOff, MouseOff, Mouse } from 'lucide-react';
+import { Play, Square, Loader, Maximize2, Monitor, Eye, EyeOff, MouseOff, Mouse, WifiOff } from 'lucide-react';
 import './RemoteDesktop.css';
 
-const RemoteDesktop = ({ agentId, deviceName }) => {
+const RemoteDesktop = ({ agentId, deviceName, isAgentOnline = true }) => {
     const { socket, isConnected } = useSocket();
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
@@ -16,8 +16,10 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
     const [isInvisibleMode, setIsInvisibleMode] = useState(false); // Modo furtivo sem OSD no Agent
     const [viewOnly, setViewOnly] = useState(false); // Somente visualizar, bloqueia input
 
-    // Trava lógica para Sessão Colaborativa (ignora frames de outros usuários conectados neste agentId se eu não iniciei)
+    // Watchdog de Sinal: se não recebermos frames por X segundos, consideramos sinal perdido
     const isViewingRef = useRef(false);
+    const lastFrameReceivedRef = useRef(Date.now());
+    const [isSignalLost, setIsSignalLost] = useState(false);
 
     // Refs para valores mutáveis que NÃO devem causar re-registro de listeners
     const selectedMonitorRef = useRef(selectedMonitor);
@@ -43,9 +45,11 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
             // Apenas reage ao Broadcast do Proxy Node se VOCÊ tiver ativado a visualização.
             if (!isViewingRef.current) return;
 
-            // Auto-Recupera a interface caso o stream mude de monitor e o backend tenha enviado stopped para a thread anterior
+            // Auto-Recupera a interface caso o sinal volte
             setStreamActive(true);
             setLoading(false);
+            setIsSignalLost(false);
+            lastFrameReceivedRef.current = Date.now();
 
             const canvas = canvasRef.current;
             if (!canvas) return;
@@ -157,6 +161,50 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
             socket.off('connect', handleReconnect);
         };
     }, [socket, isConnected, agentId]); // BUG 2 Fix: apenas dependências estáveis
+
+    // Auto-resume persistente (resolve gap de 10s pro Doc-IT-Remote.exe ligar ou travamento do módulo)
+    useEffect(() => {
+        let reconnectInterval = null;
+
+        // Watchdog loop: verifica a cada 1s se o sinal parou
+        const watchdogInterval = setInterval(() => {
+            if (isViewingRef.current && streamActive && !isSignalLost) {
+                const timeSinceLastFrame = Date.now() - lastFrameReceivedRef.current;
+                if (timeSinceLastFrame > 5000) { // 5 segundos sem frame = sinal perdido
+                    console.warn('[RemoteDesktop] Watchdog: Sinal de vídeo interrompido (5s timeout).');
+                    setIsSignalLost(true);
+                }
+            }
+        }, 1000);
+
+        // Lógica de Re-emissão quando o sinal é perdido (seja por isAgentOnline=false ou por watchdog de frames)
+        if (isViewingRef.current && (isSignalLost || !isAgentOnline)) {
+            console.log('[RemoteDesktop] Tentando recuperar sinal... Disparando desktop:start periodicamente.');
+
+            const payload = {
+                agentId,
+                monitorIndex: selectedMonitorRef.current,
+                quality: selectedQualityRef.current,
+                invisible_mode: isInvisibleModeRef.current
+            };
+
+            // Primeira tentativa imediata
+            socket.emit('desktop:start', payload);
+
+            // Retentativa a cada 3 segundos até que frames voltem (streamActive voltando a resetar o isSignalLost)
+            reconnectInterval = setInterval(() => {
+                if (isConnected && socket) {
+                    console.log('[RemoteDesktop] Retentando desktop:start (3s)...');
+                    socket.emit('desktop:start', payload);
+                }
+            }, 3000);
+        }
+
+        return () => {
+            if (reconnectInterval) clearInterval(reconnectInterval);
+            if (watchdogInterval) clearInterval(watchdogInterval);
+        };
+    }, [isAgentOnline, socket, isConnected, agentId, streamActive, isSignalLost]);
 
     // Efeito dedicado apenas para parar a stream quando o componente é desmontado (sair da página)
     useEffect(() => {
@@ -409,11 +457,19 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
                 </div>
             </div>
 
-            <div className={`canvas-container ${streamActive ? 'active' : ''}`}>
-                {!streamActive && !loading && (
+            <div className={`canvas-container ${streamActive ? 'active' : ''}`} style={{ position: 'relative' }}>
+                {!streamActive && !loading && isAgentOnline && (
                     <div className="canvas-placeholder">
                         <Monitor size={48} />
                         <p>Clique em Iniciar para capturar a tela de <strong>{deviceName}</strong></p>
+                    </div>
+                )}
+
+                {!streamActive && !loading && !isAgentOnline && (
+                    <div className="canvas-placeholder offline-placeholder" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <WifiOff size={48} className="offline-icon" />
+                        <h3>Área de Trabalho Indisponível</h3>
+                        <p>O agente encontra-se offline. Aguarde o computador restabelecer o link.</p>
                     </div>
                 )}
 
@@ -436,6 +492,23 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
                     tabIndex={1}
                     onKeyDown={handleKeyDown}
                 />
+
+                {/* Overlay for connection loss or frozen signal during active stream */}
+                {(isSignalLost || !isAgentOnline) && streamActive && (
+                    <div className="reconnect-overlay" style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center',
+                        color: 'white', zIndex: 10
+                    }}>
+                        <WifiOff size={48} className="offline-icon" style={{ marginBottom: '16px', opacity: 0.8 }} />
+                        <h3 style={{ margin: '0 0 8px 0' }}>Sinal Interrompido</h3>
+                        <p style={{ margin: 0, opacity: 0.8 }}>
+                            {!isAgentOnline ? "O agente oscilou. Aguardando reconexão..." : "Vídeo travado. Tentando reiniciar streaming..."}
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );

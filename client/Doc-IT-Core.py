@@ -44,7 +44,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.1.12"
+AGENT_VERSION = "2.1.13"
 
 # Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
 KEY_FILE = "Doc-IT.key"
@@ -794,6 +794,7 @@ def handle_ipc_client(pipe):
             if 'sio' in globals() and sio.connected:
                 ws_busy = True
                 # Timer de segurança: reseta ws_busy se o callback não chegar em 3 segundos
+                global ws_busy_timer
                 ws_busy_timer = threading.Timer(3.0, ws_busy_timeout)
                 ws_busy_timer.daemon = True
                 ws_busy_timer.start()

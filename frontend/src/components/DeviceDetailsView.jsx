@@ -526,16 +526,8 @@ const DeviceDetailsView = ({ device, onBack, onDeleteRequest, isOnline }) => { /
 
         {/* Aba: Remoto Gráfico (WebSockets) */}
         {activeTab === 'desktop' && (
-          <div className="card-dashboard" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: isOnline ? 0 : '25px' }}>
-            {isOnline ? (
-              <RemoteDesktop agentId={device.agentId} deviceName={device.name} />
-            ) : (
-              <div className="offline-placeholder" style={{ height: '100%', display: 'flex', justifyContent: 'center' }}>
-                <WifiOff size={48} className="offline-icon" />
-                <h3>Área de Trabalho Indisponível</h3>
-                <p>O agente encontra-se offline. Aguarde o computador restabelecer o link com o servidor para iniciar o streaming de vídeo.</p>
-              </div>
-            )}
+          <div className="card-dashboard" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+            <RemoteDesktop agentId={device.agentId} deviceName={device.name} isAgentOnline={isOnline} />
           </div>
         )}
 

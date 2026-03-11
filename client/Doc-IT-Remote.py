@@ -37,7 +37,7 @@ MY_IPC_PIPE = r'\\.\pipe\DocIT_Remote_IPC'
 IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 
 LOG_FILE = "agent-remote.log"
-AGENT_VERSION = "2.0.22"
+AGENT_VERSION = "2.0.24"
 
 config = {}
 
@@ -159,6 +159,9 @@ def stream_screen(monitor_idx, quality_profile, stream_id):
                 
             monitor = sct.monitors[monitor_idx]
             
+            global cached_monitor_geometry
+            cached_monitor_geometry = monitor
+            
             while desktop_streaming and current_stream_id == stream_id:
                 try:
                     # Respeita o FPS alvo: não captura mais rápido do que o necessário
@@ -167,8 +170,8 @@ def stream_screen(monitor_idx, quality_profile, stream_id):
                         time.sleep(min_frame_interval - elapsed)
                     
                     sct_img = sct.grab(monitor)
-                    # Utiliza sct_img.rgb para remover o padding de memória (strides) do Windows
-                    img = Image.frombytes("RGB", sct_img.size, sct_img.rgb)
+                    # Usando sct_img.bgra com decoder BGRX para evitar problemas de padding (stride) nas resoluções do Windows
+                    img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
                     
                     if img.width > max_w or img.height > max_h:
                         img.thumbnail((max_w, max_h), Image.Resampling.BILINEAR)
