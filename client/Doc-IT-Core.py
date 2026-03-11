@@ -44,7 +44,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.1.8"
+AGENT_VERSION = "2.1.9"
 
 # Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
 KEY_FILE = "Doc-IT.key"
@@ -880,6 +880,11 @@ def proxy_desktop_start(data):
 def proxy_desktop_stop(data):
     if data.get('agentId') != config.get('agent_id'): return
     send_ipc_command("remote", {"cmd": "stop_desktop"})
+
+@sio.on('desktop:get_monitors')
+def proxy_get_monitors(data):
+    if data.get('agentId') != config.get('agent_id'): return
+    send_ipc_command("remote", {"cmd": "get_monitors"})
 
 @sio.on('desktop:mouse_move')
 def proxy_mouse_move(data):

@@ -37,7 +37,7 @@ MY_IPC_PIPE = r'\\.\pipe\DocIT_Remote_IPC'
 IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 
 LOG_FILE = "agent-remote.log"
-AGENT_VERSION = "2.0.15"
+AGENT_VERSION = "2.0.17"
 
 config = {}
 
@@ -138,7 +138,11 @@ def stream_screen(monitor_idx, quality_profile, stream_id):
 
     try:
         with mss.mss() as sct:
-            if monitor_idx >= len(sct.monitors): monitor_idx = 1
+            # Se monitor_idx for 0 (Todos os monitores) e houver falha de tamanho, mantém 0
+            # Se for um índice específico maior que a qtd de monitores fisicos conectados, fallback pro monitor 1
+            if monitor_idx < 0 or monitor_idx >= len(sct.monitors): 
+                monitor_idx = 1
+                
             monitor = sct.monitors[monitor_idx]
             
             while desktop_streaming and current_stream_id == stream_id:
@@ -325,11 +329,21 @@ def ipc_listener_loop():
                 0,
                 sa
             )
-            
-            win32pipe.ConnectNamedPipe(pipe, None)
-            threading.Thread(target=handle_remote_ipc_client, args=(pipe,), daemon=True).start()
+            try:
+                win32pipe.ConnectNamedPipe(pipe, None)
+                threading.Thread(target=handle_remote_ipc_client, args=(pipe,), daemon=True).start()
+            except pywintypes.error as e:
+                if e.winerror == 535: # ERROR_PIPE_CONNECTED
+                    threading.Thread(target=handle_remote_ipc_client, args=(pipe,), daemon=True).start()
+                elif e.winerror == 232: # ERROR_NO_DATA (Client disconnected before we could accept)
+                    win32file.CloseHandle(pipe)
+                else:
+                    log_event(f"Erro Conectando ao IPC (Remote Pipe): {e}", "ERROR")
+                    try: win32file.CloseHandle(pipe)
+                    except: pass
+                    time.sleep(1)
         except Exception as e:
-            log_event(f"Erro no Listener IPC (Remote Pipe): {e}", "ERROR")
+            log_event(f"Erro Criando Servidor IPC (Remote Pipe): {e}", "ERROR")
             try: win32file.CloseHandle(pipe)
             except: pass
             time.sleep(1)
