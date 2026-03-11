@@ -19,6 +19,16 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
     // Trava lógica para Sessão Colaborativa (ignora frames de outros usuários conectados neste agentId se eu não iniciei)
     const isViewingRef = useRef(false);
 
+    // Refs para valores mutáveis que NÃO devem causar re-registro de listeners
+    const selectedMonitorRef = useRef(selectedMonitor);
+    const selectedQualityRef = useRef(selectedQuality);
+    const isInvisibleModeRef = useRef(isInvisibleMode);
+
+    // Sincroniza os refs quando o state mudar (sem causar re-render do useEffect)
+    useEffect(() => { selectedMonitorRef.current = selectedMonitor; }, [selectedMonitor]);
+    useEffect(() => { selectedQualityRef.current = selectedQuality; }, [selectedQuality]);
+    useEffect(() => { isInvisibleModeRef.current = isInvisibleMode; }, [isInvisibleMode]);
+
     useEffect(() => {
         if (!socket || !isConnected) return;
 
@@ -91,22 +101,62 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
             if (data.agentId === agentId && data.monitors) {
                 setMonitors(data.monitors);
                 // Se o monitor atual selecionado não existir na lista nova, reseta pro default
-                if (!data.monitors.find(m => m.index === selectedMonitor)) {
+                if (!data.monitors.find(m => m.index === selectedMonitorRef.current)) {
                     setSelectedMonitor(1);
                 }
+            }
+        };
+
+        const handleInUse = (data) => {
+            if (window.confirm(`${data.currentViewer} já está controlando esta máquina.\n\nDeseja assumir o controle e desconectá-lo?`)) {
+                // Usuário quer roubar a sessão
+                setLoading(true);
+                isViewingRef.current = true;
+                socket.emit('desktop:force_start', { agentId, monitorIndex: selectedMonitorRef.current, quality: selectedQualityRef.current, invisible_mode: isInvisibleModeRef.current });
+                setTimeout(() => {
+                    setStreamActive(true);
+                    setLoading(false);
+                }, 1000);
+            } else {
+                // Usuário desistiu
+                setLoading(false);
+                setStreamActive(false);
+                isViewingRef.current = false;
+            }
+        };
+
+        const handleKicked = () => {
+            alert("Sua sessão foi encerrada porque outro administrador assumiu o controle desta máquina.");
+            isViewingRef.current = false;
+            setStreamActive(false);
+            setLoading(false);
+            clearCanvas();
+        };
+
+        // BUG 3 Fix: Auto-rejoin na sala após reconexão do WebSocket do browser
+        const handleReconnect = () => {
+            if (isViewingRef.current) {
+                console.log('[RemoteDesktop] Reconexão detectada. Re-entrando na sala do agente...');
+                socket.emit('desktop:start', { agentId, monitorIndex: selectedMonitorRef.current, quality: selectedQualityRef.current, invisible_mode: isInvisibleModeRef.current });
             }
         };
 
         socket.on('desktop:frame', handleDesktopFrame);
         socket.on('desktop:stopped', handleStreamStopped);
         socket.on('desktop:monitor_list', handleMonitorList);
+        socket.on('desktop:in_use', handleInUse);
+        socket.on('desktop:kicked', handleKicked);
+        socket.on('connect', handleReconnect);
 
         return () => {
             socket.off('desktop:frame', handleDesktopFrame);
             socket.off('desktop:stopped', handleStreamStopped);
             socket.off('desktop:monitor_list', handleMonitorList);
+            socket.off('desktop:in_use', handleInUse);
+            socket.off('desktop:kicked', handleKicked);
+            socket.off('connect', handleReconnect);
         };
-    }, [socket, isConnected, agentId]); // Remoção de selectedMonitor e selectedQuality das dependências para evitar desconexão ao trocar
+    }, [socket, isConnected, agentId]); // BUG 2 Fix: apenas dependências estáveis
 
     // Efeito dedicado apenas para parar a stream quando o componente é desmontado (sair da página)
     useEffect(() => {
@@ -223,22 +273,53 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
         };
     };
 
+    // Throttle: limita mouse_move a no máximo 20 eventos/segundo para não inundar o IPC do agente
+    const lastMouseSendRef = useRef(0);
+
     const handleMouseMove = (e) => {
-        if (!streamActive || !socket || viewOnly) return; // Bloqueado se viewOnly
-        // Opcional: Reduzir a taxa de envio usando debounce/throttle se sobrecarregar a rede
+        if (!streamActive || !socket || viewOnly) return;
+
+        const now = Date.now();
+        if (now - lastMouseSendRef.current < 50) return; // 50ms = máx 20 eventos/s
+        lastMouseSendRef.current = now;
+
         const pos = getRelativeMousePosition(e);
         if (pos) {
             socket.emit('desktop:mouse_move', { agentId, ...pos });
         }
     };
 
-    const handleMouseClick = (e) => {
-        if (!streamActive || !socket || viewOnly) return; // Bloqueado se viewOnly
+    const handleMouseDown = (e) => {
+        if (!streamActive || !socket || viewOnly) return;
         const pos = getRelativeMousePosition(e);
         if (pos) {
             const button = e.button === 0 ? 'left' : e.button === 2 ? 'right' : 'middle';
-            socket.emit('desktop:mouse_click', { agentId, button, ...pos });
+            socket.emit('desktop:mouse_down', { agentId, button, ...pos });
         }
+    };
+
+    const handleMouseUp = (e) => {
+        if (!streamActive || !socket || viewOnly) return;
+        const pos = getRelativeMousePosition(e);
+        if (pos) {
+            const button = e.button === 0 ? 'left' : e.button === 2 ? 'right' : 'middle';
+            socket.emit('desktop:mouse_up', { agentId, button, ...pos });
+        }
+    };
+
+    // Scroll (wheel) com throttle de 50ms
+    const lastScrollRef = useRef(0);
+    const handleWheel = (e) => {
+        if (!streamActive || !socket || viewOnly) return;
+        e.preventDefault();
+
+        const now = Date.now();
+        if (now - lastScrollRef.current < 50) return;
+        lastScrollRef.current = now;
+
+        // deltaY positivo = scroll pra baixo, negativo = scroll pra cima
+        const clicks = Math.sign(e.deltaY) * Math.max(1, Math.min(Math.abs(Math.round(e.deltaY / 100)), 5));
+        socket.emit('desktop:mouse_scroll', { agentId, clicks });
     };
 
     // Impedir o menu de contexto real (botão direito) no canvas
@@ -247,7 +328,7 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
     };
 
     const handleKeyDown = (e) => {
-        if (!streamActive || !socket || viewOnly) return; // Bloqueado se viewOnly
+        if (!streamActive || !socket || viewOnly) return;
         // Evitar scroll de tela quando apertar seta pra baixo/cima
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
             e.preventDefault();
@@ -284,10 +365,10 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
                             onChange={handleQualityChange}
                             className="monitor-select"
                         >
-                            <option value="low">Baixa (Econômica)</option>
-                            <option value="medium">Média (Padrão)</option>
-                            <option value="high">Alta (20 FPS)</option>
-                            <option value="ultra">Mais Alta (30 FPS)</option>
+                            <option value="low">Baixa (~1 Mbps / 10 FPS)</option>
+                            <option value="medium">Média (~3 Mbps / 15 FPS)</option>
+                            <option value="high">Alta (~6 Mbps / 20 FPS)</option>
+                            <option value="ultra">Máxima (~10 Mbps / 24 FPS)</option>
                         </select>
                     </div>
 
@@ -348,9 +429,11 @@ const RemoteDesktop = ({ agentId, deviceName }) => {
                     className="desktop-canvas"
                     style={{ display: streamActive ? 'block' : 'none' }}
                     onMouseMove={handleMouseMove}
-                    onMouseDown={handleMouseClick}
+                    onMouseDown={handleMouseDown}
+                    onMouseUp={handleMouseUp}
+                    onWheel={handleWheel}
                     onContextMenu={handleContextMenu}
-                    tabIndex={1} // Permitir captura de teclado
+                    tabIndex={1}
                     onKeyDown={handleKeyDown}
                 />
             </div>

@@ -37,7 +37,7 @@ MY_IPC_PIPE = r'\\.\pipe\DocIT_Remote_IPC'
 IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 
 LOG_FILE = "agent-remote.log"
-AGENT_VERSION = "2.0.17"
+AGENT_VERSION = "2.0.22"
 
 config = {}
 
@@ -62,6 +62,8 @@ sys.excepthook = handle_exception
 terminal_process = None
 desktop_streaming = False
 current_stream_id = 0
+active_monitor_idx = 1
+cached_monitor_geometry = {"left": 0, "top": 0, "width": 1920, "height": 1080}
 osd_process = None
 
 # --- OSD Subprocess Hijack ---
@@ -127,19 +129,31 @@ def push_to_core(action, data):
         except: pass
 
 def stream_screen(monitor_idx, quality_profile, stream_id):
-    """Laço infinito de captura de tela com Frame Skipping"""
+    """Laço infinito de captura de tela com Frame Skipping e Detecção de Tela Estática"""
     global desktop_streaming
     
-    # Perfil de qualidade refinado para performance
-    if quality_profile == 'low': max_w, max_h = 854, 480; jpeg_quality = 30; sleep_time = 0.03
-    elif quality_profile == 'high': max_w, max_h = 1600, 900; jpeg_quality = 50; sleep_time = 0.01
-    elif quality_profile == 'ultra': max_w, max_h = 1920, 1080; jpeg_quality = 70; sleep_time = 0.01
-    else: max_w, max_h = 1280, 720; jpeg_quality = 40; sleep_time = 0.02
+    # Perfis de qualidade otimizados para BANDA REAL (MJPEG sobre WebSocket + Base64)
+    # Base64 adiciona ~33% overhead, então JPEG quality precisa ser conservador
+    # Alvo de banda: low ~1Mbps, medium ~3Mbps, high ~6Mbps, ultra ~10Mbps
+    profiles = {
+        'low':    {'max_w': 854,  'max_h': 480,  'jpeg_q': 25, 'target_fps': 10},
+        'medium': {'max_w': 1280, 'max_h': 720,  'jpeg_q': 35, 'target_fps': 15},
+        'high':   {'max_w': 1280, 'max_h': 720,  'jpeg_q': 45, 'target_fps': 20},
+        'ultra':  {'max_w': 1600, 'max_h': 900,  'jpeg_q': 50, 'target_fps': 24},
+    }
+    
+    p = profiles.get(quality_profile, profiles['medium'])
+    max_w = p['max_w']
+    max_h = p['max_h']
+    jpeg_quality = p['jpeg_q']
+    min_frame_interval = 1.0 / p['target_fps']  # Intervalo mínimo entre frames
+    
+    last_frame_hash = None  # Para detecção de tela estática
+    static_count = 0        # Quantos frames consecutivos foram idênticos
+    last_send_time = 0      # Timestamp do último frame enviado
 
     try:
         with mss.mss() as sct:
-            # Se monitor_idx for 0 (Todos os monitores) e houver falha de tamanho, mantém 0
-            # Se for um índice específico maior que a qtd de monitores fisicos conectados, fallback pro monitor 1
             if monitor_idx < 0 or monitor_idx >= len(sct.monitors): 
                 monitor_idx = 1
                 
@@ -147,15 +161,43 @@ def stream_screen(monitor_idx, quality_profile, stream_id):
             
             while desktop_streaming and current_stream_id == stream_id:
                 try:
+                    # Respeita o FPS alvo: não captura mais rápido do que o necessário
+                    elapsed = time.time() - last_send_time
+                    if elapsed < min_frame_interval:
+                        time.sleep(min_frame_interval - elapsed)
+                    
                     sct_img = sct.grab(monitor)
-                    img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+                    # Utiliza sct_img.rgb para remover o padding de memória (strides) do Windows
+                    img = Image.frombytes("RGB", sct_img.size, sct_img.rgb)
                     
                     if img.width > max_w or img.height > max_h:
-                        img.thumbnail((max_w, max_h), Image.Resampling.BILINEAR) # Mais rápido q Lanczos
+                        img.thumbnail((max_w, max_h), Image.Resampling.BILINEAR)
                     
                     buffer = io.BytesIO()
                     img.save(buffer, format="JPEG", quality=jpeg_quality)
-                    b64_img = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                    frame_bytes = buffer.getvalue()
+                    
+                    # Detecção de Tela Estática: compara hash rápido do frame comprimido
+                    # Se a tela não mudou, não envia o frame (economia massiva de banda)
+                    import hashlib
+                    frame_hash = hashlib.md5(frame_bytes).digest()
+                    
+                    if frame_hash == last_frame_hash:
+                        static_count += 1
+                        # Tela parada: reduz polling progressivamente (0.2s → 0.5s → 1s)
+                        if static_count > 30:
+                            time.sleep(1.0)
+                        elif static_count > 10:
+                            time.sleep(0.5)
+                        else:
+                            time.sleep(0.2)
+                        continue
+                    
+                    # Tela mudou: reseta contador e envia
+                    last_frame_hash = frame_hash
+                    static_count = 0
+                    
+                    b64_img = base64.b64encode(frame_bytes).decode('utf-8')
                     
                     # Push de frame pro Orquestrador (Core) com FRAME SKIPPING
                     success = push_to_core("desktop_frame", {
@@ -164,12 +206,13 @@ def stream_screen(monitor_idx, quality_profile, stream_id):
                         "height": img.height
                     })
                     
+                    last_send_time = time.time()
+                    
                     # Se o pipe estava ocupado, descansa um pouco antes da próxima tentativa
                     if not success:
                         time.sleep(0.05)
                         continue
 
-                    time.sleep(sleep_time)
                 except Exception as e:
                      log_event(f"Erro capturando tela: {e}", "ERROR")
                      time.sleep(1) 
@@ -230,7 +273,22 @@ def execute_ipc_command(payload):
                     log_event(f"Erro ao injetar caractere no CMD: {e}", "ERROR")
 
     elif cmd == "start_desktop":
-        monitor_idx = data.get("monitorIndex", 1)
+        try: monitor_idx = int(data.get("monitorIndex", 1))
+        except: monitor_idx = 1
+        
+        global active_monitor_idx, cached_monitor_geometry
+        active_monitor_idx = monitor_idx
+        
+        # Cacheia geometria do monitor ativo para uso nos handlers de mouse
+        # Evita criar mss.mss() a cada evento de mouse (era ~20x/s, causava crash)
+        try:
+            with mss.mss() as sct:
+                if monitor_idx < 0 or monitor_idx >= len(sct.monitors):
+                    monitor_idx = 1
+                cached_monitor_geometry = sct.monitors[monitor_idx]
+        except:
+            cached_monitor_geometry = {"left": 0, "top": 0, "width": 1920, "height": 1080}
+        
         quality = data.get("quality", "medium")
         invisible = data.get("invisible_mode", False)
         viewer = data.get("viewer", "Administrador")
@@ -270,21 +328,37 @@ def execute_ipc_command(payload):
     elif cmd == "mouse_move":
          if not desktop_streaming: return
          try:
-            screen_w, screen_h = pyautogui.size()
-            frame_w = data.get("width", screen_w)
-            frame_h = data.get("height", screen_h)
-            target_x = (data.get("x", 0) / frame_w) * screen_w
-            target_y = (data.get("y", 0) / frame_h) * screen_h
+            mon = cached_monitor_geometry
+            target_x = mon["left"] + (data.get("x", 0) / data.get("width", mon["width"])) * mon["width"]
+            target_y = mon["top"] + (data.get("y", 0) / data.get("height", mon["height"])) * mon["height"]
             pyautogui.moveTo(target_x, target_y)
          except: pass
 
-    elif cmd == "mouse_click":
+    elif cmd == "mouse_down":
          if not desktop_streaming: return
          try:
-            screen_w, screen_h = pyautogui.size()
-            target_x = (data.get("x", 0) / data.get("width", screen_w)) * screen_w
-            target_y = (data.get("y", 0) / data.get("height", screen_h)) * screen_h
-            pyautogui.click(x=target_x, y=target_y, button=data.get("button", "left"))
+            mon = cached_monitor_geometry
+            target_x = mon["left"] + (data.get("x", 0) / data.get("width", mon["width"])) * mon["width"]
+            target_y = mon["top"] + (data.get("y", 0) / data.get("height", mon["height"])) * mon["height"]
+            pyautogui.mouseDown(x=target_x, y=target_y, button=data.get("button", "left"))
+         except: pass
+
+    elif cmd == "mouse_up":
+         if not desktop_streaming: return
+         try:
+            mon = cached_monitor_geometry
+            target_x = mon["left"] + (data.get("x", 0) / data.get("width", mon["width"])) * mon["width"]
+            target_y = mon["top"] + (data.get("y", 0) / data.get("height", mon["height"])) * mon["height"]
+            pyautogui.mouseUp(x=target_x, y=target_y, button=data.get("button", "left"))
+         except: pass
+
+    elif cmd == "mouse_scroll":
+         if not desktop_streaming: return
+         try:
+            # e.deltaY > 0 in browser means scroll down -> clicks positive.
+            # pyautogui requires negative value to scroll down.
+            scroll_amount = int(data.get("clicks", 0)) * -120
+            pyautogui.scroll(scroll_amount)
          except: pass
 
     elif cmd == "key_down":

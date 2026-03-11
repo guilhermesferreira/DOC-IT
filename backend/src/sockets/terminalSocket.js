@@ -108,35 +108,64 @@ const { logAudit } = require('../services/auditService');
         });
     
         // --- Eventos de Remote Desktop (MJPEG/Canvas) ---
+
         // Start/Stop requests
         socket.on('desktop:start', ({ agentId, monitorIndex, quality, invisible_mode }) => {
           const viewerName = socket.user?.username || 'Administrador';
-          console.log(`[Socket] Frontend (${viewerName}) solicitou iniciar Remote Desktop para Agente: ${agentId} no monitor ${monitorIndex || 1}`);
           
-          // O Admin (Browser) entra na sala exclusiva desse agente para receber frames de vídeo isolados
-          socket.join(`agent_data_${agentId}`);
-          
-          if (!desktopViewers.has(agentId)) {
-            desktopViewers.set(agentId, new Set());
+          // Verifica exclusividade de controle
+          if (desktopViewers.has(agentId)) {
+            const currentViewer = desktopViewers.get(agentId);
+            // Se já tem outra pessoa conectada e não é um reload do usuário atual
+            if (currentViewer.socketId !== socket.id) {
+              console.log(`[Socket] Acesso Negado: ${viewerName} tentou acessar Agente ${agentId}, mas já está em uso por ${currentViewer.viewerName}`);
+              socket.emit('desktop:in_use', { currentViewer: currentViewer.viewerName });
+              return; // Bloqueia a conexão!
+            }
           }
-          desktopViewers.get(agentId).add(socket.id);
           
+          console.log(`[Socket] Frontend (${viewerName}) iniciou Remote Desktop para Agente: ${agentId} no monitor ${monitorIndex || 1}`);
+          
+          socket.join(`agent_data_${agentId}`);
+          desktopViewers.set(agentId, { socketId: socket.id, viewerName });
+          
+          io.emit('desktop:start', { agentId, monitorIndex, quality, invisible_mode, viewer: viewerName });
+        });
+
+        // Evento de Takeover ("Roubar a Sessão")
+        socket.on('desktop:force_start', ({ agentId, monitorIndex, quality, invisible_mode }) => {
+          const viewerName = socket.user?.username || 'Administrador';
+          
+          if (desktopViewers.has(agentId)) {
+            const oldViewer = desktopViewers.get(agentId);
+            if (oldViewer.socketId !== socket.id) {
+                console.log(`[Socket] TAKEOVER: ${viewerName} assumiu o controle do Agente ${agentId} expulsando ${oldViewer.viewerName}`);
+                // Avisa o usuário que foi chutado para matar a tela dele
+                io.to(oldViewer.socketId).emit('desktop:kicked');
+                // Remove o antigo socket da sala de transmissão do agente
+                const oldSocket = io.sockets.sockets.get(oldViewer.socketId);
+                if (oldSocket) {
+                    oldSocket.leave(`agent_data_${agentId}`);
+                }
+            }
+          }
+          
+          socket.join(`agent_data_${agentId}`);
+          desktopViewers.set(agentId, { socketId: socket.id, viewerName });
+          
+          // Re-inicia o loop de stream com este novo dono
           io.emit('desktop:start', { agentId, monitorIndex, quality, invisible_mode, viewer: viewerName });
         });
     
         socket.on('desktop:stop', ({ agentId }) => {
-          console.log(`[Socket] Frontend (${socket.user?.username}) saindo do Remote Desktop de: ${agentId}`);
-          
+          console.log(`[Socket] Frontend (${socket.user?.username}) parando o Remote Desktop de: ${agentId}`);
           socket.leave(`agent_data_${agentId}`);
 
-          const viewers = desktopViewers.get(agentId);
-          if (viewers) {
-            viewers.delete(socket.id);
-            if (viewers.size === 0) {
-                console.log(`[Socket] Nenhum visualizador para o Agente ${agentId}. Desligando streaming.`);
-                io.emit('desktop:stop', { agentId });
-                desktopViewers.delete(agentId);
-            }
+          const viewer = desktopViewers.get(agentId);
+          if (viewer && viewer.socketId === socket.id) {
+             console.log(`[Socket] Dono da sessão parou a visualização. Desligando streaming do Agente ${agentId}.`);
+             io.emit('desktop:stop', { agentId });
+             desktopViewers.delete(agentId);
           }
         });
     
@@ -168,15 +197,38 @@ const { logAudit } = require('../services/auditService');
     
         // Eventos de I/O (Frontend -> Agente)
         socket.on('desktop:mouse_move', ({ agentId, x, y, width, height }) => {
-          io.emit('desktop:mouse_move', { agentId, x, y, width, height });
+          const viewer = desktopViewers.get(agentId);
+          if (viewer && viewer.socketId === socket.id) {
+             io.emit('desktop:mouse_move', { agentId, x, y, width, height });
+          }
         });
     
-        socket.on('desktop:mouse_click', ({ agentId, button, x, y, width, height }) => {
-          io.emit('desktop:mouse_click', { agentId, button, x, y, width, height });
+        socket.on('desktop:mouse_down', ({ agentId, button, x, y, width, height }) => {
+          const viewer = desktopViewers.get(agentId);
+          if (viewer && viewer.socketId === socket.id) {
+             io.emit('desktop:mouse_down', { agentId, button, x, y, width, height });
+          }
+        });
+
+        socket.on('desktop:mouse_up', ({ agentId, button, x, y, width, height }) => {
+          const viewer = desktopViewers.get(agentId);
+          if (viewer && viewer.socketId === socket.id) {
+             io.emit('desktop:mouse_up', { agentId, button, x, y, width, height });
+          }
+        });
+
+        socket.on('desktop:mouse_scroll', ({ agentId, clicks }) => {
+          const viewer = desktopViewers.get(agentId);
+          if (viewer && viewer.socketId === socket.id) {
+             io.emit('desktop:mouse_scroll', { agentId, clicks });
+          }
         });
     
         socket.on('desktop:key_down', ({ agentId, key }) => {
-          io.emit('desktop:key_down', { agentId, key });
+          const viewer = desktopViewers.get(agentId);
+          if (viewer && viewer.socketId === socket.id) {
+             io.emit('desktop:key_down', { agentId, key });
+          }
         });
     
         // Relay de Confirmação de Tamper (Agente -> Backend/Frontend)
@@ -200,17 +252,12 @@ const { logAudit } = require('../services/auditService');
             io.emit('agent:offline', { agentId: socket.agentId });
             console.log(`[Socket] Agente ${socket.agentId} OFFLINE. Total online: ${onlineAgents.size}`);
           } else {
-             // Limpeza se for um usuário
-             // Tira este browser (socket) de todos os canais de viewers que ele possa estar assistindo
-             for (const [agentId, viewers] of desktopViewers.entries()) {
-                 if (viewers.has(socket.id)) {
-                     viewers.delete(socket.id);
-                     // Se esvaziou a saleta enquanto ele assistia e dropou a net
-                     if (viewers.size === 0) {
-                         console.log(`[Socket] Último admin (caiu do socket) do Agente ${agentId}. Parando streaming...`);
-                         io.emit('desktop:stop', { agentId });
-                         desktopViewers.delete(agentId);
-                     }
+             // Limpeza se for um admin/browser que caiu silenciosamente
+             for (const [agentId, viewer] of desktopViewers.entries()) {
+                 if (viewer.socketId === socket.id) {
+                     console.log(`[Socket] O admin dono da sessão do Agente ${agentId} caiu. Parando streaming...`);
+                     io.emit('desktop:stop', { agentId });
+                     desktopViewers.delete(agentId);
                  }
              }
           }

@@ -44,7 +44,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.1.9"
+AGENT_VERSION = "2.1.12"
 
 # Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
 KEY_FILE = "Doc-IT.key"
@@ -706,10 +706,22 @@ def ipc_local_server():
 
 # Controle de Fluxo WebSocket para não congestionar a rede do agente
 ws_busy = False
+ws_busy_timer = None
 
 def on_emit_done():
-    global ws_busy
+    global ws_busy, ws_busy_timer
     ws_busy = False
+    # Cancela o timer de segurança se o callback chegou a tempo
+    if ws_busy_timer:
+        ws_busy_timer.cancel()
+        ws_busy_timer = None
+
+def ws_busy_timeout():
+    """Safety net: reseta ws_busy se o callback não chegar em 3 segundos."""
+    global ws_busy, ws_busy_timer
+    if ws_busy:
+        ws_busy = False
+        ws_busy_timer = None
 
 def handle_ipc_client(pipe):
     global ws_busy
@@ -781,6 +793,10 @@ def handle_ipc_client(pipe):
             if ws_busy: return
             if 'sio' in globals() and sio.connected:
                 ws_busy = True
+                # Timer de segurança: reseta ws_busy se o callback não chegar em 3 segundos
+                ws_busy_timer = threading.Timer(3.0, ws_busy_timeout)
+                ws_busy_timer.daemon = True
+                ws_busy_timer.start()
                 sio.emit('desktop:frame', {
                     'agentId': config.get("agent_id"),
                     'imageB64': payload["data"]["imageB64"],
@@ -849,11 +865,47 @@ def send_ipc_command(module_name, payload):
     return False
 
 
+def send_ipc_fire_and_forget(module_name, payload):
+    """Versão não-bloqueante de send_ipc_command para eventos de alta frequência (mouse/teclado).
+    Executa em thread separada, sem retries, sem WaitNamedPipe longo.
+    Se falhar, descarta silenciosamente (mouse skip é imperceptível)."""
+    pipe_path = None
+    if module_name == "remote": pipe_path = r"\\.\pipe\DocIT_Remote_IPC"
+    if not pipe_path: return
+    
+    payload["token"] = IPC_TOKEN
+    handle = None
+    try:
+        # Timeout curtíssimo: se o pipe não estiver livre em 20ms, desiste
+        try:
+            win32pipe.WaitNamedPipe(pipe_path, 20)
+        except:
+            return  # Pipe ocupado, descarta este evento
+        
+        handle = win32file.CreateFile(
+            pipe_path,
+            win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+            0, None,
+            win32file.OPEN_EXISTING,
+            0, None
+        )
+        win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
+        win32file.WriteFile(handle, json.dumps(payload).encode('utf-8'))
+    except:
+        pass  # Silencioso: perder 1 evento de mouse não é perceptível
+    finally:
+        try:
+            if handle: win32file.CloseHandle(handle)
+        except: pass
+
+
 # --- Websocket (Conector Mestre de Comandos de Tela/Terminal) ---
 sio = socketio.Client(ssl_verify=False)
 
 @sio.event
 def connect():
+    global ws_busy
+    ws_busy = False  # Reset: garante que o fluxo não fique travado após reconexão
     log_event("Websocket do Core conectado!", "INFO")
 
 @sio.on('terminal:start')
@@ -889,12 +941,23 @@ def proxy_get_monitors(data):
 @sio.on('desktop:mouse_move')
 def proxy_mouse_move(data):
     if data.get('agentId') != config.get('agent_id'): return
-    send_ipc_command("remote", {"cmd": "mouse_move", "data": data})
+    # Fire-and-forget em thread separada para NÃO bloquear o event loop do Socket.IO
+    threading.Thread(target=send_ipc_fire_and_forget, args=("remote", {"cmd": "mouse_move", "data": data}), daemon=True).start()
 
-@sio.on('desktop:mouse_click')
-def proxy_mouse_click(data):
+@sio.on('desktop:mouse_down')
+def proxy_mouse_down(data):
     if data.get('agentId') != config.get('agent_id'): return
-    send_ipc_command("remote", {"cmd": "mouse_click", "data": data})
+    threading.Thread(target=send_ipc_fire_and_forget, args=("remote", {"cmd": "mouse_down", "data": data}), daemon=True).start()
+
+@sio.on('desktop:mouse_up')
+def proxy_mouse_up(data):
+    if data.get('agentId') != config.get('agent_id'): return
+    threading.Thread(target=send_ipc_fire_and_forget, args=("remote", {"cmd": "mouse_up", "data": data}), daemon=True).start()
+
+@sio.on('desktop:mouse_scroll')
+def proxy_mouse_scroll(data):
+    if data.get('agentId') != config.get('agent_id'): return
+    threading.Thread(target=send_ipc_fire_and_forget, args=("remote", {"cmd": "mouse_scroll", "data": data}), daemon=True).start()
 
 @sio.on('tamper:update')
 def handle_tamper_update(data):
@@ -919,12 +982,7 @@ def handle_tamper_update(data):
 @sio.on('desktop:key_down')
 def proxy_key_down(data):
     if data.get('agentId') != config.get('agent_id'): return
-    send_ipc_command("remote", {"cmd": "key_down", "data": data})
-
-@sio.on('desktop:get_monitors')
-def proxy_get_monitors(data):
-    if data.get('agentId') != config.get('agent_id'): return
-    send_ipc_command("remote", {"cmd": "get_monitors"})
+    threading.Thread(target=send_ipc_fire_and_forget, args=("remote", {"cmd": "key_down", "data": data}), daemon=True).start()
 
 
 class DocITAgentService(win32serviceutil.ServiceFramework):
