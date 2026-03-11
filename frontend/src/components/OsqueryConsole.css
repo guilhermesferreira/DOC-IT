@@ -4,9 +4,14 @@
     display: flex;
     flex-direction: column;
     height: 100%;
+    width: 100%;
+    max-width: 100%;
     color: #e2e8f0;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     animation: fadeIn 0.4s ease-out;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    padding-right: 1px;
 }
 
 @keyframes fadeIn {
@@ -56,31 +61,31 @@
 
 /* Grid Layout */
 .osq-layout {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 24px;
-    align-items: flex-start;
-}
-
-@media (min-width: 1024px) {
-    .osq-layout {
-        flex-direction: row;
-    }
-
-    .osq-sidebar {
-        width: 38%;
-    }
-
-    .osq-main {
-        width: 62%;
-    }
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .osq-sidebar {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 20px;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.osq-main {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.osq-container * {
+    box-sizing: border-box;
 }
 
 .osq-panel {
@@ -89,6 +94,10 @@
     border-radius: 16px;
     padding: 20px;
     box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
 }
 
 /* Form Elements */
@@ -129,6 +138,7 @@
 
 .osq-select {
     width: 100%;
+    max-width: 100%;
     background: #1e293b;
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #f8fafc;
@@ -160,10 +170,13 @@
     position: relative;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    max-width: 100%;
 }
 
 .osq-textarea {
     width: 100%;
+    max-width: 100%;
     height: 180px;
     background: #1e293b;
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -254,6 +267,7 @@
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s;
+    min-width: 0;
 }
 
 .osq-history-item:hover {
@@ -268,7 +282,9 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 90%;
+    min-width: 0;
+    flex: 1;
+    margin-right: 12px;
 }
 
 .osq-history-icon {
@@ -362,6 +378,8 @@
     overflow: auto;
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .osq-state-box {
@@ -436,18 +454,26 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 500px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .osq-table {
     width: 100%;
-    border-collapse: collapse;
     min-width: 600px;
+    border-collapse: collapse;
 }
 
 .osq-table th {
-    background: rgba(255, 255, 255, 0.03);
+    background: #1e293b;
     color: #94a3b8;
+    position: sticky;
+    top: 0;
+    z-index: 10;
     font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -499,6 +525,63 @@
 
 .osq-history-list::-webkit-scrollbar-thumb:hover,
 .osq-main-content::-webkit-scrollbar-thumb:hover,
+.osq-templates-list::-webkit-scrollbar-thumb:hover,
 .osq-table-wrapper::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.2);
+}
+
+/* Templates List */
+.osq-templates-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 10px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.osq-template-item {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 14px;
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.osq-template-item:hover {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: rgba(99, 102, 241, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.osq-tpl-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.osq-tpl-title {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #e2e8f0;
+}
+
+.osq-tpl-desc {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.osq-panel-icon {
+    color: #818cf8;
 }
