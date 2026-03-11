@@ -74,5 +74,28 @@ module.exports = function initCronJobs(httpsServer) {
     }
   });
 
-  console.log('[Cron] Rotinas agendadas: limpeza de auditoria (03:00) e verificação de cert (03:30).');
+  // ─── Job 3: Sincronização do Osquery (04:00) ─────────────────────────────
+  cron.schedule('0 4 * * *', async () => {
+    console.log('[Cron] Iniciando sincronização automática do Osquery...');
+    try {
+      const osqueryService = require('./services/osqueryService');
+      const settings = await prisma.globalSettings.findFirst();
+      
+      if (settings && settings.selectedOsqueryVersion && settings.selectedOsqueryVersion !== 'latest') {
+        console.log(`[Cron] Sincronizando versão selecionada: ${settings.selectedOsqueryVersion}`);
+        await osqueryService.syncVersion(settings.selectedOsqueryVersion);
+      } else {
+        // Se for 'latest' ou não definido, pega a mais recente do GH
+        const releases = await osqueryService.getLatestReleases();
+        if (releases.length > 0) {
+          console.log(`[Cron] Sincronizando versão mais recente: ${releases[0].version}`);
+          await osqueryService.syncVersion(releases[0].version);
+        }
+      }
+    } catch (error) {
+      console.error('[Cron] Erro na sincronização do Osquery:', error);
+    }
+  });
+
+  console.log('[Cron] Rotinas agendadas: limpeza de auditoria (03:00), cert (03:30) e osquery (04:00).');
 };

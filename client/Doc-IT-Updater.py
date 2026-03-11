@@ -7,6 +7,8 @@ import socket
 import datetime
 import traceback
 import hashlib
+import subprocess
+import psutil
 
 import requests
 import urllib3
@@ -23,7 +25,7 @@ CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 # Token de Autenticação (Lido da Variável de Ambiente em segurança)
 IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.0.36"
+AGENT_VERSION = "2.0.39"
 
 config = {}
 
@@ -130,6 +132,108 @@ def read_local_module_version(mod_key):
 
 # Lista de módulos locais para varredura de updates
 MODULES_KEYS = ["core", "inventory", "remote", "updater", "gui"]
+
+def get_install_dir():
+    """Retorna o diretório real da instalação, lidando corretamente com o formato PyInstaller (--onefile)."""
+    return os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+
+# Mantemos a variável base (mas agora de forma segura para os outros locais se precisarem)
+BASE_SCRIPT_DIR = get_install_dir()
+
+def check_and_update_osquery(working_url, remote_version):
+    """Verifica se a versão do OsqueryEngine local diverge do selecionado no servidor."""
+    if not remote_version:
+        return False
+        
+    log_event(f"Verificando motor Osquery: Versão Alvo {remote_version}...", "INFO")
+    
+    install_dir = get_install_dir()
+    
+    # Caminho real para o binário do agente dentro de client/assets/bin
+    bin_dir = os.path.join(install_dir, "assets", "bin")
+    if not os.path.exists(bin_dir):
+        os.makedirs(bin_dir, exist_ok=True)
+    
+    target_path = os.path.join(bin_dir, "osqueryi.exe")
+    temp_path = target_path + ".tmp"
+    
+    local_version = "None"
+    if os.path.exists(target_path):
+        try:
+            output = subprocess.check_output([target_path, "--version"], text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            parts = output.strip().split(" ")
+            local_version = parts[2] if len(parts) > 2 else parts[1]
+        except:
+            local_version = "Corrupt"
+
+    if remote_version == "latest":
+        if local_version not in ["None", "Corrupt"]:
+            return False
+    elif local_version == remote_version:
+        log_event(f"Osquery Engine v{local_version} já está atualizado no Agente.", "INFO")
+        return False
+
+    log_event(f"Atualizando Osquery: {local_version} -> {remote_version}", "WARNING")
+    
+    try:
+        download_url = f"{working_url}/agent/osquery/{remote_version}"
+        
+        # Certificados absolutos via config ou default do install_dir
+        cert_path = config.get("cert_path", os.path.join(install_dir, "certs", "agent.crt"))
+        key_path = config.get("key_path", os.path.join(install_dir, "certs", "agent.key"))
+        ca_path = config.get("ca_path", os.path.join(install_dir, "certs", "ca.crt"))
+        
+        verify_ssl = ca_path if (ca_path and os.path.exists(ca_path)) else False
+        if re.match(r"https?://\d+\.\d+\.\d+\.\d+", working_url): verify_ssl = False
+
+        certs = None
+        if cert_path and key_path and os.path.exists(cert_path) and os.path.exists(key_path):
+            certs = (cert_path, key_path)
+
+        r = requests.get(download_url, cert=certs, verify=verify_ssl, stream=True, timeout=60)
+        
+        if r.status_code == 200:
+            expected_hash = r.headers.get('X-Osquery-Hash')
+            sha256 = hashlib.sha256()
+            
+            with open(temp_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=65536):
+                    f.write(chunk)
+                    sha256.update(chunk)
+            
+            if expected_hash:
+                calc_hash = sha256.hexdigest()
+                if calc_hash != expected_hash:
+                    log_event(f"INTEGRITY ERROR: Hash do Osquery ({calc_hash}) não confere com server ({expected_hash}). Abortando.", "CRITICAL")
+                    if os.path.exists(temp_path): os.remove(temp_path)
+                    return False
+            
+            if os.path.exists(target_path):
+                try: 
+                    os.remove(target_path)
+                except:
+                    log_event("Detectado binário em uso. Tentando encerrar processos osqueryi...", "WARNING")
+                    for proc in psutil.process_iter(['name']):
+                        if proc.info['name'] == 'osqueryi.exe':
+                            try: proc.kill()
+                            except: pass
+                    time.sleep(2)
+                    try: os.remove(target_path)
+                    except: 
+                        log_event("Não foi possível deletar o binário ativo. Usando extensão .old", "WARNING")
+                        if os.path.exists(target_path + ".old"): os.remove(target_path + ".old")
+                        os.rename(target_path, target_path + ".old")
+
+            os.rename(temp_path, target_path)
+            log_event(f"Osquery Engine atualizado com sucesso! Alvo: {remote_version}", "INFO")
+            return True
+        else:
+            log_event(f"Falha ao baixar Osquery: status {r.status_code}. Verifique se a versão está sincronizada no servidor.", "ERROR")
+            return False
+    except Exception as e:
+        log_event(f"Erro Crítico na atualização do Osquery: {e}", "ERROR")
+        if os.path.exists(temp_path): os.remove(temp_path)
+        return False
 
 
 # =========================================================
@@ -371,6 +475,10 @@ if __name__ == "__main__":
                         settings_data = r.json()
                         if "updateCheckIntervalMinutes" in settings_data:
                             polling_interval = int(settings_data["updateCheckIntervalMinutes"])
+                        
+                        remote_osq_ver = settings_data.get("selectedOsqueryVersion")
+                        if remote_osq_ver:
+                            check_and_update_osquery(url, remote_osq_ver)
                         break
                 except:
                     continue

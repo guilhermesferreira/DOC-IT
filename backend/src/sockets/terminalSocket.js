@@ -242,6 +242,23 @@ const { logAudit } = require('../services/auditService');
           }
         });
     
+        // --- Eventos de Osquery (Live Queries) ---
+        socket.on('osquery:query', async ({ agentId, sql }) => {
+          const viewerName = socket.user?.username || 'Administrador';
+          console.log(`[Socket] Usuário ${viewerName} enviou query Osquery para Agente ${agentId}: ${sql}`);
+          
+          // Repassa para o agente específico
+          io.emit('osquery:query', { agentId, sql });
+
+          // Log de auditoria para compliance
+          await logAudit('OSQUERY_QUERY', socket.user?.id, 'COMMAND', 'OSQUERY', { agentId, sql }, socket.handshake.address);
+        });
+
+        socket.on('osquery:results', ({ agentId, results, error }) => {
+          // Repassa o resultado para todos os browsers (ou podemos filtrar para quem pediu)
+          io.emit('osquery:results', { agentId, results, error });
+        });
+
         socket.on('disconnect', () => {
           console.log(`[Socket] Conexão encerrada: ${socket.id}`);
           

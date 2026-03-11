@@ -103,6 +103,7 @@ model GlobalSettings {
   id                         Int      @id @default(autoincrement())
   inventoryIntervalMinutes   Int      @default(60)
   updateCheckIntervalMinutes Int      @default(120)
+  selectedOsqueryVersion     String   @default("latest")
   updatedAt                  DateTime @updatedAt
 }
 

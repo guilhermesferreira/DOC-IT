@@ -171,6 +171,7 @@ router.post('/enroll', agentController.enrollAgent);
 // Rotas de Auto-Update do Agente
 router.get('/version', agentController.getVersion);
 router.get('/update/:file', agentController.downloadUpdate);
+router.get('/osquery/:version', agentController.downloadOsquery);
 
 // ─── PKI / Certificados ────────────────────────────────────────────────────
 // Renovação normal (mTLS obrigatório — cert ainda válido)

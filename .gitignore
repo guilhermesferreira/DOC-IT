@@ -64,3 +64,4 @@ client/__pycache__/agent.cpython-310.pyc
 docs/security_roadmap.md
 docs/osquery_roadmap.md
 client/Doc-IT.dat
+backend/updates/osquery/versions/*

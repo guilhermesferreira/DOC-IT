@@ -5,6 +5,8 @@ import SettingsView from '../components/SettingsView'; // Painel Global de Setti
 import UsersView from '../components/UsersView'; // Gestão de Usuários
 import UserGroupsView from '../components/UserGroupsView'; // Gestão de Grupos de Usuários
 import AuditSettingsView from '../components/AuditSettingsView';
+import OsqueryBinariesView from '../components/OsqueryBinariesView';
+import OsqueryConsole from '../components/OsqueryConsole';
 import { useAuth } from '../auth/AuthContext';
 import './SettingsPage.css'; // Criaremos este arquivo CSS para estilizar as abas e o conteúdo
 
@@ -75,13 +77,34 @@ const SettingsPage = () => {
               >
                 Agendamento
               </button>
-              {/* Espaço para futuras sub-abas de agentes: "Listagem", "Políticas", etc */}
+              <button
+                className={`sub-tab-link ${activeAgentsSubView === 'binaries' ? 'active' : ''}`}
+                onClick={() => setActiveAgentsSubView('binaries')}
+              >
+                Binários (Osquery)
+              </button>
+              <button
+                className={`sub-tab-link ${activeAgentsSubView === 'console' ? 'active' : ''}`}
+                onClick={() => setActiveAgentsSubView('console')}
+              >
+                Console SQL
+              </button>
             </nav>
 
             <div className="user-security-sub-content">
               {activeAgentsSubView === 'scheduling' && (
                 <div className="settings-section">
                   <SettingsView />
+                </div>
+              )}
+              {activeAgentsSubView === 'binaries' && (
+                <div className="settings-section" style={{ padding: 0 }}>
+                  <OsqueryBinariesView />
+                </div>
+              )}
+              {activeAgentsSubView === 'console' && (
+                <div className="settings-section" style={{ padding: 0 }}>
+                  <OsqueryConsole />
                 </div>
               )}
             </div>

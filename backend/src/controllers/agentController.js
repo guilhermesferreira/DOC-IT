@@ -152,6 +152,50 @@ async function downloadUpdate(req, res) {
   }
 }
 
+// Serve o binário do Osquery para o agente (Protegido por mTLS)
+async function downloadOsquery(req, res) {
+  try {
+    const { version } = req.params;
+    const path = require('path');
+    const fs = require('fs');
+    const crypto = require('crypto');
+
+    // Força mTLS para o Agente
+    const isDirectMTLS = req.socket.authorized;
+    const internalIps = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+    const isProxyMTLS = req.headers['x-ssl-client-verify'] === 'SUCCESS' && internalIps.includes(req.socket.remoteAddress || req.ip);
+
+    if (!isDirectMTLS && !isProxyMTLS) {
+      console.warn(`[mTLS] Acesso negado para /osquery/${version}. Motivo: ${req.socket.authorizationError || 'Nenhum certificado enviado'}`);
+      return res.status(401).json({ error: 'Acesso negado. Certificado mTLS válido é obrigatório.' });
+    }
+
+    // Segurança: Previne Path Traversal
+    if (!version || path.basename(version) !== version) {
+      return res.status(400).json({ error: 'Formato de versão inválido.' });
+    }
+
+    const versionsDir = path.join(__dirname, '..', '..', 'updates', 'osquery', 'versions');
+    const filePath = path.join(versionsDir, version, 'osqueryi.exe');
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Binário não encontrado para esta versão.' });
+    }
+
+    // Calcula Hash em tempo real para o agente validar a integridade
+    const fileBuffer = fs.readFileSync(filePath);
+    const hashSum = crypto.createHash('sha256');
+    hashSum.update(fileBuffer);
+    const hex = hashSum.digest('hex');
+
+    res.header('X-Osquery-Hash', hex);
+    res.download(filePath);
+  } catch (error) {
+    console.error('Erro ao servir Osquery para o agente:', error);
+    res.status(500).json({ error: 'Erro interno ao iniciar o download.' });
+  }
+}
+
 const certService = require('../services/certService');
 
 // ─── Enrollment Inicial (Sem mTLS, o agente ainda não possui certificado) ───
@@ -288,4 +332,4 @@ function getCaCert(req, res) {
 
 // As funções getAgentHosts, approveAgentHost, rejectAgentHost, deleteAgentHost
 // foram movidas e adaptadas para o deviceController.js
-module.exports = { checkIn, getVersion, downloadUpdate, renewCert, emergencyCertRequest, getCaCert, enrollAgent };
+module.exports = { checkIn, getVersion, downloadUpdate, downloadOsquery, renewCert, emergencyCertRequest, getCaCert, enrollAgent };

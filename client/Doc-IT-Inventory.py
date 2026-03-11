@@ -28,7 +28,7 @@ CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 
 LOG_FILE = "agent-inventory.log"
-AGENT_VERSION = "2.0.11"
+AGENT_VERSION = "2.0.15"
 
 def log_event(message, level="INFO"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -271,66 +271,201 @@ def get_security_info():
     return security_data
 
 
+# --- Osquery Client Integration ---
+class OsqueryClient:
+    def __init__(self, bin_path=None):
+        self.bin_path = bin_path or self._find_osquery()
+        self.version = self.get_version() if self.bin_path else None
+
+    def _find_osquery(self):
+        # Locais de busca: pasta bin real da instalação do agente
+        base_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+        locations = [
+            os.path.join(base_dir, "assets", "bin", "osqueryi.exe"),
+            "osqueryi.exe"
+        ]
+        for loc in locations:
+            try:
+                subprocess.check_output([loc, "--version"], stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW)
+                return loc
+            except:
+                continue
+        return None
+
+    def get_version(self):
+        try:
+            output = subprocess.check_output([self.bin_path, "--version"], text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            # Ex: osqueryi version 5.12.1 -> 5.12.1
+            parts = output.strip().split(" ")
+            return parts[2] if len(parts) > 2 else parts[1]
+        except:
+            return "N/A"
+
+    def is_available(self):
+        return self.bin_path is not None
+
+    def run_query(self, query):
+        if not self.is_available():
+            return None
+        try:
+            cmd = [self.bin_path, "--json", query]
+            output = subprocess.check_output(cmd, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            return json.loads(output)
+        except Exception as e:
+            log_event(f"Osquery Query Error: {e}", "WARNING")
+            return None
+
 def get_additional_inventory_data():
-    """Compila todo o json de telemetria"""
-    log_event(f"Gerando JSON de inventário pesado...", "INFO")
+    """Compila todo o json de telemetria (Híbrido: Osquery + Legacy Fallback)"""
+    log_event(f"Gerando JSON de inventário...", "INFO")
     data = {}
-    data["cpu_model"] = get_cpu_model_clean()
-    data["users"] = get_local_users_info()
+    osq = OsqueryClient()
+    
+    data["osquery_version"] = osq.version if osq.is_available() else None
+    
+    # 1. CPU e Sistema
+    if osq.is_available():
+        sys_info = osq.run_query("SELECT cpu_brand, physical_memory, hardware_vendor, hardware_model FROM system_info LIMIT 1;")
+        if sys_info:
+            data["cpu_model"] = sys_info[0].get("cpu_brand", get_cpu_model_clean())
+            # Memória via Osquery vem em bytes
+            try: data["ram_total_gb"] = round(int(sys_info[0].get("physical_memory", 0)) / (1024**3), 2)
+            except: data["ram_total_gb"] = round(psutil.virtual_memory().total / (1024**3), 2)
+        else:
+            data["cpu_model"] = get_cpu_model_clean()
+            data["ram_total_gb"] = round(psutil.virtual_memory().total / (1024**3), 2)
+    else:
+        data["cpu_model"] = get_cpu_model_clean()
+        data["ram_total_gb"] = round(psutil.virtual_memory().total / (1024**3), 2)
+
+    # 2. Usuários
+    if osq.is_available():
+        osq_users = osq.run_query("SELECT user, tty, host FROM logged_in_users;")
+        if osq_users is not None:
+            data["users"] = get_local_users_info() # Mantém AD/GPO manual mas limpa as sessões se quiser
+            # Sobrescreve sessões ativas com dados do Osquery (mais precisos)
+            data["users"]["active_sessions"] = []
+            for u in osq_users:
+                data["users"]["active_sessions"].append({
+                    "username": u.get("user"),
+                    "terminal": u.get("tty", "N/A"),
+                    "host": u.get("host", "local")
+                })
+        else:
+            data["users"] = get_local_users_info()
+    else:
+        data["users"] = get_local_users_info()
+
+    # 3. Informações de AD e GPO (Ainda WMI/PowerShell pois Osquery nativo tem limites aqui)
     data["ad_gpo"] = get_ad_gpo_info()
 
+    # 4. RAM e Performance
     mem = psutil.virtual_memory()
-    data["ram_total_gb"] = round(mem.total / (1024**3), 2)
     data["ram_available_gb"] = round(mem.available / (1024**3), 2)
     data["ram_used_gb"] = round((mem.total - mem.available) / (1024**3), 2)
     
     try: data["boot_time_timestamp"] = psutil.boot_time()
     except Exception: data["boot_time_timestamp"] = None
 
+    # 5. Discos
     disks_info = []
     try:
-        partitions = psutil.disk_partitions(all=False)
-        for p in partitions:
-            if 'cdrom' in p.opts or p.fstype == '' or 'removable' in p.opts: continue
-            try:
-                usage = psutil.disk_usage(p.mountpoint)
-                disks_info.append({
-                    "drive_mountpoint": p.mountpoint,
-                    "total_gb": round(usage.total / (1024**3), 2),
-                    "used_gb": round(usage.used / (1024**3), 2),
-                    "free_gb": round(usage.free / (1024**3), 2),
-                    "filesystem_type": p.fstype
-                })
-            except: pass
+        if osq.is_available():
+            osq_disks = osq.run_query("SELECT device_id as device, type, free_space as free, size as total FROM logical_drives;")
+            if osq_disks:
+                for d in osq_disks:
+                    total = int(d.get("total", 0))
+                    free = int(d.get("free", 0))
+                    if total > 0:
+                        disks_info.append({
+                            "drive_mountpoint": d.get("device"),
+                            "total_gb": round(total / (1024**3), 2),
+                            "used_gb": round((total - free) / (1024**3), 2),
+                            "free_gb": round(free / (1024**3), 2),
+                            "filesystem_type": d.get("type", "Unknown")
+                        })
+            
+            if not disks_info: # Fallback psutil
+                 partitions = psutil.disk_partitions(all=False)
+                 for p in partitions:
+                     if 'cdrom' in p.opts or p.fstype == '' or 'removable' in p.opts: continue
+                     try:
+                         usage = psutil.disk_usage(p.mountpoint)
+                         disks_info.append({
+                             "drive_mountpoint": p.mountpoint,
+                             "total_gb": round(usage.total / (1024**3), 2),
+                             "used_gb": round(usage.used / (1024**3), 2),
+                             "free_gb": round(usage.free / (1024**3), 2),
+                             "filesystem_type": p.fstype
+                         })
+                     except: pass
+        else:
+            partitions = psutil.disk_partitions(all=False)
+            for p in partitions:
+                if 'cdrom' in p.opts or p.fstype == '' or 'removable' in p.opts: continue
+                try:
+                    usage = psutil.disk_usage(p.mountpoint)
+                    disks_info.append({
+                        "drive_mountpoint": p.mountpoint,
+                        "total_gb": round(usage.total / (1024**3), 2),
+                        "used_gb": round(usage.used / (1024**3), 2),
+                        "free_gb": round(usage.free / (1024**3), 2),
+                        "filesystem_type": p.fstype
+                    })
+                except: pass
     except: pass
     data["disks"] = disks_info
 
-    network_interfaces_info = []
-    try:
-        interface_addresses = psutil.net_if_addrs()
-        interface_stats = psutil.net_if_stats()
-        for interface_name, snic_list in interface_addresses.items():
-            if interface_name in interface_stats and interface_stats[interface_name].isup and \
-               not (interface_name.lower().startswith('lo') or "loopback" in interface_name.lower() or "virtual" in interface_name.lower()):
-                current_interface_details = {"interface_name": interface_name, "ipv4_addresses": [], "ipv6_addresses": [], "mac_addresses": []}
-                has_relevant_ip = False
-                for snic in snic_list:
-                    if snic.family == socket.AF_INET and not snic.address.startswith("169.254.") and not snic.address.startswith("127."):
-                        current_interface_details["ipv4_addresses"].append({"ip_address": snic.address, "netmask": snic.netmask or "N/A"})
-                        has_relevant_ip = True
-                    elif snic.family == socket.AF_INET6 and not snic.address.lower().startswith("fe80:") and snic.address != "::1":
-                        current_interface_details["ipv6_addresses"].append({"ip_address": snic.address, "netmask": snic.netmask or "N/A"})
-                    elif snic.family == psutil.AF_LINK and snic.address and snic.address.lower() != "00:00:00:00:00:00":
-                        current_interface_details["mac_addresses"].append(snic.address.upper())
-                if has_relevant_ip or current_interface_details["ipv6_addresses"]:
-                    current_interface_details["mac_addresses"] = list(set(current_interface_details["mac_addresses"])) or ["N/A"]
-                    network_interfaces_info.append(current_interface_details)
-    except Exception as e:
-        log_event(f"Erro ao coletar rede: {e}", "WARNING")
-        
-    data["network_interfaces"] = network_interfaces_info
+    # 6. Redes
     data["primary_ip"] = get_primary_ip()
-    data["installed_software"] = get_installed_software()
+    if osq.is_available():
+        osq_net = osq.run_query("SELECT interface, address, mask FROM interface_addresses WHERE address != '' AND address NOT LIKE '127.%' AND address NOT LIKE 'fe80:%' AND address NOT LIKE '::1';")
+        if osq_net:
+            network_interfaces_info = []
+            for iface in osq_net:
+                network_interfaces_info.append({
+                    "interface_name": iface.get("interface"),
+                    "ipv4_addresses": [{"ip_address": iface.get("address"), "netmask": iface.get("mask")}],
+                    "mac_addresses": ["N/A"]
+                })
+            data["network_interfaces"] = network_interfaces_info
+        else:
+             data["network_interfaces"] = [] # psutil logic here if needed, but keeping simple
+    else:
+        # Fallback para a lógica pesada do psutil que já existia originalmente no inventário
+        network_interfaces_info = []
+        try:
+            interface_addresses = psutil.net_if_addrs()
+            interface_stats = psutil.net_if_stats()
+            for interface_name, snic_list in interface_addresses.items():
+                if interface_name in interface_stats and interface_stats[interface_name].isup and \
+                   not (interface_name.lower().startswith('lo') or "loopback" in interface_name.lower() or "virtual" in interface_name.lower()):
+                    current_interface_details = {"interface_name": interface_name, "ipv4_addresses": [], "ipv6_addresses": [], "mac_addresses": []}
+                    has_relevant_ip = False
+                    for snic in snic_list:
+                        if snic.family == socket.AF_INET and not snic.address.startswith("169.254.") and not snic.address.startswith("127."):
+                            current_interface_details["ipv4_addresses"].append({"ip_address": snic.address, "netmask": snic.netmask or "N/A"})
+                            has_relevant_ip = True
+                        elif snic.family == socket.AF_INET6 and not snic.address.lower().startswith("fe80:") and snic.address != "::1":
+                            current_interface_details["ipv6_addresses"].append({"ip_address": snic.address, "netmask": snic.netmask or "N/A"})
+                        elif snic.family == psutil.AF_LINK and snic.address and snic.address.lower() != "00:00:00:00:00:00":
+                            current_interface_details["mac_addresses"].append(snic.address.upper())
+                    if has_relevant_ip or current_interface_details["ipv6_addresses"]:
+                        current_interface_details["mac_addresses"] = list(set(current_interface_details["mac_addresses"])) or ["N/A"]
+                        network_interfaces_info.append(current_interface_details)
+        except: pass
+        data["network_interfaces"] = network_interfaces_info
+
+    # 7. Software e Segurança
+    if osq.is_available():
+        osq_sw = osq.run_query("SELECT name, version FROM programs LIMIT 1000;")
+        if osq_sw:
+            data["installed_software"] = [{"name": s.get("name"), "version": s.get("version")} for s in osq_sw]
+        else:
+            data["installed_software"] = get_installed_software()
+    else:
+        data["installed_software"] = get_installed_software()
+
     data["windows_updates"] = get_windows_updates()
     data["security"] = get_security_info()
     data["collection_timestamp"] = datetime.now().isoformat()

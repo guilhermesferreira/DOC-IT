@@ -7,6 +7,7 @@ from datetime import datetime
 import customtkinter as ctk
 import psutil
 import pystray
+import subprocess
 from PIL import Image, ImageDraw
 import win32api
 import win32con
@@ -234,6 +235,9 @@ class DocITDashboard(ctk.CTk):
         self.lbl_updater = ctk.CTkLabel(self.status_frame, text="Updater: Verificando...")
         self.lbl_updater.pack(anchor="w", padx=20, pady=5)
 
+        self.lbl_osquery = ctk.CTkLabel(self.status_frame, text="Osquery Engine: Verificando...")
+        self.lbl_osquery.pack(anchor="w", padx=20, pady=5)
+
         self.actions_frame = ctk.CTkFrame(self.tab_status)
         self.actions_frame.pack(side="right", fill="both", expand=True, padx=(5,0))
 
@@ -396,35 +400,26 @@ class DocITDashboard(ctk.CTk):
         inv_running = check_process_running("Doc-IT-Inventory.exe")
         updater_running = check_process_running("Doc-IT-Updater.exe")
         
-        # Coleta Versões
-        core_ver = get_file_version("Doc-IT-Core.exe") or "0.0.0"
-        remote_ver = get_file_version("Doc-IT-Remote.exe") or "0.0.0"
-        inv_ver = get_file_version("Doc-IT-Inventory.exe") or "0.0.0"
-        updater_ver = get_file_version("Doc-IT-Updater.exe") or "0.0.0"
-        
-        # Agora busca o config via IPC em vez de ler o .dat
-        new_config = request_config_from_core()
-        
-        if new_config:
-            self.config_data = new_config
-
-        new_gui_ver = get_local_gui_version()
-        if new_gui_ver != "0.0.0" and new_gui_ver != self.current_gui_version:
-            log_event(f"Auto-Restart da GUI devido a OTA Update ({self.current_gui_version} -> {new_gui_ver})...", "INFO")
-            import subprocess
-            if getattr(sys, 'frozen', False):
-                subprocess.Popen(["Doc-IT-GUI.exe", "--hide"], creationflags=subprocess.CREATE_NO_WINDOW)
+        # Busca versão do osquery via binário local
+        try:
+            exe_osq = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "bin", "osqueryi.exe")
+            if os.path.exists(exe_osq):
+                output = subprocess.check_output([exe_osq, "--version"], text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                parts = output.strip().split(" ")
+                osq_ver = parts[2] if len(parts) > 2 else parts[1]
             else:
-                subprocess.Popen([sys.executable, "Doc-IT-GUI.py", "--hide"], creationflags=subprocess.CREATE_NO_WINDOW)
-            os._exit(0)
+                osq_ver = "Não Instalado"
+        except:
+            osq_ver = "Erro"
 
-        self.after(0, self._apply_status_ui, core_running, remote_running, inv_running, updater_running, core_ver, remote_ver, inv_ver, updater_ver)
+        self.after(0, self._apply_status_ui, core_running, remote_running, inv_running, updater_running, core_ver, remote_ver, inv_ver, updater_ver, osq_ver)
 
-    def _apply_status_ui(self, core, remote, inv, updater, core_ver, remote_ver, inv_ver, updater_ver):
+    def _apply_status_ui(self, core, remote, inv, updater, core_ver, remote_ver, inv_ver, updater_ver, osq_ver):
         self.lbl_core.configure(text=f"Core Service: {'🟢 v' + core_ver if core else '🔴 Parado'}")
         self.lbl_remote.configure(text=f"Remote Desktop: {'🟢 v' + remote_ver if remote else '🔴 Parado'}")
         self.lbl_inventory.configure(text=f"Inventory: {'🟢 v' + inv_ver if inv else '🔴 Parado'}")
         self.lbl_updater.configure(text=f"Updater: {'🟢 v' + updater_ver if updater else '🔴 Parado'}")
+        self.lbl_osquery.configure(text=f"Osquery Engine: {'🟢 v' + osq_ver if osq_ver != 'Não Instalado' and osq_ver != 'Erro' else '🟡 ' + osq_ver}")
         
         # Atualiza a UI do Tamper se recebemos config
         if self.config_data:

@@ -44,7 +44,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.1.13"
+AGENT_VERSION = "2.1.17"
 
 # Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
 KEY_FILE = "Doc-IT.key"
@@ -430,12 +430,18 @@ def perform_core_check_in(config, inventory_payload=None):
     for url in server_urls:
         try:
             check_in_url = f"{url}/agent/check-in"
-            # Se a URL for um IP, desabilita a verificação de hostname para evitar SSLError mismatch, mas mantém mTLS
-            verify_ssl = ca_path
+            
+            # Se a URL for um IP ou se ca.crt não existir, desabilita a verificação de hostname do servidor
+            verify_ssl = ca_path if (ca_path and os.path.exists(ca_path)) else False
             is_ip = re.match(r"https?://\d+\.\d+\.\d+\.\d+", url)
             if is_ip: verify_ssl = False
             
-            response = requests.post(check_in_url, json=payload, timeout=10, cert=(cert_path, key_path), verify=verify_ssl)
+            # Garanta que estamos enviando os certificados se eles existirem
+            certs = None
+            if cert_path and key_path and os.path.exists(cert_path) and os.path.exists(key_path):
+                certs = (cert_path, key_path)
+
+            response = requests.post(check_in_url, json=payload, timeout=10, cert=certs, verify=verify_ssl)
             response.raise_for_status()
             
             # Sucesso! Persiste essa URL como a ativa
@@ -466,11 +472,11 @@ def perform_core_check_in(config, inventory_payload=None):
                 save_config(config)
             
             settings_url = f"{url}/settings/agent"
-            # Mesma lógica de bypass de hostname para IP
-            verify_ssl = ca_path
+            # Mesma lógica de bypass de hostname para IP ou falta de CA
+            verify_ssl = ca_path if (ca_path and os.path.exists(ca_path)) else False
             if re.match(r"https?://\d+\.\d+\.\d+\.\d+", url): verify_ssl = False
             
-            set_response = requests.get(settings_url, timeout=10, cert=(cert_path, key_path), verify=verify_ssl)
+            set_response = requests.get(settings_url, timeout=10, cert=certs, verify=verify_ssl)
             if set_response.status_code == 200:
                 log_event("Check-in periódico realizado com sucesso.", "INFO")
                 return True, set_response.json()
@@ -979,6 +985,69 @@ def handle_tamper_update(data):
             'status': 'success'
         })
         log_event("Sincronização de Tamper concluída e confirmada ao servidor.", "INFO")
+
+@sio.on('osquery:query')
+def handle_osquery_query(data):
+    """Executa uma query SQL solicitada pelo servidor via Osquery."""
+    global config
+    if data.get('agentId') != config.get('agent_id'): return
+    
+    sql = data.get('sql')
+    if not sql: return
+
+    log_event(f"Executando Live Query: {sql}", "INFO")
+    
+    try:
+        # Localiza o binário - Mudança para absoluto para evitar erro de path e usar caminho real do PyInstaller
+        base_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+        osquery_path = os.path.join(base_dir, "assets", "bin", "osqueryi.exe")
+        
+        if not os.path.exists(osquery_path):
+             sio.emit('osquery:results', {
+                'agentId': config.get('agent_id'),
+                'error': "Motor Osquery não encontrado no agente."
+            })
+             log_event("Falha Live Query: Binário osqueryi.exe ausente.", "ERROR")
+             return
+
+        # Executa com timeout para evitar travamentos
+        process = subprocess.Popen(
+            [osquery_path, "--json", sql],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        
+        try:
+            stdout, stderr = process.communicate(timeout=30)
+            if process.returncode == 0:
+                results = json.loads(stdout)
+                sio.emit('osquery:results', {
+                    'agentId': config.get('agent_id'),
+                    'results': results
+                })
+                log_event(f"Live Query executada com sucesso. {len(results)} linhas retornadas.", "INFO")
+            else:
+                sio.emit('osquery:results', {
+                    'agentId': config.get('agent_id'),
+                    'error': stderr.strip() or "Erro desconhecido na execução."
+                })
+                log_event(f"Erro na Live Query: {stderr}", "ERROR")
+        except subprocess.TimeoutExpired:
+            process.kill()
+            sio.emit('osquery:results', {
+                'agentId': config.get('agent_id'),
+                'error': "Timeout de 30s atingido na consulta."
+            })
+            log_event("Live Query interrompida por timeout.", "WARNING")
+
+    except Exception as e:
+        log_event(f"Falha interna ao processar Live Query: {e}", "ERROR")
+        sio.emit('osquery:results', {
+            'agentId': config.get('agent_id'),
+            'error': str(e)
+        })
 
 @sio.on('desktop:key_down')
 def proxy_key_down(data):

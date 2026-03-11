@@ -20,7 +20,8 @@ exports.getAgentSettings = async (req, res) => {
     // Retorna apenas os campos necessários pro Agente
     res.json({
       inventoryIntervalMinutes: settings.inventoryIntervalMinutes,
-      updateCheckIntervalMinutes: settings.updateCheckIntervalMinutes
+      updateCheckIntervalMinutes: settings.updateCheckIntervalMinutes,
+      selectedOsqueryVersion: settings.selectedOsqueryVersion
     });
   } catch (error) {
     console.error("Erro ao buscar configurações para o agente:", error);
