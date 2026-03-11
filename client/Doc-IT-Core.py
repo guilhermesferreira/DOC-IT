@@ -44,7 +44,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.1.7"
+AGENT_VERSION = "2.1.8"
 
 # Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
 KEY_FILE = "Doc-IT.key"
@@ -685,10 +685,21 @@ def ipc_local_server():
                 sa
             )
             
-            win32pipe.ConnectNamedPipe(pipe, None)
-            threading.Thread(target=handle_ipc_client, args=(pipe,), daemon=True).start()
+            try:
+                win32pipe.ConnectNamedPipe(pipe, None)
+                threading.Thread(target=handle_ipc_client, args=(pipe,), daemon=True).start()
+            except pywintypes.error as e:
+                if e.winerror == 535: # ERROR_PIPE_CONNECTED
+                    threading.Thread(target=handle_ipc_client, args=(pipe,), daemon=True).start()
+                elif e.winerror == 232: # ERROR_NO_DATA (Client disconnected before we could accept)
+                    win32file.CloseHandle(pipe)
+                else:
+                    log_event(f"Erro Conectando ao IPC (Named Pipe): {e}", "ERROR")
+                    try: win32file.CloseHandle(pipe)
+                    except: pass
+                    time.sleep(1)
         except Exception as e:
-            log_event(f"Erro no Servidor IPC (Named Pipe): {e}", "ERROR")
+            log_event(f"Erro Criando Servidor IPC (Named Pipe): {e}", "ERROR")
             try: win32file.CloseHandle(pipe)
             except: pass
             time.sleep(1)

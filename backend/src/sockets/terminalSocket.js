@@ -141,9 +141,14 @@ const { logAudit } = require('../services/auditService');
         });
     
         // Frame de video recebido do Agente (Python) -> Frontend (React)
-        socket.on('desktop:frame', ({ agentId, imageB64, width, height }) => {
+        socket.on('desktop:frame', ({ agentId, imageB64, width, height }, callback) => {
           // REPASSA APENAS PARA QUEM ESTÁ NA SALA DO AGENTE (Isolamento de Tráfego)
           io.to(`agent_data_${agentId}`).emit('desktop:frame', { agentId, imageB64, width, height });
+          
+          // Confirma o recebimento para destravar o ws_busy do python (Controle de Fluxo)
+          if (typeof callback === 'function') {
+              callback();
+          }
         });
 
         // Multi-Monitor Support

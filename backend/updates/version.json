@@ -1,10 +1,10 @@
 {
-    "version": "2.1.7",
+    "version": "2.1.8",
     "modules": {
         "core": {
-            "version": "2.1.7",
+            "version": "2.1.8",
             "file": "Doc-IT-Core.exe",
-            "hash": "be1b2eb16ef3ae3a0d4db24e1a4a4e39f5755f6c6405de3dffda8cabff37576a"
+            "hash": "3c72d1f6852915d1e7a050b837de5a20f0878b4e9ea4f766142553a9cde3e8c9"
         },
         "inventory": {
             "version": "2.0.11",
