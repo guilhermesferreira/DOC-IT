@@ -44,7 +44,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.1.4"
+AGENT_VERSION = "2.1.7"
 
 # Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
 KEY_FILE = "Doc-IT.key"
@@ -693,7 +693,15 @@ def ipc_local_server():
             except: pass
             time.sleep(1)
 
+# Controle de Fluxo WebSocket para não congestionar a rede do agente
+ws_busy = False
+
+def on_emit_done():
+    global ws_busy
+    ws_busy = False
+
 def handle_ipc_client(pipe):
+    global ws_busy
     try:
         # Buffer de leitura
         data = b""
@@ -715,82 +723,59 @@ def handle_ipc_client(pipe):
         
         if action == "inventory_ready":
             inv_data = payload.get("data")
-            log_event("Inventário recebido via IPC do submódulo Inventory! Repassando ao Backend...", "INFO")
+            log_event("Inventário recebido via IPC! Repassando ao Backend...", "INFO")
             perform_core_check_in(config, inventory_payload=inv_data)
         
         elif action == "get_config":
-            # A GUI ou outro módulo pede a configuração atual (que o Core tem permissão de ler)
             log_event("Submódulo solicitou configuração via IPC.", "DEBUG")
             response = {"status": "success", "config": config}
             win32file.WriteFile(pipe, json.dumps(response).encode('utf-8'))
 
-        elif action == "save_config":
-            # A GUI envia atualizações de configuração. O Core salva no Doc-IT.dat usando os privilégios SYSTEM
-            log_event("GUI enviou alterações na configuração via IPC.", "INFO")
+        elif action in ["save_config", "update_config"]:
+            log_event(f"Alteração de configuração via IPC ({action}).", "INFO")
             new_cfg = payload.get("config", {})
-            
-            # Limpa server_urls atuais exceto o localhost e injeta a nova principal
             current_port = "3000"
             for url in config.get("server_urls", []):
                 if url.startswith("https://localhost:") or url.startswith("http://localhost:"):
                     current_port = url.split(":")[-1]
                     break
-                    
             base_url = new_cfg.get("server_base_url")
             if base_url:
                 config["server_base_url"] = base_url
                 config["server_urls"] = [base_url, f"https://localhost:{current_port}"]
                 
             if "log_level" in new_cfg: config["log_level"] = new_cfg["log_level"]
-            
             if "update_check_interval_minutes" in new_cfg:
-                try:
-                    config["update_check_interval_minutes"] = int(new_cfg["update_check_interval_minutes"])
-                except:
-                    pass
-                 
-            save_config(config)
+                try: config["update_check_interval_minutes"] = int(new_cfg["update_check_interval_minutes"])
+                except: pass
             
+            save_config(config)
             response = {"status": "success"}
             win32file.WriteFile(pipe, json.dumps(response).encode('utf-8'))
 
         elif action == "restart_request":
-            log_event("O Sub-Updater ou GUI pediu reinicialização do Agente. Encerrando para gatilho de recuperação...", "WARNING")
-            
-            # Matamos os submódulos para não deixar processos órfãos
+            log_event("O Sub-Updater ou GUI pediu reinicialização do Agente.", "WARNING")
             for m_name, m_data in MODULES.items():
                 if m_data["process"]:
-                    try:
-                        log_event(f"Encerrando submódulo {m_name} para restart...", "DEBUG")
-                        m_data["process"].kill()
+                    try: m_data["process"].kill()
                     except: pass
-            
             cleanup_ghost_processes()
-            
-            # O SCM (Service Control Manager) está configurado no Setup.exe para reiniciar
-            # o serviço após 5 segundos se ele falhar (reset=0, actions=restart/5000).
-            # Sair com os._exit(1) é interpretado como falha do processo, acionando o gatilho.
-            log_event("Core finalizado. SCM deve reiniciar o serviço em 5 segundos.", "WARNING")
-            
-            # Flush final e soltar hooks NTFS das chaves de criptografia DPAPI para o restart sujo não dar conflito
             time.sleep(1)
             try: win32file.CloseHandle(pipe)
             except: pass
-            
             os._exit(1)
-            
-        # ========================================================
-        # Relays: Sub-Módulo Remote -> Core -> Node.js (WebSocket)
-        # ========================================================
+
         elif action == "desktop_frame":
-            # O módulo remoto zipou um JPG em um Base64 gigante, joga no socket em tempo real
+            # Flow Control: Só envia se o WebSocket não estiver ocupado
+            if ws_busy: return
             if 'sio' in globals() and sio.connected:
+                ws_busy = True
                 sio.emit('desktop:frame', {
                     'agentId': config.get("agent_id"),
                     'imageB64': payload["data"]["imageB64"],
                     'width': payload["data"]["width"],
                     'height': payload["data"]["height"]
-                })
+                }, callback=on_emit_done)
                 
         elif action == "terminal_output":
             if 'sio' in globals() and sio.connected:
@@ -809,7 +794,8 @@ def handle_ipc_client(pipe):
     except Exception as e:
         log_event(f"Erro mapeando payload IPC local: {e}", "ERROR")
     finally:
-        win32file.CloseHandle(pipe)
+        try: win32file.CloseHandle(pipe)
+        except: pass
 
 
 def send_ipc_command(module_name, payload):

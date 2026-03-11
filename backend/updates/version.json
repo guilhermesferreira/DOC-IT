@@ -1,10 +1,10 @@
 {
-    "version": "2.1.4",
+    "version": "2.1.7",
     "modules": {
         "core": {
-            "version": "2.1.4",
+            "version": "2.1.7",
             "file": "Doc-IT-Core.exe",
-            "hash": "cea5e052f75dd7b7ad00584955228ef5975997ee8c39b7806db6eecc23752b45"
+            "hash": "be1b2eb16ef3ae3a0d4db24e1a4a4e39f5755f6c6405de3dffda8cabff37576a"
         },
         "inventory": {
             "version": "2.0.11",
@@ -12,9 +12,9 @@
             "hash": "869d91ac6272bcb01e1ef591ddb2a4c3ac0b9a6a2ab45f3174e8a7d8967ddd0f"
         },
         "remote": {
-            "version": "2.0.14",
+            "version": "2.0.15",
             "file": "Doc-IT-Remote.exe",
-            "hash": "7368b6b862d5823197e60c567c482e1ffad0e8c2ce90f71f0cc8ab5cf112e27f"
+            "hash": "424fcc4d69e14dca0c058cb5ce774ce4607ee3aae12861af6c94e17347d0c3f9"
         },
         "updater": {
             "version": "2.0.36",

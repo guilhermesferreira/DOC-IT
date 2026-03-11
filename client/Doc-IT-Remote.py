@@ -37,7 +37,7 @@ MY_IPC_PIPE = r'\\.\pipe\DocIT_Remote_IPC'
 IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 
 LOG_FILE = "agent-remote.log"
-AGENT_VERSION = "2.0.14"
+AGENT_VERSION = "2.0.15"
 
 config = {}
 
@@ -95,14 +95,20 @@ if len(sys.argv) >= 3 and sys.argv[1] == "--osd":
 # =========================================================
 
 def push_to_core(action, data):
-    """Envia um payload de resposta (ex: um frame jpg ou texto do cmd) de volta pro Core via TCP IPC"""
+    """Envia um payload de resposta de volta pro Core via TCP IPC"""
     try:
         payload = {
             "action": action,
             "data": data,
-            "token": IPC_TOKEN # Envia o token para o Core validar
+            "token": IPC_TOKEN
         }
         
+        # Se for um frame, tenta esperar pouco. Se falhar, pula o frame (Frame Skipping)
+        try:
+             win32pipe.WaitNamedPipe(CORE_IPC_PIPE, 50)
+        except:
+             return False # Core ocupado, aborta push (pula frame)
+
         handle = win32file.CreateFile(
             CORE_IPC_PIPE,
             win32file.GENERIC_READ | win32file.GENERIC_WRITE,
@@ -113,22 +119,22 @@ def push_to_core(action, data):
         win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
         win32file.WriteFile(handle, json.dumps(payload).encode('utf-8'))
         win32file.CloseHandle(handle)
-        
+        return True
     except Exception:
-        pass
+        return False
     finally:
         try: win32file.CloseHandle(handle)
         except: pass
 
 def stream_screen(monitor_idx, quality_profile, stream_id):
-    """Laço infinito de captura de tela"""
+    """Laço infinito de captura de tela com Frame Skipping"""
     global desktop_streaming
     
-    # Resolvendo resoluções dinamicamente
-    if quality_profile == 'low': max_w, max_h = 854, 480; jpeg_quality = 30; sleep_time = 0.1
-    elif quality_profile == 'high': max_w, max_h = 1920, 1080; jpeg_quality = 60; sleep_time = 0.05
-    elif quality_profile == 'ultra': max_w, max_h = 3840, 2160; jpeg_quality = 80; sleep_time = 0.033
-    else: max_w, max_h = 1280, 720; jpeg_quality = 40; sleep_time = 0.066
+    # Perfil de qualidade refinado para performance
+    if quality_profile == 'low': max_w, max_h = 854, 480; jpeg_quality = 30; sleep_time = 0.03
+    elif quality_profile == 'high': max_w, max_h = 1600, 900; jpeg_quality = 50; sleep_time = 0.01
+    elif quality_profile == 'ultra': max_w, max_h = 1920, 1080; jpeg_quality = 70; sleep_time = 0.01
+    else: max_w, max_h = 1280, 720; jpeg_quality = 40; sleep_time = 0.02
 
     try:
         with mss.mss() as sct:
@@ -141,19 +147,24 @@ def stream_screen(monitor_idx, quality_profile, stream_id):
                     img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
                     
                     if img.width > max_w or img.height > max_h:
-                        img.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
+                        img.thumbnail((max_w, max_h), Image.Resampling.BILINEAR) # Mais rápido q Lanczos
                     
                     buffer = io.BytesIO()
                     img.save(buffer, format="JPEG", quality=jpeg_quality)
                     b64_img = base64.b64encode(buffer.getvalue()).decode('utf-8')
                     
-                    # Push de frame pro Orquestrador (Core)
-                    push_to_core("desktop_frame", {
+                    # Push de frame pro Orquestrador (Core) com FRAME SKIPPING
+                    success = push_to_core("desktop_frame", {
                         "imageB64": b64_img,
                         "width": img.width,
                         "height": img.height
                     })
                     
+                    # Se o pipe estava ocupado, descansa um pouco antes da próxima tentativa
+                    if not success:
+                        time.sleep(0.05)
+                        continue
+
                     time.sleep(sleep_time)
                 except Exception as e:
                      log_event(f"Erro capturando tela: {e}", "ERROR")

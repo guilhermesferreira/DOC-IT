@@ -111,49 +111,48 @@ const { logAudit } = require('../services/auditService');
         // Start/Stop requests
         socket.on('desktop:start', ({ agentId, monitorIndex, quality, invisible_mode }) => {
           const viewerName = socket.user?.username || 'Administrador';
-          console.log(`[Socket] Frontend (${viewerName}) solicitou iniciar Remote Desktop para Agente: ${agentId} no monitor ${monitorIndex || 1} com qualidade: ${quality || 'medium'} (Stealth: ${invisible_mode})`);
+          console.log(`[Socket] Frontend (${viewerName}) solicitou iniciar Remote Desktop para Agente: ${agentId} no monitor ${monitorIndex || 1}`);
           
-          // Adiciona o socket à lista de visualizadores deste agente
+          // O Admin (Browser) entra na sala exclusiva desse agente para receber frames de vídeo isolados
+          socket.join(`agent_data_${agentId}`);
+          
           if (!desktopViewers.has(agentId)) {
             desktopViewers.set(agentId, new Set());
           }
           desktopViewers.get(agentId).add(socket.id);
           
-          // Sempre repassa o start pro agente (anexando quem é o visualizador e a flag stealth)
           io.emit('desktop:start', { agentId, monitorIndex, quality, invisible_mode, viewer: viewerName });
         });
     
         socket.on('desktop:stop', ({ agentId }) => {
-          console.log(`[Socket] Frontend (${socket.user?.username}) solicitou parar Remote Desktop para Agente: ${agentId}`);
+          console.log(`[Socket] Frontend (${socket.user?.username}) saindo do Remote Desktop de: ${agentId}`);
           
-          // Remove o socket da lista de visualizadores
+          socket.leave(`agent_data_${agentId}`);
+
           const viewers = desktopViewers.get(agentId);
           if (viewers) {
             viewers.delete(socket.id);
-            // Se foi o último visualizador a sair, manda parar a thread no Agente
             if (viewers.size === 0) {
-                console.log(`[Socket] Nenhum visualizador restante para o Agente ${agentId}. Desligando thread de captura.`);
+                console.log(`[Socket] Nenhum visualizador para o Agente ${agentId}. Desligando streaming.`);
                 io.emit('desktop:stop', { agentId });
                 desktopViewers.delete(agentId);
             }
           }
         });
     
+        // Frame de video recebido do Agente (Python) -> Frontend (React)
+        socket.on('desktop:frame', ({ agentId, imageB64, width, height }) => {
+          // REPASSA APENAS PARA QUEM ESTÁ NA SALA DO AGENTE (Isolamento de Tráfego)
+          io.to(`agent_data_${agentId}`).emit('desktop:frame', { agentId, imageB64, width, height });
+        });
+
         // Multi-Monitor Support
         socket.on('desktop:get_monitors', ({ agentId }) => {
           io.emit('desktop:get_monitors', { agentId });
         });
     
         socket.on('desktop:monitor_list', ({ agentId, monitors }) => {
-          // Repassa a lista APENAS pro frontend (React), não reflete nos agentes.
-          // O broadcast normal tá bom por que só a tab React que emitiu ta processando.
           io.emit('desktop:monitor_list', { agentId, monitors });
-        });
-    
-        // Frame de video recebido do Agente (Python) -> Frontend (React)
-        socket.on('desktop:frame', ({ agentId, imageB64, width, height }) => {
-          // Repassa o frame pra todo mundo (o Isolamento acontece no Frontend agora)
-          io.emit('desktop:frame', { agentId, imageB64, width, height });
         });
     
         // Confirmação de parada vindo do Agente
