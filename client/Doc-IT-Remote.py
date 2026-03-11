@@ -37,7 +37,7 @@ MY_IPC_PIPE = r'\\.\pipe\DocIT_Remote_IPC'
 IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 
 LOG_FILE = "agent-remote.log"
-AGENT_VERSION = "2.0.13"
+AGENT_VERSION = "2.0.14"
 
 config = {}
 
@@ -310,37 +310,41 @@ def ipc_listener_loop():
                 MY_IPC_PIPE,
                 win32pipe.PIPE_ACCESS_DUPLEX,
                 win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT,
-                1, 65536, 65536,
+                255, 65536, 65536,
                 0,
                 sa
             )
             
             win32pipe.ConnectNamedPipe(pipe, None)
-            
-            # Leitura do comando do Core
-            data = b""
-            while True:
-                resp, chunk = win32file.ReadFile(pipe, 4096)
-                data += chunk
-                if resp == 0: break
-            
-            payload = json.loads(data.decode('utf-8'))
-            
-            # VALIDAÇÃO DO TOKEN
-            if payload.get("token") == IPC_TOKEN:
-                execute_ipc_command(payload)
-            else:
-                log_event("BLOQUEADO: Tentativa de controle remoto sem token válido.", "WARNING")
-                
-            win32file.CloseHandle(pipe)
+            threading.Thread(target=handle_remote_ipc_client, args=(pipe,), daemon=True).start()
         except Exception as e:
             log_event(f"Erro no Listener IPC (Remote Pipe): {e}", "ERROR")
             try: win32file.CloseHandle(pipe)
             except: pass
             time.sleep(1)
-        finally:
-            try: win32file.CloseHandle(pipe)
-            except: pass
+
+def handle_remote_ipc_client(pipe):
+    try:
+        # Leitura do comando do Core
+        data = b""
+        while True:
+            resp, chunk = win32file.ReadFile(pipe, 4096)
+            data += chunk
+            if resp == 0: break
+        
+        payload = json.loads(data.decode('utf-8'))
+        
+        # VALIDAÇÃO DO TOKEN
+        if payload.get("token") == IPC_TOKEN:
+            execute_ipc_command(payload)
+        else:
+            log_event("BLOQUEADO: Tentativa de controle remoto sem token válido.", "WARNING")
+            
+    except Exception as e:
+        log_event(f"Erro processando cliente IPC no Remote: {e}", "ERROR")
+    finally:
+        try: win32file.CloseHandle(pipe)
+        except: pass
 
 # =========================================================
 # MAIN ENTRYPOINT

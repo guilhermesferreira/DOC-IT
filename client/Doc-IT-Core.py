@@ -44,7 +44,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.1.3"
+AGENT_VERSION = "2.1.4"
 
 # Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
 KEY_FILE = "Doc-IT.key"
@@ -813,31 +813,43 @@ def handle_ipc_client(pipe):
 
 
 def send_ipc_command(module_name, payload):
-    """Envia um comando via Named Pipe para um submódulo."""
+    """Envia um comando via Named Pipe para um submódulo com lógica de retry."""
     pipe_path = None
     if module_name == "remote": pipe_path = r"\\.\pipe\DocIT_Remote_IPC"
-    # Adicionar outros se necessário
     
     if not pipe_path: return
     
-    payload["token"] = IPC_TOKEN # Inclui o token para que o módulo valide o Core
+    payload["token"] = IPC_TOKEN
 
-    try:
-        handle = win32file.CreateFile(
-            pipe_path,
-            win32file.GENERIC_READ | win32file.GENERIC_WRITE,
-            0, None,
-            win32file.OPEN_EXISTING,
-            0, None
-        )
-        win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
-        win32file.WriteFile(handle, json.dumps(payload).encode('utf-8'))
-        win32file.CloseHandle(handle)
-    except pywintypes.error as e:
-         log_event(f"Falha ao enviar IPC para o submódulo '{module_name}' via Pipe {pipe_path}: {e}", "WARNING")
-    finally:
-         try: win32file.CloseHandle(handle)
-         except: pass
+    # Tenta até 3 vezes em caso de colisão
+    for i in range(3):
+        try:
+            # Se o pipe estiver ocupado, espera até 500ms
+            try:
+                win32pipe.WaitNamedPipe(pipe_path, 500)
+            except:
+                pass
+
+            handle = win32file.CreateFile(
+                pipe_path,
+                win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+                0, None,
+                win32file.OPEN_EXISTING,
+                0, None
+            )
+            win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
+            win32file.WriteFile(handle, json.dumps(payload).encode('utf-8'))
+            win32file.CloseHandle(handle)
+            return True # Sucesso!
+        except pywintypes.error as e:
+            if e.winerror == 231: # Pipe is busy
+                time.sleep(0.1)
+                continue
+            log_event(f"Falha ao enviar IPC para o submódulo '{module_name}' (Tentativa {i+1}): {e}", "WARNING")
+        finally:
+            try: win32file.CloseHandle(handle)
+            except: pass
+    return False
 
 
 # --- Websocket (Conector Mestre de Comandos de Tela/Terminal) ---
