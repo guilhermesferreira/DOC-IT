@@ -44,7 +44,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.1.2"
+AGENT_VERSION = "2.1.3"
 
 # Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
 KEY_FILE = "Doc-IT.key"
@@ -68,7 +68,7 @@ def init_cipher():
             except: pass
             cipher_suite = Fernet(new_key)
     except Exception as e:
-        log_event(f"Erro Fatal Inicializando DPAPI Key: {e}", "CRITICAL")
+        log_event(f"Erro Fatal Inicializando DPAPI Key: {e}. Verifique se o serviço tem permissões adequadas na fresta do DPAPI (contexto SYSTEM).", "CRITICAL")
         sys.exit(1)
 
 # Token de Autenticação IPC (Gerado Dinamicamente para cada Inicialização)
@@ -414,7 +414,11 @@ def perform_core_check_in(config, inventory_payload=None):
     ca_path = config.get("ca_path")
 
     # Verifica os certificados. Se faltarem a Private Key ou Agent Cert, executa o Enrollment dinamicamente.
-    # O CA deve estar sempre presente via instalador base.
+    # O CA deve estar sempre presente via instalador base e ter ACL de leitura.
+    if os.path.exists(ca_path):
+        try: apply_strict_acl(ca_path) # Garante que SYSTEM/Admins tenham controle, garantindo leitura
+        except: pass
+        
     if not (os.path.exists(cert_path) and os.path.exists(key_path)):
         if not enroll_agent(config, payload):
             log_event("Certificados mTLS ausentes e Enrollment falhou. Check-in abortado.", "ERROR")

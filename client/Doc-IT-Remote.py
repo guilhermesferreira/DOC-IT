@@ -37,7 +37,7 @@ MY_IPC_PIPE = r'\\.\pipe\DocIT_Remote_IPC'
 IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 
 LOG_FILE = "agent-remote.log"
-AGENT_VERSION = "2.0.12"
+AGENT_VERSION = "2.0.13"
 
 config = {}
 
@@ -329,6 +329,7 @@ def ipc_listener_loop():
             # VALIDAÇÃO DO TOKEN
             if payload.get("token") == IPC_TOKEN:
                 execute_ipc_command(payload)
+            else:
                 log_event("BLOQUEADO: Tentativa de controle remoto sem token válido.", "WARNING")
                 
             win32file.CloseHandle(pipe)
