@@ -12,7 +12,8 @@ import {
     Download,
     Trash2,
     Table as TableIcon,
-    BookOpen
+    BookOpen,
+    Settings2
 } from 'lucide-react';
 import './OsqueryConsole.css';
 
@@ -192,8 +193,9 @@ const OsqueryConsole = () => {
                                 Modelos Prontos (Windows)
                             </label>
                             {isAuthorizedToManage && (
-                                <button className="osq-btn-manage" onClick={() => setIsModalOpen(true)}>
-                                    Gerenciar
+                                <button className="osq-btn-manage" onClick={() => setIsModalOpen(true)} title="Gerenciar Modelos">
+                                    <Settings2 size={14} />
+                                    <span>Gerenciar</span>
                                 </button>
                             )}
                         </div>

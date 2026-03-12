@@ -543,19 +543,31 @@
 }
 
 .osq-btn-manage {
-    background: transparent;
-    border: 1px solid #373a40;
-    color: #4dabf7;
-    padding: 2px 8px;
-    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    padding: 6px 12px;
+    border-radius: 8px;
     font-size: 0.75rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(4px);
 }
 
 .osq-btn-manage:hover {
-    background: rgba(77, 171, 247, 0.1);
-    border-color: #4dabf7;
+    background: rgba(99, 102, 241, 0.2);
+    border-color: rgba(99, 102, 241, 0.4);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
+}
+
+.osq-btn-manage:active {
+    transform: translateY(0);
 }
 
 .osq-templates-list {

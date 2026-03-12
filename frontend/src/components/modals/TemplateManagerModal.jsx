@@ -1,7 +1,7 @@
 // src/components/modals/TemplateManagerModal.jsx
 import React, { useState, useEffect } from 'react';
 import API from '../../api/api';
-import { X, Plus, Trash2, Edit2, Save, Terminal } from 'lucide-react';
+import { X, Plus, Trash2, Edit2, Save, Terminal, BookOpen, Table as TableIcon } from 'lucide-react';
 import './TemplateManagerModal.css';
 
 const TemplateManagerModal = ({ isOpen, onClose, onUpdate }) => {
@@ -78,27 +78,38 @@ const TemplateManagerModal = ({ isOpen, onClose, onUpdate }) => {
                 <div className="tm-modal-body">
                     {/* Formulário */}
                     <div className="tm-form-panel">
-                        <h4>{editingId ? 'Editar Modelo' : 'Novo Modelo'}</h4>
-                        <div className="tm-form-group">
-                            <label>Título</label>
-                            <input
-                                type="text"
-                                value={formData.title}
-                                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                placeholder="Ex: Informações da CPU"
-                            />
+                        <div className="tm-panel-header">
+                            <Plus size={16} />
+                            <h4>{editingId ? 'Editar Modelo' : 'Novo Modelo'}</h4>
                         </div>
                         <div className="tm-form-group">
-                            <label>Consulta SQL</label>
-                            <textarea
-                                value={formData.sql}
-                                onChange={(e) => setFormData({ ...formData, sql: e.target.value })}
-                                placeholder="SELECT * FROM ..."
-                            />
+                            <label>Título do Modelo</label>
+                            <div className="tm-input-wrapper">
+                                <BookOpen size={16} className="tm-input-icon" />
+                                <input
+                                    type="text"
+                                    value={formData.title}
+                                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                    placeholder="Ex: Informações da CPU"
+                                />
+                            </div>
                         </div>
                         <div className="tm-form-group">
-                            <label>Descrição</label>
+                            <label>Consulta SQL Osquery</label>
+                            <div className="tm-textarea-wrapper">
+                                <Terminal size={16} className="tm-textarea-icon" />
+                                <textarea
+                                    value={formData.sql}
+                                    onChange={(e) => setFormData({ ...formData, sql: e.target.value })}
+                                    placeholder="SELECT * FROM ..."
+                                    spellCheck="false"
+                                />
+                            </div>
+                        </div>
+                        <div className="tm-form-group">
+                            <label>Descrição Auxiliar</label>
                             <input
+                                className="tm-simple-input"
                                 type="text"
                                 value={formData.description}
                                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -113,30 +124,49 @@ const TemplateManagerModal = ({ isOpen, onClose, onUpdate }) => {
                             )}
                             <button className="tm-btn-primary" onClick={handleSave}>
                                 <Save size={16} />
-                                {editingId ? 'Atualizar' : 'Salvar'}
+                                <span>{editingId ? 'Atualizar' : 'Salvar Modelo'}</span>
                             </button>
                         </div>
                     </div>
 
                     {/* Lista */}
                     <div className="tm-list-panel">
-                        <h4>Modelos Cadastrados</h4>
+                        <div className="tm-panel-header">
+                            <TableIcon size={16} />
+                            <h4>Modelos Cadastrados</h4>
+                        </div>
                         {loading ? (
-                            <div className="tm-loading">Carregando...</div>
+                            <div className="tm-loading">
+                                <div className="tm-spinner"></div>
+                                <span>Carregando modelos...</span>
+                            </div>
                         ) : (
-                            <div className="tm-items-list">
-                                {templates.map(tpl => (
-                                    <div key={tpl.id} className="tm-item">
-                                        <div className="tm-item-info">
-                                            <span className="tm-item-title">{tpl.title}</span>
-                                            <span className="tm-item-sql">{tpl.sql}</span>
+                            <div className="tm-items-list-wrapper">
+                                <div className="tm-items-list">
+                                    {templates.map(tpl => (
+                                        <div key={tpl.id} className="tm-item">
+                                            <div className="tm-item-content">
+                                                <div className="tm-item-main">
+                                                    <span className="tm-item-title">{tpl.title}</span>
+                                                    <div className="tm-item-actions">
+                                                        <button onClick={() => startEdit(tpl)} title="Editar"><Edit2 size={14} /></button>
+                                                        <button onClick={() => handleDelete(tpl.id)} className="danger" title="Excluir"><Trash2 size={14} /></button>
+                                                    </div>
+                                                </div>
+                                                <div className="tm-item-sql-box">
+                                                    <code>{tpl.sql}</code>
+                                                </div>
+                                                {tpl.description && <p className="tm-item-description">{tpl.description}</p>}
+                                            </div>
                                         </div>
-                                        <div className="tm-item-actions">
-                                            <button onClick={() => startEdit(tpl)} title="Editar"><Edit2 size={14} /></button>
-                                            <button onClick={() => handleDelete(tpl.id)} className="danger" title="Excluir"><Trash2 size={14} /></button>
+                                    ))}
+                                    {templates.length === 0 && (
+                                        <div className="tm-empty-state">
+                                            <Terminal size={32} />
+                                            <p>Nenhum modelo cadastrado.</p>
                                         </div>
-                                    </div>
-                                ))}
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>

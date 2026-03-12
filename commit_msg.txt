@@ -1,9 +1,0 @@
-✨ feat(api/ui): integrar instalador no frontend e incluir certificados no bundle
-
-Atualiza a rota de download do backend para gerar um pacote ZIP contendo:
-- O novo instalador nativo (Doc-IT-Setup.exe)
-- A pasta 'certs/' com o trio de certificados mTLS (ca, agent.crt, agent.key)
-- O config.json apontando para o servidor
-
-Também atualiza o componente AgentDownloadView no frontend para refletir 
-o novo fluxo de instalação guiada, detalhando corretamente o conteúdo do pacote.
