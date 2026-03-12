@@ -11,6 +11,7 @@ async function seedGroups() {
       update: {
         canViewAuditLogs: true,
         canViewAuditSettings: true,
+        canManageTemplates: true,
       },
       create: {
         name: 'SuperAdministrator',
@@ -30,6 +31,7 @@ async function seedGroups() {
         canEditSettings: true,
         canViewAuditLogs: true,
         canViewAuditSettings: true,
+        canManageTemplates: true,
       }
     });
     console.log(`[Seed] Grupo '${superAdmin.name}' verificado/criado.`);

@@ -41,8 +41,20 @@ model UserGroup {
   canViewAuditSettings Boolean @default(false)
   canEditAuditSettings Boolean @default(false)
 
+  // Permissões: Módulo Osquery Templates
+  canManageTemplates Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model OsqueryTemplate {
+  id          Int      @id @default(autoincrement())
+  title       String
+  sql         String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model User {

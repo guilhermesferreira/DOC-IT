@@ -531,6 +531,33 @@
 }
 
 /* Templates List */
+.osq-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.osq-panel-header .osq-label {
+    margin-bottom: 0;
+}
+
+.osq-btn-manage {
+    background: transparent;
+    border: 1px solid #373a40;
+    color: #4dabf7;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.osq-btn-manage:hover {
+    background: rgba(77, 171, 247, 0.1);
+    border-color: #4dabf7;
+}
+
 .osq-templates-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

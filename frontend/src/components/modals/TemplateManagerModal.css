@@ -1,0 +1,231 @@
+/* src/components/modals/TemplateManagerModal.css */
+.tm-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.tm-modal-container {
+    background: #1a1b1e;
+    border: 1px solid #2c2e33;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 900px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.tm-modal-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #2c2e33;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tm-header-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #e9ecef;
+}
+
+.tm-header-title h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.tm-close-btn {
+    background: transparent;
+    border: none;
+    color: #909296;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.tm-close-btn:hover {
+    background: #2c2e33;
+    color: #fff;
+}
+
+.tm-modal-body {
+    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 2rem;
+    overflow-y: auto;
+}
+
+.tm-form-panel h4,
+.tm-list-panel h4 {
+    margin: 0 0 1rem 0;
+    color: #adb5bd;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.tm-form-group {
+    margin-bottom: 1rem;
+}
+
+.tm-form-group label {
+    display: block;
+    margin-bottom: 0.4rem;
+    color: #ced4da;
+    font-size: 0.85rem;
+}
+
+.tm-form-group input,
+.tm-form-group textarea {
+    width: 100%;
+    background: #25262b;
+    border: 1px solid #373a40;
+    border-radius: 6px;
+    padding: 0.6rem;
+    color: #fff;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.tm-form-group input:focus,
+.tm-form-group textarea:focus {
+    border-color: #4dabf7;
+}
+
+.tm-form-group textarea {
+    height: 100px;
+    resize: none;
+    font-family: 'Fira Code', monospace;
+}
+
+.tm-form-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+}
+
+.tm-btn-primary {
+    background: #228be6;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.6rem 1.25rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tm-btn-primary:hover {
+    background: #1c7ed6;
+}
+
+.tm-btn-secondary {
+    background: transparent;
+    color: #adb5bd;
+    border: 1px solid #373a40;
+    border-radius: 6px;
+    padding: 0.6rem 1.25rem;
+    cursor: pointer;
+}
+
+.tm-btn-secondary:hover {
+    background: #2c2e33;
+}
+
+.tm-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.tm-item {
+    background: #25262b;
+    border: 1px solid #2c2e33;
+    border-radius: 8px;
+    padding: 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.2s;
+}
+
+.tm-item:hover {
+    background: #2c2e33;
+}
+
+.tm-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    overflow: hidden;
+}
+
+.tm-item-title {
+    color: #e9ecef;
+    font-weight: 500;
+    font-size: 0.95rem;
+}
+
+.tm-item-sql {
+    color: #909296;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: monospace;
+}
+
+.tm-item-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.tm-item-actions button {
+    background: #373a40;
+    border: none;
+    color: #adb5bd;
+    padding: 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tm-item-actions button:hover {
+    background: #4dabf7;
+    color: #fff;
+}
+
+.tm-item-actions button.danger:hover {
+    background: #fa5252;
+}
+
+.tm-loading {
+    padding: 2rem;
+    text-align: center;
+    color: #909296;
+}
+
+@media (max-width: 768px) {
+    .tm-modal-body {
+        grid-template-columns: 1fr;
+    }
+}
