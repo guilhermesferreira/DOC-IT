@@ -21,14 +21,14 @@ try:
 except ImportError:
     pass
 
-# --- Configurações IPC ---
+# --- Configurações IPC ----
 CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 
 # Determina o diretório base do executável ou script
 BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
 
 LOG_FILE = os.path.join(BASE_DIR, "agent-inventory.log")
-AGENT_VERSION = "2.2.0"
+AGENT_VERSION = "2.3.0"
 
 def log_event(message, level="INFO"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

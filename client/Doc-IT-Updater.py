@@ -29,7 +29,7 @@ CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 
 # Token de Autenticação (Lido da Variável de Ambiente em segurança)
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.2.0"
+AGENT_VERSION = "2.3.0"
 
 config = {}
 

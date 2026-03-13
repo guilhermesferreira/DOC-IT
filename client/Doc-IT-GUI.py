@@ -19,11 +19,11 @@ import win32pipe
 import win32file
 import pywintypes
 
-# --- Constantes IPC ---
+# --- Constantes IPC ----
 CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 
 # Versão do Módulo GUI
-GUI_VERSION = "2.2.0"
+GUI_VERSION = "2.3.0"
 LOG_FILE = "agent-gui.log"
 
 def log_event(message, level="INFO"):

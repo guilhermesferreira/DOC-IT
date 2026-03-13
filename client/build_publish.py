@@ -163,7 +163,15 @@ def process_modules():
         dist_exe_path = os.path.join("dist", src.replace(".py", ".exe"))
         
         # O módulo precisa ser compilado se o hash do fonte mudou OU se o .exe não existir na pasta dist
-        needs_build = (current_src_hash != cached_src_hash) or not os.path.exists(dist_exe_path)
+        force_build = "--force" in sys.argv
+        # FORÇAR REBUILD v2.3.0 se --force for passado ou se houve mudanças
+        needs_build = force_build or (current_src_hash != cached_src_hash) or not os.path.exists(dist_exe_path)
+        
+        # Caminho absoluto para o ícone para evitar falhas silenciosas
+        abs_icon_path = os.path.abspath("assets/icon.ico")
+        
+        # Caminho absoluto para o ícone para evitar falhas silenciosas v2.2.1
+        abs_icon_path = os.path.abspath("assets/icon.ico")
         
         mod_manifest_info = manifest.get("modules", {}).get(mod_key, {})
         current_version = mod_manifest_info.get("version", "2.0.0")
@@ -182,6 +190,9 @@ def process_modules():
             
             # Compila via Pyinstaller
             cmd = ["pyinstaller", "--onefile", "--clean", "--noconfirm", "--noupx", "--version-file=version_info.txt"]
+            if os.path.exists(abs_icon_path):
+                cmd.append(f"--icon={abs_icon_path}")
+            
             if mod_key == "core":
                 cmd.append("--hidden-import=win32timezone")
             if mod_key != "core": cmd.append("--noconsole") 
@@ -189,9 +200,9 @@ def process_modules():
             sep = ";" if os.name == "nt" else ":"
             if mod_key == "gui":
                 cmd.append(f"--add-data=assets{sep}assets")
-                cmd.append("--icon=assets/icon.ico")
                 
             cmd.append(src)
+
             print(f"Executando: {' '.join(cmd)}")
             subprocess.run(cmd, check=True)
             
@@ -369,6 +380,7 @@ def copy_certs_to_dist():
 def build_installer():
     print("\n--- Empacotando Instalador GUI Nativo (Doc-IT-Setup.exe) ---")
     sep = ";" if os.name == "nt" else ":"
+    abs_icon_path = os.path.abspath("assets/icon.ico")
     cmd = [
         "pyinstaller", "--onefile", "--clean", "--noconfirm", "--noconsole", "--noupx",
         f"--add-data=dist/Doc-IT-Core.exe{sep}.",
@@ -379,7 +391,7 @@ def build_installer():
         f"--add-data=dist/config.json{sep}.",
         f"--add-data=dist/certs{sep}certs",
         f"--add-data=assets{sep}assets",
-        "--icon=assets/icon.ico",
+        f"--icon={abs_icon_path}",
         "Doc-IT-Setup.py"
     ]
     subprocess.run(cmd, check=True)

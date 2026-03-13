@@ -45,7 +45,7 @@ def get_pipe_client_exe(pipe_handle):
         return None
 
 LOG_FILE = "agent-remote.log"
-AGENT_VERSION = "2.2.0"
+AGENT_VERSION = "2.3.0"
 
 config = {}
 
@@ -101,7 +101,7 @@ if len(sys.argv) >= 3 and sys.argv[1] == "--osd":
 
 
 # =========================================================
-# FUNÇÕES DE STREAMING (Migradas)
+# FUNÇÕES DE STREAMING (Migradas).
 # =========================================================
 
 def push_to_core(action, data):

@@ -32,10 +32,10 @@ from cryptography.x509.oid import NameOID
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-# --- Configurações Básicas ---
+# --- Configurações Básicas ----
 CONFIG_FILE = "Doc-IT.dat"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.2.0"
+AGENT_VERSION = "2.3.0"
 
 # Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
 KEY_FILE = "Doc-IT.key"
