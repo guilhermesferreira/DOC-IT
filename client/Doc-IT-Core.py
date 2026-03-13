@@ -791,6 +791,16 @@ def handle_ipc_client(pipe):
             win32file.WriteFile(pipe, json.dumps(response).encode('utf-8'))
 
         elif action in ["save_config", "update_config"]:
+            # --- BLINDAGEM TAMPER AUTH  ---
+            if config.get("tamper_enabled"):
+                auth_provided = payload.get("tamper_auth")
+                expected_pwd = config.get("tamper_password")
+                if auth_provided != expected_pwd:
+                    log_event(f"BLOQUEIO CRÍTICO: Tentativa de alteração de configuração sem senha válida via IPC.", "CRITICAL")
+                    response = {"status": "error", "message": "Proteção ativa. Senha necessária."}
+                    win32file.WriteFile(pipe, json.dumps(response).encode('utf-8'))
+                    return
+            # ----------------------------------------
             log_event(f"Alteração de configuração via IPC ({action}).", "INFO")
             new_cfg = payload.get("config", {})
             current_port = "3000"

@@ -4,7 +4,7 @@
         "core": {
             "version": "2.1.0",
             "file": "Doc-IT-Core.exe",
-            "hash": "1867e13e088698166d2708b18ba0aceba807d89c87bba320a68e997a93602a3b"
+            "hash": "6ea1745e14f12a50a9a7169a27645da02781be6fda43dcbbba8317e27cabaf01"
         },
         "inventory": {
             "version": "2.1.0",
@@ -19,12 +19,13 @@
         "updater": {
             "version": "2.1.0",
             "file": "Doc-IT-Updater.exe",
-            "hash": "31a5f26c2ba058259dac99d72b02e8b4b81ec74ddca49b54b5b372c94d4c6162"
+            "hash": "3397c2fe6b79055d3c5e480f75426fc93e709c32fdd0cee2b2689de0bb34ddfc"
         },
         "gui": {
-            "version": "2.0.35",
+            "version": "2.0.36",
             "file": "Doc-IT-GUI.exe",
-            "hash": "d4a9bfaeb8f331c2125dc36135987e200aea692f8c668c7b4d76cfe9ded16f57"
+            "hash": "67d2927c7f37d0660f7a0f0519e814fb8403b41e910c56b212af303a559c1093"
         }
-    }
+    },
+    "_signature": "cMABcQya3fKS7xzstJrZDH3ftmfx5YVs565HdyztimrO6dVmNSS8gcCtRck0VVN8ioIBX5vwUPkjP/yIN3V7CK6SVrDK62KNxixcNalzZIpouK4gmo+HNM3RrHfzQ14rUzonz+JoMLErzkCHcAwTf3ljBZKC049ZxQOOUBUvTXQySDmb4o8Oin08He9aLSoge9gwGfFanQNNrbx4ZWUHccOa+qf7Kz3ht5CwyVtZUGySZDL8k/ZQxUAU5S0JI7v4P+jxeDQ7QnbAXw28fSp3uY9Z/mR9VDQxYpF03gpN5x4eDbqwRa64JSxRu5hqZiyS+mOR53//xSZitW/9njhr/g=="
 }

@@ -12,7 +12,12 @@ import psutil
 
 import requests
 import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+import base64
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import serialization
+
+# urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning) # Removido por segurança v2.1.2
 
 
 import win32pipe
@@ -181,8 +186,7 @@ def check_and_update_osquery(working_url, remote_version):
         key_path = config.get("key_path", os.path.join(install_dir, "certs", "agent.key"))
         ca_path = config.get("ca_path", os.path.join(install_dir, "certs", "ca.crt"))
         
-        verify_ssl = ca_path if (ca_path and os.path.exists(ca_path)) else False
-        if re.match(r"https?://\d+\.\d+\.\d+\.\d+", working_url): verify_ssl = False
+        verify_ssl = ca_path if (ca_path and os.path.exists(ca_path)) else True
 
         certs = None
         if cert_path and key_path and os.path.exists(cert_path) and os.path.exists(key_path):
@@ -262,6 +266,42 @@ def push_restart_to_core():
         try: win32file.CloseHandle(handle)
         except: pass
 
+def verify_manifest_signature(manifest, public_key_path):
+    """Verifica a assinatura digital RSA do manifesto version.json."""
+    if not os.path.exists(public_key_path):
+        log_event(f"SECURITY ERROR: Chave pública RSA não encontrada em {public_key_path}. Bloqueando update.", "CRITICAL")
+        return False
+        
+    try:
+        # Extrai a assinatura
+        sig_b64 = manifest.get("_signature")
+        if not sig_b64:
+            log_event("SECURITY ALERT: Manifesto sem assinatura digital. Abortando.", "CRITICAL")
+            return False
+            
+        signature = base64.b64decode(sig_b64)
+        
+        # Cria cópia do manifesto sem a assinatura para validar o conteúdo original
+        manifest_to_verify = manifest.copy()
+        del manifest_to_verify["_signature"]
+        
+        # O build_publish.py usa sort_keys=True para garantir consistência
+        content_to_verify = json.dumps(manifest_to_verify, sort_keys=True).encode('utf-8')
+        
+        with open(public_key_path, "rb") as f:
+            public_key = serialization.load_pem_public_key(f.read())
+            
+        public_key.verify(
+            signature,
+            content_to_verify,
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+            hashes.SHA256()
+        )
+        return True
+    except Exception as e:
+        log_event(f"INTEGRITY FAILURE: Assinatura do manifesto inválida ou corrompida! {e}", "CRITICAL")
+        return False
+
 def cleanup_old_files():
     """Varre a pasta instalada e exclui arquivos .old ou .tmp de atualizações passadas consolidadadas."""
     try:
@@ -296,13 +336,8 @@ def check_and_apply_updates():
     for url in server_urls:
         try:
             version_url = f"{url}/agent/version"
-            if os.path.exists(cert_path) and os.path.exists(key_path) and os.path.exists(ca_path):
-                # Se a URL for um IP, desabilita a verificação de hostname para evitar SSLError mismatch
-                verify_ssl = ca_path
-                if re.match(r"https?://\d+\.\d+\.\d+\.\d+", url): verify_ssl = False
-                response = requests.get(version_url, cert=(cert_path, key_path), verify=verify_ssl, timeout=10)
-            else:
-                response = requests.get(version_url, verify=False, timeout=10)
+            verify_ssl = ca_path if (ca_path and os.path.exists(ca_path)) else True
+            response = requests.get(version_url, cert=(cert_path, key_path), verify=verify_ssl, timeout=10)
             
             if response.status_code == 200:
                 working_url = url
@@ -316,6 +351,12 @@ def check_and_apply_updates():
         return
     
     manifest = response.json()
+    
+    # VERIFICAÇÃO DE ASSINATURA RSA (Passo C.2 / C.3)
+    pub_key_path = os.path.join(get_install_dir(), "certs", "updater_public.pem")
+    if not verify_manifest_signature(manifest, pub_key_path):
+        return
+
     modules_updated = False
     
     try:
@@ -362,12 +403,8 @@ def download_module_safe(mod_key, target_file, expected_hash, base_url=None):
         key_path = config.get("key_path", "./certs/agent.key")
         ca_path = config.get("ca_path", "./certs/ca.crt")
         
-        if os.path.exists(cert_path) and os.path.exists(key_path) and os.path.exists(ca_path):
-            verify_ssl = ca_path
-            if re.match(r"https?://\d+\.\d+\.\d+\.\d+", base_url): verify_ssl = False
-            r = requests.get(file_url, cert=(cert_path, key_path), verify=verify_ssl, stream=True, timeout=30)
-        else:
-            r = requests.get(file_url, verify=False, stream=True, timeout=30)
+        verify_ssl = ca_path if (ca_path and os.path.exists(ca_path)) else True
+        r = requests.get(file_url, cert=(cert_path, key_path), verify=verify_ssl, stream=True, timeout=30)
         
         if r.status_code == 200:
             sha256 = hashlib.sha256()
@@ -461,12 +498,8 @@ if __name__ == "__main__":
             for url in server_urls:
                 try:
                     settings_url = f"{url}/settings/agent"
-                    if os.path.exists(cert_path) and os.path.exists(key_path) and os.path.exists(ca_path):
-                        verify_ssl = ca_path
-                        if re.match(r"https?://\d+\.\d+\.\d+\.\d+", url): verify_ssl = False
-                        r = requests.get(settings_url, cert=(cert_path, key_path), verify=verify_ssl, timeout=10)
-                    else:
-                        r = requests.get(settings_url, verify=False, timeout=10)
+                    verify_ssl = ca_path if (ca_path and os.path.exists(ca_path)) else True
+                    r = requests.get(settings_url, cert=(cert_path, key_path), verify=verify_ssl, timeout=10)
                         
                     if r.status_code == 200:
                         settings_data = r.json()

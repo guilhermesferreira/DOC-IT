@@ -309,6 +309,7 @@ class DocITDashboard(ctk.CTk):
         try:
             payload = {
                 "action": "save_config",
+                "tamper_auth": self.entry_password.get().strip() if self.config_data.get("tamper_enabled") else None,
                 "config": {
                     "server_base_url": self.input_base_url.get(),
                     "log_level": self.combo_log.get(),
