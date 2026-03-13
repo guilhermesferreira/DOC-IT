@@ -45,7 +45,7 @@ def get_pipe_client_exe(pipe_handle):
         return None
 
 LOG_FILE = "agent-remote.log"
-AGENT_VERSION = "2.1.0"
+AGENT_VERSION = "2.1.3"
 
 config = {}
 

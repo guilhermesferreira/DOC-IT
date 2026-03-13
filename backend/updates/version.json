@@ -1,31 +1,31 @@
 {
-    "version": "2.1.0",
+    "_signature": "Jzg20lnYwUFLI49w6vO5XiB2fHpXRGzEZSa6n9abGZ1fftyX5Mg4lRsF7UcDtAwohs7JgEECTudDjI02iE4gGqTVFJg5RsDMm9PvxfR7oYcN7uRM7yOL3C9KaeGemFENj8LDfwwbg7LQdvmlKlLzFONd/t9OAr6WeEoW3qguSJpnEttI7QZgDsMmyQCWJIdrZpFZUIBKlm5K6e0nEfiuPNzA5f1t1SxFocM43AADARb/sdxsA+f9I70UOsYKJArzUDi4jLbHslVGN0PAyu5YCgxTuWeyxYbIhxUufjozWcaAHkYJ4MjftbGbHwHWVz09K6+rKbrpPaxMDOVlgwU1+w==",
     "modules": {
         "core": {
-            "version": "2.1.0",
             "file": "Doc-IT-Core.exe",
-            "hash": "6ea1745e14f12a50a9a7169a27645da02781be6fda43dcbbba8317e27cabaf01"
-        },
-        "inventory": {
-            "version": "2.1.0",
-            "file": "Doc-IT-Inventory.exe",
-            "hash": "ac690b561c2c76b74ad074feb04f9d7a0b2d7e2c0f28698cdbddc30f55e53207"
-        },
-        "remote": {
-            "version": "2.1.0",
-            "file": "Doc-IT-Remote.exe",
-            "hash": "43d300c0090ad62b539d452f5dc72da19250a8a238acac336f9eeadf61997b92"
-        },
-        "updater": {
-            "version": "2.1.0",
-            "file": "Doc-IT-Updater.exe",
-            "hash": "3397c2fe6b79055d3c5e480f75426fc93e709c32fdd0cee2b2689de0bb34ddfc"
+            "hash": "abe0f3c19f155fb40146a1e932a1fcb7b0a5e9baaa169c864afc5ec6b4c91ade",
+            "version": "2.1.3"
         },
         "gui": {
-            "version": "2.0.36",
             "file": "Doc-IT-GUI.exe",
-            "hash": "67d2927c7f37d0660f7a0f0519e814fb8403b41e910c56b212af303a559c1093"
+            "hash": "a474891f3d76b576398c3cc177c5d3456b9fa0b5ed9c0cf9559c2c9695da0f7d",
+            "version": "2.0.37"
+        },
+        "inventory": {
+            "file": "Doc-IT-Inventory.exe",
+            "hash": "11789cc11fbe59532123d0dcd7829cfb3454da1988491c00b0e12d2f4a5648a2",
+            "version": "2.1.3"
+        },
+        "remote": {
+            "file": "Doc-IT-Remote.exe",
+            "hash": "7545a66c36c585ded2261dda4207a3591c0c66b5c7ec726a5e998593a0a87c2a",
+            "version": "2.1.3"
+        },
+        "updater": {
+            "file": "Doc-IT-Updater.exe",
+            "hash": "48f69e0e99933a08443d8a1b36990523f2da44c1c4eef06fb0bbd0817cb2b58e",
+            "version": "2.1.3"
         }
     },
-    "_signature": "cMABcQya3fKS7xzstJrZDH3ftmfx5YVs565HdyztimrO6dVmNSS8gcCtRck0VVN8ioIBX5vwUPkjP/yIN3V7CK6SVrDK62KNxixcNalzZIpouK4gmo+HNM3RrHfzQ14rUzonz+JoMLErzkCHcAwTf3ljBZKC049ZxQOOUBUvTXQySDmb4o8Oin08He9aLSoge9gwGfFanQNNrbx4ZWUHccOa+qf7Kz3ht5CwyVtZUGySZDL8k/ZQxUAU5S0JI7v4P+jxeDQ7QnbAXw28fSp3uY9Z/mR9VDQxYpF03gpN5x4eDbqwRa64JSxRu5hqZiyS+mOR53//xSZitW/9njhr/g=="
+    "version": "2.1.3"
 }

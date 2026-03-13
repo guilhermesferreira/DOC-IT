@@ -28,7 +28,7 @@ CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
 
 LOG_FILE = os.path.join(BASE_DIR, "agent-inventory.log")
-AGENT_VERSION = "2.1.0"
+AGENT_VERSION = "2.1.3"
 
 def log_event(message, level="INFO"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

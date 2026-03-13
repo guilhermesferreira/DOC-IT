@@ -36,7 +36,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.1.0"
+AGENT_VERSION = "2.1.3"
 
 # Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
 KEY_FILE = "Doc-IT.key"
@@ -361,8 +361,7 @@ def enroll_agent(config, payload):
         for url in server_urls:
             try:
                 enroll_url = f"{url}/agent/enroll"
-                verify_ssl = ca_path if os.path.exists(ca_path) else False
-                if re.match(r"https?://\d+\.\d+\.\d+\.\d+", url): verify_ssl = False
+                verify_ssl = ca_path if os.path.exists(ca_path) else True
                 
                 resp = requests.post(enroll_url, json=enroll_payload, timeout=15, verify=verify_ssl)
                 resp.raise_for_status()
@@ -449,10 +448,8 @@ def perform_core_check_in(config, inventory_payload=None):
         try:
             check_in_url = f"{url}/agent/check-in"
             
-            # Se a URL for um IP ou se ca.crt não existir, desabilita a verificação de hostname do servidor
-            verify_ssl = ca_path if (ca_path and os.path.exists(ca_path)) else False
-            is_ip = re.match(r"https?://\d+\.\d+\.\d+\.\d+", url)
-            if is_ip: verify_ssl = False
+            # Se o ca.crt não existir, o requests tentará usar os certificados do sistema
+            verify_ssl = ca_path if (ca_path and os.path.exists(ca_path)) else True
             
             # Garanta que estamos enviando os certificados se eles existirem
             certs = None
@@ -490,9 +487,8 @@ def perform_core_check_in(config, inventory_payload=None):
                 save_config(config)
             
             settings_url = f"{url}/settings/agent"
-            # Mesma lógica de bypass de hostname para IP ou falta de CA
-            verify_ssl = ca_path if (ca_path and os.path.exists(ca_path)) else False
-            if re.match(r"https?://\d+\.\d+\.\d+\.\d+", url): verify_ssl = False
+            # Mesma lógica de bypass de hostname removida por segurança v2.1.3
+            verify_ssl = ca_path if (ca_path and os.path.exists(ca_path)) else True
             
             set_response = requests.get(settings_url, timeout=10, cert=certs, verify=verify_ssl)
             if set_response.status_code == 200:

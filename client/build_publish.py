@@ -6,9 +6,8 @@ import hashlib
 import json
 import os
 import base64
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives import serialization
 
 def get_project_name():
     env_path = os.path.join("..", "backend", ".env")
@@ -212,38 +211,28 @@ def process_modules():
 
 
 def generate_or_load_rsa_keys():
-    """Gera ou carrega o par de chaves RSA para assinar o manifesto de atualização."""
     keys_dir = os.path.join("..", "backend", "keys")
-    if not os.path.exists(keys_dir):
-        os.makedirs(keys_dir)
-    
+    os.makedirs(keys_dir, exist_ok=True)
     priv_path = os.path.join(keys_dir, "updater_private.pem")
     pub_path = os.path.join(keys_dir, "updater_public.pem")
     
     if not os.path.exists(priv_path):
-        print(" -> Gerando novas chaves RSA para assinatura de manifesto...")
+        print("Gerando novo par de chaves RSA de segurança para o Updater...")
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        public_key = private_key.public_key()
-        
-        # Salva Privada
         with open(priv_path, "wb") as f:
             f.write(private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
                 encryption_algorithm=serialization.NoEncryption()
             ))
-        
-        # Salva Pública
         with open(pub_path, "wb") as f:
-            f.write(public_key.public_bytes(
+            f.write(private_key.public_key().public_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
             ))
-    else:
-        with open(priv_path, "rb") as f:
-            private_key = serialization.load_pem_private_key(f.read(), password=None)
             
-    return private_key
+    with open(priv_path, "rb") as f:
+        return serialization.load_pem_private_key(f.read(), password=None)
 
 def copy_to_backend_and_publish(updated_modules):
     print("\n--- Copiando Artefatos e Gerando Manifesto ---")
@@ -277,20 +266,22 @@ def copy_to_backend_and_publish(updated_modules):
     # Mantemos este arquivo no backend porque o Updater ainda baixa o JSON do servidor
     # para saber se há novos arquivos, hash de validação e o nome do arquivo.
     # O que mudou é que a VERSÃO LOCAL agora é lida do .exe e não de um JSON local.
-    # ASSINATURA RSA DO MANIFESTO (Passo B.2)
+    # Adiciona a assinatura criptográfica ao JSON
     private_key = generate_or_load_rsa_keys()
-    manifest_content = json.dumps(new_manifest, sort_keys=True).encode('utf-8')
+    content_to_sign = json.dumps(new_manifest, sort_keys=True).encode('utf-8')
+    
     signature = private_key.sign(
-        manifest_content,
+        content_to_sign,
         padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
         hashes.SHA256()
     )
+    
     new_manifest["_signature"] = base64.b64encode(signature).decode('utf-8')
-
+    
     with open(VERSION_JSON_FILE, 'w', encoding='utf-8') as f:
-        json.dump(new_manifest, f, indent=4)
+        json.dump(new_manifest, f, indent=4, sort_keys=True)
         
-    print(f"Manifesto version.json modular gerado e ASSINADO com sucesso em {VERSION_JSON_FILE}!")
+    print("Manifesto version.json modular assinado com RSA e gerado com sucesso!")
 
 
 def get_server_urls():
@@ -367,11 +358,11 @@ def copy_certs_to_dist():
         json.dump(config_data, f, indent=4)
     print(f" -> config.json gerado com {len(server_urls)} URL(s) de servidor")
 
-    # Passo C.2: Copia também a chave pública RSA para validação do Updater (Passo B.3)
-    pub_key_src = os.path.join("..", "backend", "keys", "updater_public.pem")
+    # --- COPIA A CHAVE PÚBLICA PARA O DIST PARA IR JUNTO NO INSTALADOR ---
+    keys_dir = os.path.join("..", "backend", "keys")
+    pub_key_src = os.path.join(keys_dir, "updater_public.pem")
     if os.path.exists(pub_key_src):
         shutil.copy2(pub_key_src, os.path.join(dist_certs, "updater_public.pem"))
-        print(f" -> Chave pública RSA copiada para dist/certs/")
 
 
 
@@ -401,13 +392,14 @@ def build_installer():
 
 
 if __name__ == "__main__":
-    print("=== Iniciando Build & Publish INCREMENTAL do Agente Doc-IT v2 ===")
+    print("=== Iniciando Build & Publish COM BLINDAGEM RSA ===")
     try:
         updated_modules = process_modules()
+        generate_or_load_rsa_keys() # Garante que as chaves existem antes de copiar
         copy_certs_to_dist()
         copy_to_backend_and_publish(updated_modules)
         build_installer()
-        print("\n=== DEPLOYMENT INCREMENTAL CONCLUIDO COM SUCESSO! ===")
+        print("\n=== DEPLOYMENT SEGURO CONCLUIDO COM SUCESSO! ===")
     except Exception as e:
         print(f"\nERRO FATAL DURANTE O DEPLOY INCREMENTAL: {e}")
         sys.exit(1)
