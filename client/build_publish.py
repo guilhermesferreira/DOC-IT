@@ -388,7 +388,9 @@ def build_installer():
     setup_backend = os.path.join(BACKEND_UPDATES_DIR, "Doc-IT-Setup.exe")
     if os.path.exists(setup_dist):
         shutil.copy2(setup_dist, setup_backend)
-        print("Instalador Doc-IT-Setup.exe gerado e copiado para o backend com sucesso!")
+        # Copia também para a raiz para facilitar testes do desenvolvedor v2.2.0
+        shutil.copy2(setup_dist, os.path.join(".", "Doc-IT-Setup.exe"))
+        print("Instalador Doc-IT-Setup.exe gerado e copiado para o backend e raiz com sucesso!")
 
 
 if __name__ == "__main__":

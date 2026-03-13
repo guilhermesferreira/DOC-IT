@@ -1,31 +1,31 @@
 {
-    "_signature": "Jzg20lnYwUFLI49w6vO5XiB2fHpXRGzEZSa6n9abGZ1fftyX5Mg4lRsF7UcDtAwohs7JgEECTudDjI02iE4gGqTVFJg5RsDMm9PvxfR7oYcN7uRM7yOL3C9KaeGemFENj8LDfwwbg7LQdvmlKlLzFONd/t9OAr6WeEoW3qguSJpnEttI7QZgDsMmyQCWJIdrZpFZUIBKlm5K6e0nEfiuPNzA5f1t1SxFocM43AADARb/sdxsA+f9I70UOsYKJArzUDi4jLbHslVGN0PAyu5YCgxTuWeyxYbIhxUufjozWcaAHkYJ4MjftbGbHwHWVz09K6+rKbrpPaxMDOVlgwU1+w==",
+    "_signature": "uu+dBt0a+L5HknM6aAK9gnxcmBQ5hrjypK9+ZSeKhKWZj4ZTmWIkLB5DWL9j/a08Ek/rrYETlAdYkB+BuawhQ3EwXLrapgADUk4lUw1wPY7M6pJgpHaxpxElE00BCrlH1jr5BKZ9MlHcXjjJZtnTw5n+6aJSBBlwH9d7ibIazbl8QB08r0F395XmW5y69phFucjN/2zjtbfQP38pjiFgf5Nq73+ZgRAYYIsls1zTDdoKasvCJNn7djCYemwiC+yzBVybS3VIfps+jbZzIMECsTz+O1BQX/aLXZpzeid6gr2iNYyHDLGz0pvg3AD7ZYODzDBMa4j2PQM/fRka1qTD5Q==",
     "modules": {
         "core": {
             "file": "Doc-IT-Core.exe",
-            "hash": "abe0f3c19f155fb40146a1e932a1fcb7b0a5e9baaa169c864afc5ec6b4c91ade",
-            "version": "2.1.3"
+            "hash": "80c072e0aee8d876d142998473db1dc1c7317531685c1490e270e3738ff187dc",
+            "version": "2.2.0"
         },
         "gui": {
             "file": "Doc-IT-GUI.exe",
-            "hash": "a474891f3d76b576398c3cc177c5d3456b9fa0b5ed9c0cf9559c2c9695da0f7d",
-            "version": "2.0.37"
+            "hash": "22a7526a60135ee1dd8be7c4997c14105acde39f5ac4a5615a199a7836f79d27",
+            "version": "2.0.38"
         },
         "inventory": {
             "file": "Doc-IT-Inventory.exe",
-            "hash": "11789cc11fbe59532123d0dcd7829cfb3454da1988491c00b0e12d2f4a5648a2",
-            "version": "2.1.3"
+            "hash": "efa6f7d085b17b8081d8af9d00083d4d5a00f9a9b5bdfab8439f8a47810ce89f",
+            "version": "2.2.0"
         },
         "remote": {
             "file": "Doc-IT-Remote.exe",
-            "hash": "7545a66c36c585ded2261dda4207a3591c0c66b5c7ec726a5e998593a0a87c2a",
-            "version": "2.1.3"
+            "hash": "dbe7d524ecdbb88d5af41ae457745ddd68432ebc9650e96cbdb86b03668cea28",
+            "version": "2.2.0"
         },
         "updater": {
             "file": "Doc-IT-Updater.exe",
-            "hash": "48f69e0e99933a08443d8a1b36990523f2da44c1c4eef06fb0bbd0817cb2b58e",
-            "version": "2.1.3"
+            "hash": "d9ac566836f2e1f7cd093dd597d1e38170024d3cd31cc452049a2529b0f86fe5",
+            "version": "2.2.0"
         }
     },
-    "version": "2.1.3"
+    "version": "2.2.0"
 }

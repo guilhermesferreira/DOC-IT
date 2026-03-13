@@ -34,9 +34,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- Configurações Básicas ---
 CONFIG_FILE = "Doc-IT.dat"
-LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.1.3"
+AGENT_VERSION = "2.2.0"
 
 # Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
 KEY_FILE = "Doc-IT.key"
@@ -146,7 +145,7 @@ def load_config():
     if not cipher_suite:
         init_cipher()
     
-    # 1. Tenta carregar o novo formato seguro
+    # Tenta carregar o formato seguro DPAPI (.dat)
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "rb") as f:
@@ -154,43 +153,16 @@ def load_config():
                 decrypted_data = cipher_suite.decrypt(encrypted_data)
                 loaded_config = json.loads(decrypted_data.decode('utf-8'))
                 
-            # Verifica campos padrão ausentes
+            # Garante que campos padrão existam
             for key, value in DEFAULT_CONFIG.items():
                 if key not in loaded_config:
                     loaded_config[key] = value
             return loaded_config
         except Exception as e:
-            log_event(f"Falha CRÍTICA ao decriptar {CONFIG_FILE}. Arquivo corrompido ou chave inválida: {e}", "ERROR")
-            # Não recria o config vazio automaticamente aqui se falhou em decriptar, para evitar reset.
-            # Mas na primeira execução (onde nem legacy existe), ele fará isso.
+            log_event(f"Falha ao decriptar {CONFIG_FILE}: {e}", "ERROR")
 
-    # 2. Se .dat não existe, procura o JSON legado (Migração)
-    if os.path.exists(LEGACY_CONFIG_FILE):
-        log_event(f"Arquivo legado {LEGACY_CONFIG_FILE} detectado. Iniciando migração segura para {CONFIG_FILE}...", "INFO")
-        try:
-            with open(LEGACY_CONFIG_FILE, "r", encoding="utf-8") as f:
-                loaded_config = json.load(f)
-                
-            for key, value in DEFAULT_CONFIG.items():
-                if key not in loaded_config:
-                    loaded_config[key] = value
-            
-            # Salva no novo formato
-            save_config(loaded_config)
-            
-            # Deleta o JSON antigo para proteger os dados (como a URL do server)
-            try:
-                os.remove(LEGACY_CONFIG_FILE)
-                log_event(f"Migração concluída. {LEGACY_CONFIG_FILE} destruído com sucesso.", "INFO")
-            except Exception as d_e:
-                 log_event(f"Falha ao jogar no lixo o {LEGACY_CONFIG_FILE}: {d_e}", "WARNING")
-                 
-            return loaded_config
-        except Exception as e:
-            log_event(f"Erro ao ler legacy config para migração: {e}", "ERROR")
-
-    # 3. Se nada existe, é uma instalação crua. Cria o default bloqueado do zero.
-    log_event(f"Nenhum arquivo de configuração encontrado. Criando base em {CONFIG_FILE}.", "WARNING")
+    # Se nada existe ou falhou, cria/retorna o default
+    log_event(f"Iniciando nova configuração segura em {CONFIG_FILE}.", "WARNING")
     save_config(DEFAULT_CONFIG)
     return DEFAULT_CONFIG
 
@@ -328,12 +300,14 @@ def enroll_agent(config, payload):
     try:
         # Gera a chave privada RSA 2048 bits
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        private_key_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        
         with open(key_path, "wb") as f:
-            f.write(private_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.TraditionalOpenSSL,
-                encryption_algorithm=serialization.NoEncryption()
-            ))
+            f.write(private_key_pem)
             
         # Bloqueia a chave privada com ACL
         try: apply_strict_acl(key_path)
@@ -368,9 +342,16 @@ def enroll_agent(config, payload):
                 
                 data = resp.json()
                 if "cert" in data:
+                    cert_pem = data["cert"]
                     with open(cert_path, "w", encoding='utf-8') as f:
-                        f.write(data["cert"])
-                    log_event("Enrollment realizado com sucesso e certificado provisionado nativamente.", "INFO")
+                        f.write(cert_pem)
+                    
+                    # Embedding de Payload no Config (Cofre Seguro .dat)
+                    config["agent_cert_pem"] = cert_pem
+                    config["agent_key_pem"] = private_key_pem.decode('utf-8')
+                    save_config(config)
+                    
+                    log_event("Enrollment bem-sucedido. Credenciais persistidas no .dat (Self-Healing Ready).", "INFO")
                     try: apply_strict_acl(cert_path)
                     except: pass
                     return True
@@ -384,6 +365,17 @@ def enroll_agent(config, payload):
         log_event(f"Falha criptográfica durante a geração do CSR: {e}", "ERROR")
         return False
 
+
+def is_cert_expired_or_near(cert_pem_string, days_threshold=30):
+    """Verifica se o certificado está expirado ou próximo de vencer usando o cryptography."""
+    if not cert_pem_string: return True
+    try:
+        cert = x509.load_pem_x509_certificate(cert_pem_string.encode('utf-8'))
+        time_left = cert.not_valid_after - datetime.utcnow()
+        return time_left.days < days_threshold
+    except Exception as e:
+        log_event(f"Falha ao ler validade do certificado em memória: {e}", "WARNING")
+        return True # Se não conseguir ler, assume que precisa renovar
 
 def perform_core_check_in(config, inventory_payload=None):
     """ O Core notifica que está vivo. Itera pela lista de server_urls até encontrar um que responda. """
@@ -431,15 +423,38 @@ def perform_core_check_in(config, inventory_payload=None):
     key_path = config.get("key_path")
     ca_path = config.get("ca_path")
 
-    # Verifica os certificados com trava contra valores Nulos (None) - Correção v2.0.25
-    if ca_path and os.path.exists(ca_path):
-        try: apply_strict_acl(ca_path) # Garante que SYSTEM/Admins tenham controle, garantindo leitura
-        except: pass
-        
+    # --- SELF-HEALING: Restauração Física e Validação de Expiração ---
+    cert_pem = config.get("agent_cert_pem")
+    key_pem = config.get("agent_key_pem")
+
+    # 1. Se os arquivos sumiram mas o config tem o backup, restaura
+    if cert_pem and key_pem:
+        if not os.path.exists(cert_path) or not os.path.exists(key_path):
+            log_event("AUTO-CURA: Arquivos físicos de cert sumiram. Restaurando a partir do .dat...", "WARNING")
+            os.makedirs(os.path.dirname(cert_path), exist_ok=True)
+            with open(cert_path, "w", encoding='utf-8') as f: f.write(cert_pem)
+            with open(key_path, "w", encoding='utf-8') as f: f.write(key_pem)
+            try:
+                apply_strict_acl(cert_path)
+                apply_strict_acl(key_path)
+            except: pass
+
+    # 2. Valida expiração antes de tentar o check-in
+    if is_cert_expired_or_near(cert_pem):
+        log_event("AUTO-CURA: Certificado expirado ou próximo do vencimento. Iniciando renovação...", "WARNING")
+        if enroll_agent(config, payload):
+            # Recarrega os caminhos recém-gerados
+            cert_path = config.get("cert_path")
+            key_path = config.get("key_path")
+        else:
+            log_event("Falha ao renovar certificado expirado.", "ERROR")
+            return False, None
+
     if not (cert_path and key_path and os.path.exists(cert_path) and os.path.exists(key_path)):
         if not enroll_agent(config, payload):
             log_event("Certificados mTLS ausentes e Enrollment falhou. Check-in abortado.", "ERROR")
             return False, None
+    # --- FIM SELF-HEALING ---
 
     # Failover: tenta cada URL da lista até uma funcionar
     server_urls = config.get("server_urls", [config.get("server_base_url")])
@@ -497,6 +512,16 @@ def perform_core_check_in(config, inventory_payload=None):
                 
             log_event("Check-in periódico realizado com sucesso.", "INFO")
             return True, None
+        except requests.exceptions.SSLError as se:
+            log_event(f"AUTO-CURA: Rejeição de TLS/SSL detectada em {url}. Possível revogação ou erro server-side. Iniciando Onboarding Fallback...", "WARNING")
+            # Limpa credenciais problemáticas para forçar um refresh total
+            config["agent_cert_pem"] = None
+            config["agent_key_pem"] = None
+            if enroll_agent(config, payload):
+                log_event("Auto-Cura concluída. Novos certificados obtidos. Repetindo check-in...", "INFO")
+                # Recursão simples para tentar o check-in novamente com as novas credenciais
+                return perform_core_check_in(config, inventory_payload)
+            continue
         except Exception as e:
             log_event(f"Tentativa de check-in em {url} falhou: {e}", "WARNING")
             continue
