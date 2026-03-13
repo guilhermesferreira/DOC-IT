@@ -79,12 +79,12 @@ def update_module_file_version(filepath, current_published_version=None):
     
     if match:
         current_version = match.group(1)
-        new_version = bump_version(current_version)
-        print(f" -> Atualizando versão interna em {filepath} ({current_version} -> {new_version})")
-        content = content.replace(f'AGENT_VERSION = "{current_version}"', f'AGENT_VERSION = "{new_version}"')
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(content)
-        return new_version
+        # new_version = bump_version(current_version)
+        # print(f" -> Atualizando versão interna em {filepath} ({current_version} -> {new_version})")
+        # content = content.replace(f'AGENT_VERSION = "{current_version}"', f'AGENT_VERSION = "{new_version}"')
+        # with open(filepath, 'w', encoding='utf-8') as f:
+        #     f.write(content)
+        return current_version
     else:
         # Se não tiver string dentro, apenas incrementa baseado no manifesto
         ver_to_bump = current_published_version or "2.0.0"

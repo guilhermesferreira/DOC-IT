@@ -8,14 +8,13 @@ import customtkinter as ctk
 import psutil
 import pystray
 import subprocess
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageTk
 import win32api
 import win32con
 import win32security
 from cryptography.fernet import Fernet
 
 import socket
-
 import win32pipe
 import win32file
 import pywintypes
@@ -23,11 +22,9 @@ import pywintypes
 # --- Constantes IPC ---
 CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 
-# Token de Autenticação (Lido da Variável de Ambiente em segurança)
-IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
-
 # Versão do Módulo GUI
-GUI_VERSION = "2.0.30"
+GUI_VERSION = "2.1.0"
+LOG_FILE = "agent-gui.log"
 
 def log_event(message, level="INFO"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -42,40 +39,58 @@ def log_event(message, level="INFO"):
         pass
 
 def request_config_from_core():
-    """Solicita a configuração ativa ao processo Core via Named Pipe."""
-    try:
-        payload = {
-            "action": "get_config",
-            "token": IPC_TOKEN # Inclui o token para o Core validar
-        }
-        
-        handle = win32file.CreateFile(
-            CORE_IPC_PIPE,
-            win32file.GENERIC_READ | win32file.GENERIC_WRITE,
-            0, None,
-            win32file.OPEN_EXISTING,
-            0, None
-        )
-        win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
-        win32file.WriteFile(handle, json.dumps(payload).encode('utf-8'))
-        
-        # Leitura da resposta
-        data = b""
-        while True:
-            resp, chunk = win32file.ReadFile(handle, 4096)
-            data += chunk
-            if resp == 0: break
+    """Solicita a configuração ativa ao processo Core via Named Pipe com suporte a retries."""
+    
+    # Tenta até 5 vezes em caso de pipe ocupado ou erro temporário
+    for attempt in range(5):
+        handle = None
+        try:
+            # Se o pipe estiver ocupado, espera até 1 segundo
+            try:
+                win32pipe.WaitNamedPipe(CORE_IPC_PIPE, 1000)
+            except:
+                pass
+
+            payload = {
+                "action": "get_config",
+            }
             
-        win32file.CloseHandle(handle)
+            handle = win32file.CreateFile(
+                CORE_IPC_PIPE,
+                win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+                0, None,
+                win32file.OPEN_EXISTING,
+                0, None
+            )
+            win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
+            win32file.WriteFile(handle, json.dumps(payload).encode('utf-8'))
+            
+            # Leitura da resposta
+            data = b""
+            while True:
+                resp, chunk = win32file.ReadFile(handle, 4096)
+                data += chunk
+                if resp == 0: break
+                
+            response = json.loads(data.decode('utf-8'))
+            if response.get("status") == "success":
+                return response.get("config", {})
+                
+        except pywintypes.error as e:
+            if e.winerror == 231: # Pipe is busy
+                log_event(f"Pipe ocupado (Tentativa {attempt+1}/5). Aguardando...", "DEBUG")
+                time.sleep(0.5)
+                continue
+            log_event(f"Falha ao solicitar config ao Core (Tentativa {attempt+1}/5): {e}", "WARNING")
+        except Exception as e:
+            log_event(f"Erro inesperado no IPC do GUI: {e}", "ERROR")
+        finally:
+            if handle:
+                try: win32file.CloseHandle(handle)
+                except: pass
         
-        response = json.loads(data.decode('utf-8'))
-        if response.get("status") == "success":
-            return response.get("config")
-    except Exception as e:
-        log_event(f"Falha ao solicitar config ao Core via Pipe {CORE_IPC_PIPE}: {e}", "WARNING")
-    finally:
-        try: win32file.CloseHandle(handle)
-        except: pass
+        time.sleep(1) # Espera antes do próximo retry
+
     return None
 
 def check_process_running(process_name):
@@ -153,6 +168,13 @@ class DocITDashboard(ctk.CTk):
         self.tray_icon = None
         
         self.setup_ui()
+        
+        # Puxa configuração inicial
+        initial_cfg = request_config_from_core()
+        if initial_cfg:
+            self.config_data = initial_cfg
+            self.refresh_tamper_ui()
+            
         self.update_status_loop()
 
     def set_window_icon(self):
@@ -287,7 +309,6 @@ class DocITDashboard(ctk.CTk):
         try:
             payload = {
                 "action": "save_config",
-                "token": IPC_TOKEN,
                 "config": {
                     "server_base_url": self.input_base_url.get(),
                     "log_level": self.combo_log.get(),
@@ -400,9 +421,24 @@ class DocITDashboard(ctk.CTk):
         inv_running = check_process_running("Doc-IT-Inventory.exe")
         updater_running = check_process_running("Doc-IT-Updater.exe")
         
+        # Puxa a configuração fresquinha do Core se ele estiver rodando (correção v2.0.25)
+        if core_running:
+            new_cfg = request_config_from_core()
+            if new_cfg is not None:
+                self.config_data = new_cfg
+        
+        # Define o diretório base dinamicamente para ler as versões
+        base_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+        
+        # Coleta a versão dos submódulos
+        core_ver = get_file_version(os.path.join(base_dir, "Doc-IT-Core.exe")) or "Desconhecido"
+        remote_ver = get_file_version(os.path.join(base_dir, "Doc-IT-Remote.exe")) or "Desconhecido"
+        inv_ver = get_file_version(os.path.join(base_dir, "Doc-IT-Inventory.exe")) or "Desconhecido"
+        updater_ver = get_file_version(os.path.join(base_dir, "Doc-IT-Updater.exe")) or "Desconhecido"
+
         # Busca versão do osquery via binário local
         try:
-            exe_osq = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "bin", "osqueryi.exe")
+            exe_osq = os.path.join(base_dir, "assets", "bin", "osqueryi.exe")
             if os.path.exists(exe_osq):
                 output = subprocess.check_output([exe_osq, "--version"], text=True, creationflags=subprocess.CREATE_NO_WINDOW)
                 parts = output.strip().split(" ")
@@ -431,7 +467,6 @@ class DocITDashboard(ctk.CTk):
         try:
             payload = {
                 "action": "restart_request",
-                "token": IPC_TOKEN,
                 "data": "user_ui_request"
             }
             handle = win32file.CreateFile(CORE_IPC_PIPE, win32file.GENERIC_READ | win32file.GENERIC_WRITE, 0, None, win32file.OPEN_EXISTING, 0, None)

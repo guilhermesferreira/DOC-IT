@@ -23,9 +23,8 @@ import pywintypes
 CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 
 # Token de Autenticação (Lido da Variável de Ambiente em segurança)
-IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
 LOG_FILE = "agent-updater.log"
-AGENT_VERSION = "2.0.39"
+AGENT_VERSION = "2.1.0"
 
 config = {}
 
@@ -50,8 +49,7 @@ def request_config_from_core():
     """Solicita a configuração ativa ao processo Core via Named Pipe."""
     try:
         payload = {
-            "action": "get_config",
-            "token": IPC_TOKEN
+            "action": "get_config"
         }
         
         handle = win32file.CreateFile(
@@ -246,7 +244,6 @@ def push_restart_to_core():
         ipc_message = {
             "action": "restart_request", 
             "data": "update_applied",
-            "token": IPC_TOKEN # Inclui o token para o Core validar
         }
         
         handle = win32file.CreateFile(

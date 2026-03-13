@@ -13,6 +13,7 @@ import win32file
 import win32security
 import win32con
 import pywintypes
+import ctypes, psutil
 
 # Bibliotecas pesadas focadas em Interface de Usuário
 import mss
@@ -33,11 +34,18 @@ except ImportError:
 CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 MY_IPC_PIPE = r'\\.\pipe\DocIT_Remote_IPC'
 
-# Token de Autenticação (Lido da Variável de Ambiente em segurança)
-IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
+def get_pipe_client_exe(pipe_handle):
+    try:
+        pid = ctypes.c_ulong(0)
+        success = ctypes.windll.kernel32.GetNamedPipeClientProcessId(int(pipe_handle), ctypes.byref(pid))
+        if not success or pid.value == 0: return None
+        return psutil.Process(pid.value).exe()
+    except Exception as e:
+        log_event(f"Falha ao rastrear PID do cliente IPC: {e}", "WARNING")
+        return None
 
 LOG_FILE = "agent-remote.log"
-AGENT_VERSION = "2.0.24"
+AGENT_VERSION = "2.1.0"
 
 config = {}
 
@@ -101,8 +109,7 @@ def push_to_core(action, data):
     try:
         payload = {
             "action": action,
-            "data": data,
-            "token": IPC_TOKEN
+            "data": data
         }
         
         # Se for um frame, tenta esperar pouco. Se falhar, pula o frame (Frame Skipping)
@@ -436,11 +443,33 @@ def handle_remote_ipc_client(pipe):
         
         payload = json.loads(data.decode('utf-8'))
         
-        # VALIDAÇÃO DO TOKEN
-        if payload.get("token") == IPC_TOKEN:
+        # VALIDAÇÃO FÍSICA DO CLIENTE (KERNEL PID VALIDATION)
+        client_exe = get_pipe_client_exe(pipe)
+        if not client_exe:
+            log_event("BLOQUEIO IPC REMOTE: Tentativa de conexão sem PID rastreável.", "CRITICAL")
+            return
+
+        expected_dir = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
+        client_exe_lower = client_exe.lower()
+        expected_dir_lower = expected_dir.lower()
+
+        is_authorized = False
+        allowed_modules = ["Doc-IT-Core.exe"] # Apenas o Core pode comandar o Remote
+        
+        # Se estiver em modo dev, permite python.exe
+        if not getattr(sys, 'frozen', False):
+             allowed_modules.append("python.exe")
+
+        if client_exe_lower.startswith(expected_dir_lower) or not getattr(sys, 'frozen', False):
+            for mod in allowed_modules:
+                if mod.lower() in client_exe_lower:
+                    is_authorized = True
+                    break
+        
+        if is_authorized:
             execute_ipc_command(payload)
         else:
-            log_event("BLOQUEADO: Tentativa de controle remoto sem token válido.", "WARNING")
+            log_event(f"TENTATIVA DE INVASÃO IPC REMOTE: Processo não autorizado '{client_exe}' tentou comandar o Remote.", "CRITICAL")
             
     except Exception as e:
         log_event(f"Erro processando cliente IPC no Remote: {e}", "ERROR")

@@ -1,9 +1,5 @@
-import os
-import sys
-import json
-import time
-import re
-import socket
+import json, socket, time, re
+import ctypes, psutil, os, sys
 import threading
 import subprocess
 from datetime import datetime
@@ -22,16 +18,12 @@ import win32con
 import win32ts
 import win32profile
 import socketio
-import psutil
 from cryptography.fernet import Fernet
 import base64
 import win32file
 import win32pipe
 import pywintypes
-import secrets
 import win32crypt
-from cryptography.fernet import Fernet
-import base64
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -44,7 +36,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_FILE = "Doc-IT.dat"
 LEGACY_CONFIG_FILE = "config.json"
 LOG_FILE = "agent-core.log"
-AGENT_VERSION = "2.1.17"
+AGENT_VERSION = "2.1.0"
 
 # Chave Criptográfica Dinâmica (Protegida por DPAPI nativo do Windows em vez de Hardcoded)
 KEY_FILE = "Doc-IT.key"
@@ -56,11 +48,28 @@ def init_cipher():
         if os.path.exists(KEY_FILE):
             with open(KEY_FILE, "rb") as f:
                 encrypted_key = f.read()
-            _, decrypted_key = win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0)
-            cipher_suite = Fernet(decrypted_key)
+            # Tenta descriptografar usando escopo de MÁQUINA (novo padrão) primeiro
+            decrypted_key = None
+            try:
+                _, decrypted_key = win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0x04) # 0x04 = CRYPTPROTECT_LOCAL_MACHINE
+            except:
+                # Se falhar, tenta escopo de USUÁRIO (legado) e migra
+                try:
+                    _, decrypted_key = win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0)
+                    if decrypted_key:
+                        log_event("Migrando Master Key de USER para MACHINE scope para compatibilidade com GUI.", "WARNING")
+                        new_encrypted = win32crypt.CryptProtectData(decrypted_key, "Doc-IT Master Key", None, None, None, 0x04)
+                        with open(KEY_FILE, "wb") as f:
+                            f.write(new_encrypted)
+                except:
+                    pass
+            
+            if decrypted_key:
+                cipher_suite = Fernet(decrypted_key)
         else:
             new_key = Fernet.generate_key()
-            encrypted_key = win32crypt.CryptProtectData(new_key, "Doc-IT Master Key", None, None, None, 0)
+            # Usa CRYPTPROTECT_LOCAL_MACHINE para permitir que o GUI (usuário) leia o token
+            encrypted_key = win32crypt.CryptProtectData(new_key, "Doc-IT Master Key", None, None, None, 0x04)
             with open(KEY_FILE, "wb") as f:
                 f.write(encrypted_key)
             try:
@@ -71,8 +80,19 @@ def init_cipher():
         log_event(f"Erro Fatal Inicializando DPAPI Key: {e}. Verifique se o serviço tem permissões adequadas na fresta do DPAPI (contexto SYSTEM).", "CRITICAL")
         sys.exit(1)
 
-# Token de Autenticação IPC (Gerado Dinamicamente para cada Inicialização)
-IPC_TOKEN = secrets.token_hex(24)
+# --- Configurações IPC ---
+IPC_PIPE_NAME = r'\\.\pipe\DocIT_Core_IPC'
+
+def get_pipe_client_exe(pipe_handle):
+    try:
+        pid = ctypes.c_ulong(0)
+        # kernel32.GetNamedPipeClientProcessId está disponível a partir do Windows Vista/2008
+        success = ctypes.windll.kernel32.GetNamedPipeClientProcessId(int(pipe_handle), ctypes.byref(pid))
+        if not success or pid.value == 0: return None
+        return psutil.Process(pid.value).exe()
+    except Exception as e:
+        log_event(f"Falha ao rastrear PID do cliente IPC: {e}", "WARNING")
+        return None
 
 DEFAULT_CONFIG = {
     "server_base_url": "https://localhost:3000",
@@ -80,7 +100,6 @@ DEFAULT_CONFIG = {
     "last_successful_checkin": None,
     "log_level": "INFO",
     "cert_path": "./certs/agent.crt",
-    "key_path": "./certs/agent.key",
     "ca_path": "./certs/ca.crt",
     "tamper_enabled": True,
     "tamper_password": None
@@ -413,13 +432,12 @@ def perform_core_check_in(config, inventory_payload=None):
     key_path = config.get("key_path")
     ca_path = config.get("ca_path")
 
-    # Verifica os certificados. Se faltarem a Private Key ou Agent Cert, executa o Enrollment dinamicamente.
-    # O CA deve estar sempre presente via instalador base e ter ACL de leitura.
-    if os.path.exists(ca_path):
+    # Verifica os certificados com trava contra valores Nulos (None) - Correção v2.0.25
+    if ca_path and os.path.exists(ca_path):
         try: apply_strict_acl(ca_path) # Garante que SYSTEM/Admins tenham controle, garantindo leitura
         except: pass
         
-    if not (os.path.exists(cert_path) and os.path.exists(key_path)):
+    if not (cert_path and key_path and os.path.exists(cert_path) and os.path.exists(key_path)):
         if not enroll_agent(config, payload):
             log_event("Certificados mTLS ausentes e Enrollment falhou. Check-in abortado.", "ERROR")
             return False, None
@@ -534,12 +552,6 @@ def spawn_process_in_session_1(exe_path):
             return None
             
         h_token = win32ts.WTSQueryUserToken(session_id)
-        # Herdamos o ambiente do Core para garantir que o DOCIT_IPC_TOKEN passe adiante
-        # Mas o CreateEnvironmentBlock retorna apenas o ambiente do USUÁRIO.
-        # Para simplificar e garantir que o Token seja passado, usaremos o ambiente do Core
-        # mas forçaremos o carregamento do perfil se necessário. 
-        # No entanto, subprocessos em Session 0 -> 1 funcionam melhor com o env do Core + modificações.
-        
         si = win32process.STARTUPINFO()
         si.lpDesktop = "winsta0\\default"
         si.dwFlags = win32process.STARTF_USESHOWWINDOW
@@ -555,7 +567,7 @@ def spawn_process_in_session_1(exe_path):
             None,
             False,
             creation_flags,
-            None, # Passamos None para herdar env do Core (que agora tem o TOKEN)
+            None, 
             os.path.dirname(os.path.abspath(exe_path)),
             si
         )
@@ -601,7 +613,6 @@ def start_module(module_name):
             if new_process:
                 MODULES[module_name]["process"] = new_process
         else:
-            # Posen herda o DOCIT_IPC_TOKEN automaticamente do os.environ
             new_process = subprocess.Popen([exe_path], 
                                          stdout=subprocess.DEVNULL, 
                                          stderr=subprocess.DEVNULL,
@@ -655,25 +666,21 @@ def get_pipe_acl():
     sd = win32security.SECURITY_DESCRIPTOR()
     dacl = win32security.ACL()
     
-    sid_system = win32security.ConvertStringSidToSid("S-1-5-18")
-    sid_admins = win32security.ConvertStringSidToSid("S-1-5-32-544")
-    
-    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_system)
-    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_admins)
+    # SIDs Necessários
+    sid_system = win32security.ConvertStringSidToSid("S-1-5-18")      # SYSTEM
+    sid_admins = win32security.ConvertStringSidToSid("S-1-5-32-544")  # Administradores
+    sid_everyone = win32security.ConvertStringSidToSid("S-1-1-0")     # Todos (Ou S-1-5-4 para Interativo)
 
-    # --- S-1-5-4 representa qualquer usuário logado fisicamente ---
-    sid_interactive = win32security.ConvertStringSidToSid("S-1-5-4") 
-    
+    # Adiciona permissões. IMPORTANTE: A ordem das ACEs importa no Windows.
     dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_system)
     dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_admins)
-    
-    #  --- Concede permissão ao usuário interativo na DACL ---
-    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_ALL, sid_interactive)
+    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.GENERIC_READ | win32con.GENERIC_WRITE, sid_everyone)
     
     sd.SetSecurityDescriptorDacl(1, dacl, 0)
     
     sa = win32security.SECURITY_ATTRIBUTES()
     sa.SECURITY_DESCRIPTOR = sd
+    sa.bInheritHandle = False
     return sa
 
 def ipc_local_server():
@@ -742,10 +749,33 @@ def handle_ipc_client(pipe):
         
         payload = json.loads(data.decode('utf-8'))
         
-        # VALIDAÇÃO DO TOKEN
-        client_token = payload.get("token")
-        if client_token != IPC_TOKEN:
-            log_event("TENTATIVA DE ACESSO IPC NÃO AUTORIZADA: Token inválido.", "CRITICAL")
+        # VALIDAÇÃO FÍSICA DO CLIENTE (KERNEL PID VALIDATION)
+        client_exe = get_pipe_client_exe(pipe)
+        if not client_exe:
+            log_event("BLOQUEIO IPC: Tentativa de conexão sem PID rastreável.", "CRITICAL")
+            return
+
+        expected_dir = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
+        client_exe_lower = client_exe.lower()
+        expected_dir_lower = expected_dir.lower()
+
+        is_authorized = False
+        allowed_modules = ["Doc-IT-GUI.exe", "Doc-IT-Updater.exe", "Doc-IT-Remote.exe", "Doc-IT-Inventory.exe"]
+        
+        # Permite rodar via VSCode / Terminal para testes (Correção v2.0.25)
+        if not getattr(sys, 'frozen', False):
+             allowed_modules.append("python.exe")
+             allowed_modules.append("python3.exe")
+        
+        # Valida se o executável pertence ao diretório do agente e é um módulo autorizado
+        if client_exe_lower.startswith(expected_dir_lower) or not getattr(sys, 'frozen', False):
+            for mod in allowed_modules:
+                if mod.lower() in client_exe_lower:
+                    is_authorized = True
+                    break
+        
+        if not is_authorized:
+            log_event(f"TENTATIVA DE INVASÃO IPC: Processo não autorizado '{client_exe}' tentou enviar comandos ao Core.", "CRITICAL")
             return
 
         action = payload.get("action")
@@ -839,8 +869,6 @@ def send_ipc_command(module_name, payload):
     
     if not pipe_path: return
     
-    payload["token"] = IPC_TOKEN
-
     # Tenta até 3 vezes em caso de colisão
     for i in range(3):
         try:
@@ -880,7 +908,6 @@ def send_ipc_fire_and_forget(module_name, payload):
     if module_name == "remote": pipe_path = r"\\.\pipe\DocIT_Remote_IPC"
     if not pipe_path: return
     
-    payload["token"] = IPC_TOKEN
     handle = None
     try:
         # Timeout curtíssimo: se o pipe não estiver livre em 20ms, desiste
@@ -1096,9 +1123,6 @@ class DocITAgentService(win32serviceutil.ServiceFramework):
         os.chdir(os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__)))
         
         config = load_config()
-        # Exporta o Token para o Ambiente para que todos os subprocessos herdem via os.environ
-        os.environ["DOCIT_IPC_TOKEN"] = IPC_TOKEN
-
         log_event("==== DOC-IT CORE SERVICE INITIALIZED ====", "INFO")
 
         if not config.get("agent_id"):

@@ -24,11 +24,11 @@ except ImportError:
 # --- Configurações IPC ---
 CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 
-# Token de Autenticação (Lido da Variável de Ambiente em segurança)
-IPC_TOKEN = os.environ.get("DOCIT_IPC_TOKEN", "")
+# Determina o diretório base do executável ou script
+BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
 
-LOG_FILE = "agent-inventory.log"
-AGENT_VERSION = "2.0.15"
+LOG_FILE = os.path.join(BASE_DIR, "agent-inventory.log")
+AGENT_VERSION = "2.1.0"
 
 def log_event(message, level="INFO"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -279,9 +279,10 @@ class OsqueryClient:
 
     def _find_osquery(self):
         # Locais de busca: pasta bin real da instalação do agente
-        base_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+        # Locais de busca: pasta bin real da instalação do agente
         locations = [
-            os.path.join(base_dir, "assets", "bin", "osqueryi.exe"),
+            os.path.join(BASE_DIR, "assets", "bin", "osqueryi.exe"),
+            os.path.join(os.path.dirname(BASE_DIR), "backend", "updates", "osquery", "versions", "5.12.1", "osqueryi.exe"),
             "osqueryi.exe"
         ]
         for loc in locations:
@@ -478,8 +479,7 @@ def push_inventory_to_core(payload):
     try:
         ipc_message = {
             "action": "inventory_ready",
-            "data": payload,
-            "token": IPC_TOKEN  # Inclui o token para o Core validar
+            "data": payload
         }
         
         handle = win32file.CreateFile(
@@ -492,9 +492,9 @@ def push_inventory_to_core(payload):
         win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
         win32file.WriteFile(handle, json.dumps(ipc_message).encode('utf-8'))
         win32file.CloseHandle(handle)
-        log_event("Dados enviados com sucesso para o IPC do Core.", "INFO")
+        log_event(f"Dados enviados com sucesso para o IPC do Core.", "INFO")
     except Exception as e:
-         log_event(f"Falha ao empurrar dados de inventário pro Core IPC (Pipe {CORE_IPC_PIPE}): {e}. O Core está rodando?", "ERROR")
+         log_event(f"Falha ao empurrar dados de inventário pro Core IPC (Pipe {CORE_IPC_PIPE}). O Core está rodando? Erro: {e}", "ERROR")
 
 
 # =========================================================
