@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
+const requirePermission = require('../middleware/rbac');
 const {
   getDevices,
   addDevice,
@@ -323,9 +324,6 @@ const {
  *           type: string
  *           format: date-time
  *           nullable: true
- *         createdAt:
- *           type: string
- *           format: date-time
  *         updatedAt:
  *           type: string
  *           format: date-time
@@ -361,15 +359,15 @@ const {
 
 router.use(authMiddleware);
 
-router.get('/', getDevices);
-router.post('/', addDevice);
-router.put('/:id', updateDevice);
-router.delete('/:id', deleteDevice);
-router.patch('/:id/approve', approveDevice); // Rota para aprovar
-router.patch('/:id/reject', rejectDevice);   // Rota para rejeitar
+router.get('/', requirePermission('canViewDevices'), getDevices);
+router.post('/', requirePermission('canManageDevices'), addDevice);
+router.put('/:id', requirePermission('canManageDevices'), updateDevice);
+router.delete('/:id', requirePermission('canManageDevices'), deleteDevice);
+router.patch('/:id/approve', requirePermission('canManageDevices'), approveDevice);
+router.patch('/:id/reject', requirePermission('canManageDevices'), rejectDevice);
 
 // Rotas Tamper Protection
-router.get('/:id/tamper', getTamperPassword);
-router.post('/:id/tamper/toggle', toggleTamperProtection);
+router.get('/:id/tamper', requirePermission('canManageDevices'), getTamperPassword);
+router.post('/:id/tamper/toggle', requirePermission('canManageDevices'), toggleTamperProtection);
 
 module.exports = router;

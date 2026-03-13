@@ -39,6 +39,7 @@ const buildGroupDataMatrix = (body) => {
         canViewAuditLogs: Boolean(body.canViewAuditLogs),
         canViewAuditSettings: Boolean(body.canViewAuditSettings),
         canEditAuditSettings: Boolean(body.canEditAuditSettings),
+        canManageTemplates: Boolean(body.canManageTemplates),
     };
 };
 

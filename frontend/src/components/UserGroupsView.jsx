@@ -32,7 +32,8 @@ const UserGroupsView = () => {
         canViewGroups: false, canCreateGroups: false, canEditGroups: false, canDeleteGroups: false,
         canViewDevices: false, canManageDevices: false, canAccessRemote: false,
         canViewSettings: false, canEditSettings: false,
-        canViewAuditLogs: false, canViewAuditSettings: false, canEditAuditSettings: false
+        canViewAuditLogs: false, canViewAuditSettings: false, canEditAuditSettings: false,
+        canManageTemplates: false
     };
 
     const [newGroup, setNewGroup] = useState(defaultGroupState);
@@ -102,7 +103,8 @@ const UserGroupsView = () => {
             canAccessRemote: group.canAccessRemote,
             canViewSettings: group.canViewSettings, canEditSettings: group.canEditSettings,
             canViewAuditLogs: group.canViewAuditLogs, canViewAuditSettings: group.canViewAuditSettings,
-            canEditAuditSettings: group.canEditAuditSettings
+            canEditAuditSettings: group.canEditAuditSettings,
+            canManageTemplates: group.canManageTemplates
         });
         setEditingGroupId(group.id);
         setIsModalOpen(true);
@@ -209,7 +211,7 @@ const UserGroupsView = () => {
             {/* Modal de Criação / Edição */}
             {isModalOpen && (
                 <div className="modal-backdrop" onClick={() => setIsModalOpen(false)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content modal-rbac" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h4>{editingGroupId ? 'Editar Grupo' : 'Criar Novo Grupo'}</h4>
                             <button className="button-ghost" onClick={() => setIsModalOpen(false)} style={{ padding: '4px', height: 'auto', color: 'var(--text-color-light)' }}>
@@ -264,6 +266,7 @@ const UserGroupsView = () => {
                                     <div className="rbac-toggles-grid">
                                         <ToggleSwitch checked={newGroup.canViewSettings} onChange={() => toggle('canViewSettings')} label="Ver Configs" />
                                         <ToggleSwitch checked={newGroup.canEditSettings} onChange={() => toggle('canEditSettings')} label="Editar Agendamentos" />
+                                        <ToggleSwitch checked={newGroup.canManageTemplates} onChange={() => toggle('canManageTemplates')} label="Gerenciar Templates Osquery" />
                                     </div>
                                 </div>
 

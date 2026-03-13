@@ -117,3 +117,21 @@
     grid-template-columns: 1fr 1fr;
     gap: 4px;
 }
+
+/* Modal RBAC Premium Scaling */
+.modal-content.modal-rbac {
+    max-width: 650px;
+    max-height: 90vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--avatar-blue) transparent;
+}
+
+.modal-content.modal-rbac::-webkit-scrollbar {
+    width: 6px;
+}
+
+.modal-content.modal-rbac::-webkit-scrollbar-thumb {
+    background-color: var(--avatar-blue);
+    border-radius: 10px;
+}
