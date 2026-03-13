@@ -1,29 +1,29 @@
 {
-    "_signature": "JFawEwp4a2h31x/1uH5WUqcHv/j9PG9cFYpNFf5H4ThIRxaI+SLNtpzi+Bcmu9RMKZgG1YbcBQOV51ChJ1cIZ4DQohdrySCsjRKdF7Ex/dEjxqsWbMVbyQv2RH0g8d8iQKksdYQ8EYWgW/MmmopmjWjMe6nlcJHERVGJzr03TGf+eRE/gNUf5f3TmYTSX0NUJwBOLN2LIcsGOFsq7GCVjMmBp/P/s1KlJD3klXAb8tTyBkmn7aZUqMDIRbvS+gGM9j6G5E8I0QYcaeOAbXCyE9KslbFzJDTDKQVm4JO5z7Jb/krEdTXxmAezUlMxbKTM8pTY/NM1wvFeOQAlnXxo8g==",
+    "_signature": "LOOLydHIJgbIYTWSvJIwc9bCu4/oplahR0ian57C4s08UpgI08WCTwpxAxrqJ+fYJWDRANHlDXRpc54/ufuu4hrg4lAzWt96cvQkOfJruGHjpfJUrSQN+TZCvyF6cD7bM0x9LfZT1IMVDvzaRQap8WHOJ2ybYOyWb0mR0ba+c25WTAmrqk1lqTD4rfcxmdKSonXXhMS7Be4EFiP2WLorWY7gee/4ksKhES3fOyBTWgWk43huvM9nZZKjpCQzyGNTUb07pTUdYoUmDrhraVuDrkqEl8za0VK27sc/ez9n0MtOLYLx7gYODOwWupuaZKi0+mQTnap+A+KxodVdjpkjlQ==",
     "modules": {
         "core": {
             "file": "Doc-IT-Core.exe",
-            "hash": "9b03d22a055fdea44af78b4c36877c6888de6dcc9fe96a8a766b7099a99ad622",
+            "hash": "13e02890ec95aa16e7ac811b90495be64a1bc78e5ecad7e62ea30b0e46311360",
             "version": "2.3.0"
         },
         "gui": {
             "file": "Doc-IT-GUI.exe",
-            "hash": "f384e20c611c5804aeb0cb1f071d5cb1b2d75067800f2500c1dfe68ab18ffed9",
-            "version": "2.0.43"
+            "hash": "81ef5710dda2b256fad9958ef00bf7d06ccd377fd207c3dbe41cd750f6373699",
+            "version": "2.3.0"
         },
         "inventory": {
             "file": "Doc-IT-Inventory.exe",
-            "hash": "f8535dc1546bc2c997a86a5ec69f7937ea65da5847f9456be679849baaae1146",
+            "hash": "24be93a4367ed45eaa1fb8676167498739714ed9b906b670cb96bc607920f768",
             "version": "2.3.0"
         },
         "remote": {
             "file": "Doc-IT-Remote.exe",
-            "hash": "cf176267fbc459ad2949eb6875fa2697c5cd3649b66a03e1a50749dd9126486c",
+            "hash": "0b4524576efcef6a4170b2367b7a20c787fdbfbf2055ff7e7e4dafb269076215",
             "version": "2.3.0"
         },
         "updater": {
             "file": "Doc-IT-Updater.exe",
-            "hash": "5c845f3804e4e08a5ac052c3d6123beb2351f7dc4fa8a9f6383a4340428f7ef7",
+            "hash": "68fd798e6d4c66c95c16d923027492e6724a1b6c1fd20736275ac2e316f5bbe4",
             "version": "2.3.0"
         }
     },
