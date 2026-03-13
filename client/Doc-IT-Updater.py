@@ -420,6 +420,15 @@ def download_module_safe(mod_key, target_file, expected_hash, base_url=None):
                 return False
                 
             # Substituição Eficiente sem BAT
+            # 0. Garante que o processo não esteja travando o arquivo (especial para GUI)
+            if mod_key == "gui":
+                log_event("Solicitando encerramento da GUI para atualização...", "INFO")
+                for proc in psutil.process_iter(['name']):
+                    if proc.info['name'] == target_file:
+                        try: proc.kill()
+                        except: pass
+                time.sleep(1)
+
             # 1. Deleta o .old anterior se existir
             if os.path.exists(old_save):
                 try: os.remove(old_save)

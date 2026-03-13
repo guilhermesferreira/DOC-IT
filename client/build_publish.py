@@ -77,11 +77,11 @@ def update_module_file_version(filepath, current_published_version=None):
     with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Tenta achar AGENT_VERSION declarada no .py
-    match = re.search(r'AGENT_VERSION\s*=\s*"([^"]+)"', content)
+    # Tenta achar AGENT_VERSION ou GUI_VERSION declarada no .py
+    match = re.search(r'(AGENT_VERSION|GUI_VERSION)\s*=\s*"([^"]+)"', content)
     
     if match:
-        current_version = match.group(1)
+        current_version = match.group(2)
         # new_version = bump_version(current_version)
         # print(f" -> Atualizando versão interna em {filepath} ({current_version} -> {new_version})")
         # content = content.replace(f'AGENT_VERSION = "{current_version}"', f'AGENT_VERSION = "{new_version}"')

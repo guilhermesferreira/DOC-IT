@@ -23,7 +23,7 @@ import pywintypes
 CORE_IPC_PIPE = r'\\.\pipe\DocIT_Core_IPC'
 
 # Versão do Módulo GUI
-GUI_VERSION = "2.3.0"
+AGENT_VERSION = "2.3.0"
 LOG_FILE = "agent-gui.log"
 
 def log_event(message, level="INFO"):
